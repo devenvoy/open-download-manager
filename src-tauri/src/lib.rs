@@ -2,9 +2,15 @@ use application::{
     download_history_service::DownloadHistoryService,
     download_transfer_service::DownloadTransferService, settings_service::SettingsService,
 };
-use infrastructure::{download_history_store::DownloadHistoryStore, settings_store::SettingsStore};
+use infrastructure::http_download_executor::HttpDownloadExecutor;
+use infrastructure::{
+    data_file_policy::USER_DATA_DIRECTORY_NAME, download_history_store::DownloadHistoryStore,
+    settings_store::SettingsStore,
+};
 use presentation::{
-    commands::{add_download, snapshot, update_settings, AppState, TauriDownloadEventPublisher},
+    app_state::AppState,
+    commands::{add_download, snapshot, update_settings},
+    download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
 };
 use tauri::Manager;
@@ -28,7 +34,7 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let data_directory = home_directory.join(".awesome-downloader");
+            let data_directory = home_directory.join(USER_DATA_DIRECTORY_NAME);
             let settings = SettingsService::new(
                 SettingsStore::new(data_directory),
                 default_download_directory.clone(),
@@ -36,13 +42,17 @@ pub fn run() {
             .map_err(|error| std::io::Error::other(error.message))?;
             let max_concurrent = settings.settings().max_concurrent;
             let download_history = DownloadHistoryService::with_events(
-                DownloadHistoryStore::new(home_directory.join(".awesome-downloader")),
+                DownloadHistoryStore::new(home_directory.join(USER_DATA_DIRECTORY_NAME)),
                 std::sync::Arc::new(TauriDownloadEventPublisher::new(app.handle().clone())),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            let download_transfer =
-                DownloadTransferService::new(download_history.clone(), max_concurrent)
-                    .map_err(|error| std::io::Error::other(error.message))?;
+            let download_executor = HttpDownloadExecutor::new()
+                .map_err(|error| std::io::Error::other(error.message))?;
+            let download_transfer = DownloadTransferService::new(
+                download_history.clone(),
+                download_executor,
+                max_concurrent,
+            );
 
             app.manage(AppState::new(settings, download_history, download_transfer));
             Ok(())

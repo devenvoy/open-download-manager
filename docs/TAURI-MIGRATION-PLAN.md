@@ -262,15 +262,19 @@ measurements are deferred and do not block Tauri implementation.
   data and URL credentials, query strings, and fragments from renderer
   snapshots. New downloads use a separate, versioned `downloads-tauri.json`
   history file written atomically, leaving the legacy history source intact.
-  Command/event compatibility is only partially implemented.
+  Categories and transfer protocols are represented by domain enums while
+  retaining the renderer's existing serialized category names. Command/event
+  compatibility is only partially implemented.
 - **Phase 4:** The first regular HTTP slice is implemented: validated HTTP(S)
   requests, bounded queue admission and configurable concurrency, streamed
   writes to temporary files, collision-safe finalization, progress events,
   failure states, and transient URL credential redaction in snapshots and
-  persisted history. Pausing, cancellation, retry/resume, scheduling, speed
-  limiting, segmented transfers, media handling, and download actions remain
-  outstanding. The UI can submit direct downloads, but queued-only entries
-  cannot yet be resumed through a Tauri action.
+  persisted history. The application transfer use case depends on an executor
+  port; its HTTP/file implementation lives in infrastructure. Policy values
+  and substantial data types are kept in focused modules. Pausing, cancellation,
+  retry/resume, scheduling, speed limiting, segmented transfers, media handling,
+  and download actions remain outstanding. The UI can submit direct downloads,
+  but queued-only entries cannot yet be resumed through a Tauri action.
 - The Electron shell, JavaScript backend, native host, and their tests were
   moved to the ignored local `reference/electron-legacy/` archive as requested.
   That archive is not present in fresh clones. The pre-migration sources remain

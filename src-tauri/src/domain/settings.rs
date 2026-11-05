@@ -1,31 +1,22 @@
+mod patch;
+mod policy;
+mod validation_error;
+
+pub use patch::SettingsPatch;
+pub use validation_error::SettingsValidationError;
+
 use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-const MAX_CONCURRENT_DOWNLOADS: u8 = 16;
-const MAX_CONNECTIONS_PER_DOWNLOAD: u8 = 32;
-const MAX_SPEED_LIMIT_KBPS: u32 = 1_048_576;
-const CATEGORIES: [&str; 6] = [
-    "Video",
-    "Audio",
-    "Archives",
-    "Documents",
-    "Programs",
-    "Other",
-];
+use crate::domain::category::DownloadCategory;
 
-#[derive(Debug)]
-pub struct SettingsValidationError {
-    pub message: String,
-}
-
-impl SettingsValidationError {
-    fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
+use self::policy::{
+    DEFAULT_CONFIRM_BROWSER_DOWNLOADS, DEFAULT_CONNECTIONS_PER_DOWNLOAD,
+    DEFAULT_HIDE_COMPLETION_DIALOG, DEFAULT_MAX_CONCURRENT_DOWNLOADS, DEFAULT_NOTIFY_ON_COMPLETE,
+    DEFAULT_REVEAL_ON_COMPLETE, DEFAULT_SPEED_LIMIT_KBPS, DEFAULT_START_WITH_WINDOWS,
+    MAX_CONCURRENT_DOWNLOADS, MAX_CONNECTIONS_PER_DOWNLOAD, MAX_SPEED_LIMIT_KBPS,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +25,7 @@ pub struct Settings {
     pub max_concurrent: u8,
     pub connections: u8,
     pub speed_limit_kbps: u32,
-    pub category_directories: BTreeMap<String, PathBuf>,
+    pub category_directories: BTreeMap<DownloadCategory, PathBuf>,
     pub notify_on_complete: bool,
     pub reveal_on_complete: bool,
     pub confirm_browser_downloads: bool,
@@ -46,15 +37,15 @@ impl Settings {
     pub fn new(default_directory: PathBuf) -> Self {
         Self {
             default_directory,
-            max_concurrent: 3,
-            connections: 8,
-            speed_limit_kbps: 0,
+            max_concurrent: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+            connections: DEFAULT_CONNECTIONS_PER_DOWNLOAD,
+            speed_limit_kbps: DEFAULT_SPEED_LIMIT_KBPS,
             category_directories: BTreeMap::new(),
-            notify_on_complete: true,
-            reveal_on_complete: false,
-            confirm_browser_downloads: true,
-            start_with_windows: true,
-            hide_completion_dialog: false,
+            notify_on_complete: DEFAULT_NOTIFY_ON_COMPLETE,
+            reveal_on_complete: DEFAULT_REVEAL_ON_COMPLETE,
+            confirm_browser_downloads: DEFAULT_CONFIRM_BROWSER_DOWNLOADS,
+            start_with_windows: DEFAULT_START_WITH_WINDOWS,
+            hide_completion_dialog: DEFAULT_HIDE_COMPLETION_DIALOG,
         }
     }
 
@@ -117,30 +108,17 @@ impl Settings {
                 "speedLimitKbps must not exceed {MAX_SPEED_LIMIT_KBPS}."
             )));
         }
-        for (category, directory) in &self.category_directories {
-            if !CATEGORIES.contains(&category.as_str()) || !directory.is_absolute() {
-                return Err(SettingsValidationError::new(
-                    "Stored category directories must use a supported category and absolute path.",
-                ));
-            }
+        if self
+            .category_directories
+            .values()
+            .any(|directory| !directory.is_absolute())
+        {
+            return Err(SettingsValidationError::new(
+                "Stored category directories must be absolute paths.",
+            ));
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SettingsPatch {
-    pub default_directory: Option<String>,
-    pub max_concurrent: Option<u8>,
-    pub connections: Option<u8>,
-    pub speed_limit_kbps: Option<u32>,
-    pub category_directories: Option<BTreeMap<String, String>>,
-    pub notify_on_complete: Option<bool>,
-    pub reveal_on_complete: Option<bool>,
-    pub confirm_browser_downloads: Option<bool>,
-    pub start_with_windows: Option<bool>,
-    pub hide_completion_dialog: Option<bool>,
 }
 
 fn apply_if_some<T>(target: &mut T, value: Option<T>) {

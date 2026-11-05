@@ -6,6 +6,7 @@ use std::{
 
 use awesome_downloader_lib::{
     application::settings_service::{SettingsRepository, SettingsService},
+    domain::category::DownloadCategory,
     domain::settings::SettingsPatch,
     infrastructure::settings_store::SettingsStore,
 };
@@ -108,7 +109,10 @@ fn legacy_settings_are_migrated_without_modifying_download_history() {
     assert_eq!(loaded.max_concurrent, 5);
     assert_eq!(loaded.connections, 12);
     assert_eq!(loaded.speed_limit_kbps, 256);
-    assert_eq!(loaded.category_directories.get("Video"), Some(&directory));
+    assert_eq!(
+        loaded.category_directories.get(&DownloadCategory::Video),
+        Some(&directory)
+    );
     assert!(!loaded.notify_on_complete);
     assert!(loaded.reveal_on_complete);
     assert!(!loaded.confirm_browser_downloads);

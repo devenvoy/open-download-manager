@@ -16,6 +16,7 @@ use awesome_downloader_lib::{
         settings::Settings,
     },
     infrastructure::download_history_store::DownloadHistoryStore,
+    infrastructure::http_download_executor::HttpDownloadExecutor,
 };
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
@@ -103,8 +104,8 @@ async fn streams_http_response_to_disk_and_persists_redacted_history() {
     let settings = Settings::new(directory.clone());
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
         .expect("history service should initialize");
-    let service = DownloadTransferService::new(history.clone(), 3)
-        .expect("transfer service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 3);
 
     let ids = service
         .add(
@@ -144,8 +145,8 @@ async fn failed_http_status_is_reported_without_leaving_a_partial_file() {
     let settings = Settings::new(directory.clone());
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
         .expect("history service should initialize");
-    let service = DownloadTransferService::new(history.clone(), 3)
-        .expect("transfer service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 3);
 
     let ids = service
         .add(download_request(url, "missing.bin"), &settings)

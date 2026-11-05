@@ -1,21 +1,25 @@
+mod document;
+mod policy;
+
 use std::{
     collections::HashSet,
     fs,
-    io::Write,
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     application::{
-        download_history_service::DownloadHistoryRepository,
+        download_history_repository::DownloadHistoryRepository,
         error::{AppError, AppResult},
     },
     domain::download::{redact_download_url, DownloadRecord},
+    infrastructure::{
+        atomic_file::write_replace,
+        data_file_policy::{LEGACY_HISTORY_FILE_NAME, TAURI_HISTORY_FILE_NAME},
+    },
 };
 
-const HISTORY_VERSION: u8 = 1;
+use self::{document::DownloadHistoryDocument, policy::HISTORY_VERSION};
 
 pub struct DownloadHistoryStore {
     legacy_path: PathBuf,
@@ -27,8 +31,8 @@ impl DownloadHistoryStore {
     pub fn new(data_directory: impl Into<PathBuf>) -> Self {
         let data_directory = data_directory.into();
         Self {
-            legacy_path: data_directory.join("downloads.json"),
-            path: data_directory.join("downloads-tauri.json"),
+            legacy_path: data_directory.join(LEGACY_HISTORY_FILE_NAME),
+            path: data_directory.join(TAURI_HISTORY_FILE_NAME),
             legacy_ids: std::sync::Mutex::new(HashSet::new()),
         }
     }
@@ -47,12 +51,13 @@ impl DownloadHistoryStore {
             }
         };
 
-        let history: History = serde_json::from_slice(&contents).map_err(|error| {
-            AppError::storage(format!(
-                "Could not read download history at {}: {error}",
-                path.display()
-            ))
-        })?;
+        let history: DownloadHistoryDocument =
+            serde_json::from_slice(&contents).map_err(|error| {
+                AppError::storage(format!(
+                    "Could not read download history at {}: {error}",
+                    path.display()
+                ))
+            })?;
         if history.version != HISTORY_VERSION {
             return Err(AppError::storage(format!(
                 "Unsupported download history version {} at {}.",
@@ -90,7 +95,7 @@ impl DownloadHistoryStore {
             .legacy_ids
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
-        let history = History {
+        let history = DownloadHistoryDocument {
             version: HISTORY_VERSION,
             downloads: downloads
                 .iter()
@@ -105,18 +110,9 @@ impl DownloadHistoryStore {
         let contents = serde_json::to_vec_pretty(&history).map_err(|error| {
             AppError::storage(format!("Could not encode download history: {error}"))
         })?;
-        let temporary_path = self
-            .path
-            .with_file_name(format!("downloads-tauri.json.{}.tmp", std::process::id()));
-        let result = write_and_replace(&temporary_path, &self.path, &contents);
-        if result.is_err() {
-            if let Err(error) = fs::remove_file(temporary_path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    eprintln!("Could not remove temporary download history: {error}");
-                }
-            }
-        }
-        result
+        write_replace(&self.path, &contents).map_err(|error| {
+            AppError::storage(format!("Could not replace download history: {error}"))
+        })
     }
 }
 
@@ -145,28 +141,4 @@ impl DownloadHistoryRepository for DownloadHistoryStore {
     fn save(&self, downloads: &[DownloadRecord]) -> AppResult<()> {
         self.save_history(downloads)
     }
-}
-
-#[derive(Deserialize, Serialize)]
-struct History {
-    version: u8,
-    #[serde(default)]
-    downloads: Vec<DownloadRecord>,
-}
-
-fn write_and_replace(temporary: &Path, destination: &Path, contents: &[u8]) -> AppResult<()> {
-    let mut file = fs::File::create(temporary).map_err(|error| {
-        AppError::storage(format!(
-            "Could not create temporary download history: {error}"
-        ))
-    })?;
-    file.write_all(contents)
-        .and_then(|()| file.sync_all())
-        .map_err(|error| {
-            AppError::storage(format!(
-                "Could not write temporary download history: {error}"
-            ))
-        })?;
-    fs::rename(temporary, destination)
-        .map_err(|error| AppError::storage(format!("Could not replace download history: {error}")))
 }

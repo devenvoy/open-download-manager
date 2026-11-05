@@ -1,19 +1,27 @@
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-};
+mod legacy_settings;
+mod legacy_state;
+mod persisted_settings;
+mod policy;
 
-use serde::{Deserialize, Serialize};
+use std::{fs, path::PathBuf};
 
 use crate::{
-    application::error::{AppError, AppResult},
-    application::settings_service::SettingsRepository,
-    domain::settings::{Settings, SettingsPatch},
+    application::{
+        error::{AppError, AppResult},
+        settings_service::SettingsRepository,
+    },
+    domain::settings::Settings,
+    infrastructure::{
+        atomic_file::write_replace,
+        data_file_policy::{LEGACY_HISTORY_FILE_NAME, SETTINGS_FILE_NAME},
+    },
 };
 
-const SETTINGS_VERSION: u8 = 1;
-const LEGACY_STATE_VERSION: u8 = 1;
+use self::{
+    legacy_state::LegacyState,
+    persisted_settings::PersistedSettings,
+    policy::{LEGACY_STATE_VERSION, SETTINGS_VERSION},
+};
 
 #[derive(Clone)]
 pub struct SettingsStore {
@@ -25,8 +33,8 @@ impl SettingsStore {
     pub fn new(data_directory: impl Into<PathBuf>) -> Self {
         let data_directory = data_directory.into();
         Self {
-            path: data_directory.join("settings.json"),
-            legacy_history_path: data_directory.join("downloads.json"),
+            path: data_directory.join(SETTINGS_FILE_NAME),
+            legacy_history_path: data_directory.join(LEGACY_HISTORY_FILE_NAME),
         }
     }
 
@@ -130,12 +138,8 @@ impl SettingsStore {
         };
         let contents = serde_json::to_vec_pretty(&state)
             .map_err(|error| AppError::storage(format!("Could not encode settings: {error}")))?;
-        let temporary_path = temporary_path(&self.path);
-        let result = write_and_replace(&temporary_path, &self.path, &contents);
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary_path);
-        }
-        result
+        write_replace(&self.path, &contents)
+            .map_err(|error| AppError::storage(format!("Could not replace settings file: {error}")))
     }
 }
 
@@ -147,70 +151,4 @@ impl SettingsRepository for SettingsStore {
     fn save(&self, settings: &Settings) -> AppResult<()> {
         self.save_settings(settings)
     }
-}
-
-#[derive(Deserialize, Serialize)]
-struct PersistedSettings {
-    version: u8,
-    settings: Settings,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyState {
-    version: u8,
-    settings: Option<LegacySettings>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacySettings {
-    default_directory: Option<String>,
-    max_concurrent: Option<u8>,
-    connections: Option<u8>,
-    speed_limit_kbps: Option<u32>,
-    category_directories: Option<std::collections::BTreeMap<String, String>>,
-    notify_on_complete: Option<bool>,
-    reveal_on_complete: Option<bool>,
-    confirm_browser_downloads: Option<bool>,
-    start_with_windows: Option<bool>,
-    hide_completion_dialog: Option<bool>,
-}
-
-impl LegacySettings {
-    fn into_patch(self) -> SettingsPatch {
-        SettingsPatch {
-            default_directory: self.default_directory,
-            max_concurrent: self.max_concurrent,
-            connections: self.connections,
-            speed_limit_kbps: self.speed_limit_kbps,
-            category_directories: self.category_directories,
-            notify_on_complete: self.notify_on_complete,
-            reveal_on_complete: self.reveal_on_complete,
-            confirm_browser_downloads: self.confirm_browser_downloads,
-            start_with_windows: self.start_with_windows,
-            hide_completion_dialog: self.hide_completion_dialog,
-        }
-    }
-}
-
-fn temporary_path(path: &Path) -> PathBuf {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("settings.json");
-    path.with_file_name(format!("{file_name}.{}.tmp", std::process::id()))
-}
-
-fn write_and_replace(temporary: &Path, destination: &Path, contents: &[u8]) -> AppResult<()> {
-    let mut file = fs::File::create(temporary).map_err(|error| {
-        AppError::storage(format!("Could not create temporary settings file: {error}"))
-    })?;
-    file.write_all(contents)
-        .and_then(|()| file.sync_all())
-        .map_err(|error| {
-            AppError::storage(format!("Could not write temporary settings file: {error}"))
-        })?;
-    fs::rename(temporary, destination)
-        .map_err(|error| AppError::storage(format!("Could not replace settings file: {error}")))
 }

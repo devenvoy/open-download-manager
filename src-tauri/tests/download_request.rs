@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use awesome_downloader_lib::domain::download::{
-    redact_download_url, sanitize_filename, DownloadRequest,
+    redact_download_url, sanitize_filename, DownloadProtocol, DownloadRequest,
 };
 
 fn request(url: &str) -> DownloadRequest {
@@ -18,15 +18,16 @@ fn request(url: &str) -> DownloadRequest {
 
 #[test]
 fn accepts_http_and_https_addresses_and_uses_default_directory() {
-    for url in [
-        "http://example.test/file.bin",
-        "https://example.test/file.bin",
+    for (url, protocol) in [
+        ("http://example.test/file.bin", DownloadProtocol::Http),
+        ("https://example.test/file.bin", DownloadProtocol::Https),
     ] {
         let valid = request(url)
             .validate(PathBuf::from("/tmp/downloads"))
             .expect("HTTP and HTTPS should be supported");
         assert_eq!(valid.directory, PathBuf::from("/tmp/downloads"));
         assert_eq!(valid.urls.len(), 1);
+        assert_eq!(valid.urls[0].protocol(), protocol);
     }
 }
 
@@ -75,5 +76,13 @@ fn redacts_credentials_queries_and_fragments_from_urls() {
     assert_eq!(
         redact_download_url("https://user:password@example.test/file?token=private#section"),
         "https://example.test/file"
+    );
+}
+
+#[test]
+fn malformed_url_is_not_exposed_in_a_snapshot() {
+    assert_eq!(
+        redact_download_url("https://user:password@bad host/file?token=private"),
+        "Invalid URL"
     );
 }

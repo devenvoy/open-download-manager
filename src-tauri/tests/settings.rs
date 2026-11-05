@@ -6,7 +6,10 @@ use std::{
 
 use awesome_downloader_lib::{
     application::settings_service::{SettingsRepository, SettingsService},
-    domain::settings::{Settings, SettingsPatch},
+    domain::{
+        category::DownloadCategory,
+        settings::{Settings, SettingsPatch},
+    },
     infrastructure::settings_store::SettingsStore,
 };
 
@@ -31,7 +34,7 @@ fn settings_update_is_validated_and_persisted() {
     let mut service = service;
     let mut category_directories = BTreeMap::new();
     category_directories.insert(
-        "Video".to_owned(),
+        DownloadCategory::Video,
         video_directory.to_string_lossy().into_owned(),
     );
 
@@ -53,7 +56,7 @@ fn settings_update_is_validated_and_persisted() {
     assert_eq!(updated.default_directory, updated_directory);
     assert_eq!(updated.max_concurrent, 5);
     assert_eq!(
-        updated.category_directories.get("Video"),
+        updated.category_directories.get(&DownloadCategory::Video),
         Some(&video_directory)
     );
     assert!(!updated.notify_on_complete);
@@ -96,16 +99,13 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
 }
 
 #[test]
-fn unknown_category_is_rejected() {
+fn relative_category_directory_is_rejected() {
     let directory = temporary_directory();
     let default_directory = std::env::temp_dir().join("downloads");
     let mut service = SettingsService::new(SettingsStore::new(&directory), default_directory)
         .expect("default settings should load");
     let mut category_directories = BTreeMap::new();
-    category_directories.insert(
-        "Unknown".to_owned(),
-        std::env::temp_dir().to_string_lossy().into_owned(),
-    );
+    category_directories.insert(DownloadCategory::Video, "relative/path".to_owned());
 
     let error = service
         .update(SettingsPatch {
@@ -120,7 +120,7 @@ fn unknown_category_is_rejected() {
             start_with_windows: None,
             hide_completion_dialog: None,
         })
-        .expect_err("unknown categories must be rejected");
+        .expect_err("category directories must be absolute");
 
     assert_eq!(error.code, "invalid_settings");
     assert!(!directory.exists());

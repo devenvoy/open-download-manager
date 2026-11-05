@@ -1,62 +1,57 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    application::error::{AppError, AppResult},
+    application::{
+        download_event_publisher::DownloadEventPublisher,
+        download_history_policy::MAX_ACTIVE_DOWNLOADS,
+        download_history_repository::DownloadHistoryRepository,
+        error::{AppError, AppResult},
+    },
     domain::download::{DownloadRecord, DownloadStatus},
 };
 
-const MAX_ACTIVE_DOWNLOADS: usize = 500;
-
-pub trait DownloadHistoryRepository: Send + Sync {
-    fn load(&self) -> AppResult<Vec<DownloadRecord>>;
-    fn save(&self, downloads: &[DownloadRecord]) -> AppResult<()>;
-}
-
-pub trait DownloadEventPublisher: Send + Sync {
-    fn publish_change(&self) -> AppResult<()>;
-}
-
-struct NoopEventPublisher;
-
-impl DownloadEventPublisher for NoopEventPublisher {
-    fn publish_change(&self) -> AppResult<()> {
-        Ok(())
-    }
-}
-
-struct DownloadHistoryState {
-    downloads: Mutex<Vec<DownloadRecord>>,
-    repository: Box<dyn DownloadHistoryRepository>,
-    events: Arc<dyn DownloadEventPublisher>,
-}
-
-#[derive(Clone)]
 pub struct DownloadHistoryService {
-    state: Arc<DownloadHistoryState>,
+    downloads: Arc<Mutex<Vec<DownloadRecord>>>,
+    repository: Arc<dyn DownloadHistoryRepository>,
+    events: Option<Arc<dyn DownloadEventPublisher>>,
+}
+
+impl Clone for DownloadHistoryService {
+    fn clone(&self) -> Self {
+        Self {
+            downloads: self.downloads.clone(),
+            repository: self.repository.clone(),
+            events: self.events.clone(),
+        }
+    }
 }
 
 impl DownloadHistoryService {
     pub fn new(repository: impl DownloadHistoryRepository + 'static) -> AppResult<Self> {
-        Self::with_events(repository, Arc::new(NoopEventPublisher))
+        Self::with_optional_events(repository, None)
     }
 
     pub fn with_events(
         repository: impl DownloadHistoryRepository + 'static,
         events: Arc<dyn DownloadEventPublisher>,
     ) -> AppResult<Self> {
-        let downloads = repository.load()?;
+        Self::with_optional_events(repository, Some(events))
+    }
+
+    fn with_optional_events(
+        repository: impl DownloadHistoryRepository + 'static,
+        events: Option<Arc<dyn DownloadEventPublisher>>,
+    ) -> AppResult<Self> {
+        let initial_downloads = repository.load()?;
         Ok(Self {
-            state: Arc::new(DownloadHistoryState {
-                downloads: Mutex::new(downloads),
-                repository: Box::new(repository),
-                events,
-            }),
+            downloads: Arc::new(Mutex::new(initial_downloads)),
+            repository: Arc::new(repository),
+            events,
         })
     }
 
     pub fn downloads(&self) -> AppResult<Vec<DownloadRecord>> {
-        self.state
-            .downloads
+        self.downloads
             .lock()
             .map(|downloads| downloads.clone())
             .map_err(|_| AppError::storage("Download history is unavailable."))
@@ -64,7 +59,6 @@ impl DownloadHistoryService {
 
     pub(crate) fn add_records(&self, records: Vec<DownloadRecord>) -> AppResult<()> {
         let mut downloads = self
-            .state
             .downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
@@ -87,7 +81,7 @@ impl DownloadHistoryService {
         }
         let old_len = downloads.len();
         downloads.extend(records);
-        if let Err(error) = self.persist(&downloads) {
+        if let Err(error) = self.repository.save(&downloads) {
             downloads.truncate(old_len);
             return Err(error);
         }
@@ -98,7 +92,6 @@ impl DownloadHistoryService {
 
     pub(crate) fn find_download(&self, id: &str) -> AppResult<DownloadRecord> {
         let downloads = self
-            .state
             .downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
@@ -115,7 +108,6 @@ impl DownloadHistoryService {
         update: impl FnOnce(&mut DownloadRecord),
     ) -> AppResult<()> {
         let mut downloads = self
-            .state
             .downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
@@ -125,7 +117,7 @@ impl DownloadHistoryService {
             .ok_or_else(|| AppError::download("The download no longer exists."))?;
         let previous = downloads[index].clone();
         update(&mut downloads[index]);
-        if let Err(error) = self.persist(&downloads) {
+        if let Err(error) = self.repository.save(&downloads) {
             downloads[index] = previous;
             return Err(error);
         }
@@ -134,33 +126,14 @@ impl DownloadHistoryService {
         Ok(())
     }
 
-    pub(crate) fn update_progress(&self, id: &str, downloaded: u64, speed: u64) -> AppResult<()> {
-        let mut downloads = self
-            .state
-            .downloads
-            .lock()
-            .map_err(|_| AppError::storage("Download history is unavailable."))?;
-        let download = downloads
-            .iter_mut()
-            .find(|download| download.id == id)
-            .ok_or_else(|| AppError::download("The download no longer exists."))?;
-        download.downloaded = downloaded;
-        download.speed = speed;
-        drop(downloads);
-        self.publish_change();
-        Ok(())
-    }
-
-    pub(crate) fn publish_change(&self) {
-        if let Err(error) = self.state.events.publish_change() {
-            eprintln!(
-                "Could not notify the renderer about download changes: {}",
-                error.message
-            );
+    fn publish_change(&self) {
+        if let Some(events) = &self.events {
+            if let Err(error) = events.publish_change() {
+                eprintln!(
+                    "Could not notify the renderer about download changes: {}",
+                    error.message
+                );
+            }
         }
-    }
-
-    fn persist(&self, downloads: &[DownloadRecord]) -> AppResult<()> {
-        self.state.repository.save(downloads)
     }
 }
