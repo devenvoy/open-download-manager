@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::domain::category::DownloadCategory;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsPatch {
     pub default_directory: Option<String>,

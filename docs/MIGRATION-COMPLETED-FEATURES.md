@@ -11,13 +11,14 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 62 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **Rust Test Suite:** 69 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
 - **WebExtension & Renderer Contract Suite:** 83 tests passing (`bun test renderer/ extension/`)
 - **Zero-Node Runtime:** Core transfers, scheduling, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
 | Subsystem | Legacy Electron Reference | Migrated Tauri / Rust Implementation | Functional Parity | Performance & Stability Gain |
-| :--- | :--- | :--- | :---: | :--- |
+| :--- | :--- | :--- | :--- | :--- |
 | **Download Context Actions** | `desktop/main.cjs`, `core/engine.mjs` | `src-tauri/src/application/download_transfer_service.rs`, `system_shell.rs` | **100%** | Full `remove`, `open`, `reveal`, `openWith`, and `removeCompleted` parity |
+| **Desktop Shell & System Tray** | `desktop/main.cjs` | `src-tauri/src/presentation/tray.rs`, `autostart.rs`, `lib.rs` | **100%** | System tray icon, minimize/close-to-tray, single-instance lock, Windows Run autostart |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |
@@ -208,6 +209,16 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
   - `reveal`: Highlights completed file in Windows Explorer / Finder via `opener::reveal`; falls back to directory for pending downloads.
   - `openWith`: Opens Windows `%SystemRoot%\System32\OpenWith.exe` on completed files.
   - `removeCompleted`: Batch atomic removal of all completed downloads from history without deleting finalized files from disk (`remove_completed` command).
+
+### 6.4 Desktop Shell, System Tray & Process Lifecycle
+- **Legacy:** Electron `Tray`, `app.requestSingleInstanceLock()`, `app.setLoginItemSettings()`, window `close` event interception.
+- **Migrated:** Implemented in `src-tauri/src/presentation/tray.rs`, `src-tauri/src/infrastructure/autostart.rs`, `src-tauri/src/lib.rs`, and `tauri-plugin-single-instance`.
+- **Features Complete:**
+  - **System Tray:** Configured with tooltip `"Awesome Downloader"`, custom icon, and context menu (`Show downloads`, `Quit`). Left click and double click activate and unminimize main window.
+  - **Close-to-Tray:** Intercepts main window `CloseRequested` events; hides the window instead of quitting unless explicit `Quit` from tray or app exit was invoked.
+  - **Single Instance Lock:** `tauri-plugin-single-instance` enforces a single app instance. Attempting to launch a second instance unminimizes, shows, and focuses the primary window.
+  - **Autostart with Windows:** Windows Registry persistence (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Awesome Downloader`) with `--background` parameter, automatically synchronized whenever `startWithWindows` setting is toggled.
+  - **Silent Background Launch:** Supports `--background` CLI argument to launch directly to tray without window flashing.
 
 ---
 

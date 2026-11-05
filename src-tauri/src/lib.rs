@@ -25,6 +25,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if argv.iter().any(|arg| arg == "--browser-setup") {
+                presentation::tray::show_main_window(app);
+            } else if !argv.iter().any(|arg| arg == "--background" || arg == "--browser-download") {
+                presentation::tray::show_main_window(app);
+            }
+        }))
         .setup(|app| {
             let home_directory = app
                 .path()
@@ -74,6 +81,31 @@ pub fn run() {
                     eprintln!("Could not start loopback bridge: {}", e.message);
                 }
             });
+
+            let _ = crate::infrastructure::autostart::sync_autostart(
+                settings.settings().start_with_windows,
+            );
+
+            let is_quitting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let _tray = presentation::tray::setup_system_tray(&app.handle(), is_quitting.clone())
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+
+            let is_background = std::env::args().any(|arg| arg == "--background");
+            if let Some(main_window) = app.get_webview_window("main") {
+                if !is_background {
+                    let _ = main_window.show();
+                }
+                let is_quitting_window = is_quitting.clone();
+                let main_window_clone = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if !is_quitting_window.load(std::sync::atomic::Ordering::SeqCst) {
+                            api.prevent_close();
+                            let _ = main_window_clone.hide();
+                        }
+                    }
+                });
+            }
 
             app.manage(AppState::new(settings, download_history, download_transfer));
             Ok(())

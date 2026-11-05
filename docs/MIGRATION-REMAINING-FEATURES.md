@@ -16,8 +16,8 @@ While the core transfer engine and networking have been successfully ported to R
 | Feature Category | Legacy Electron Status | Current Tauri Status | Completion % | Deficit / Missing Scope |
 | :--- | :--- | :--- | :---: | :--- |
 | **Download Context Actions** | Full OS shell integration (`open`, `openWith`, `reveal`, `remove`, `removeCompleted`) | `open`, `openWith`, `reveal`, `remove`, `removeCompleted` fully ported with clean architecture and verified | **100%** | None (100% parity achieved in Phase A) |
+| **Desktop Shell & Tray** | System tray icon, minimize-to-tray, close-to-tray, autostart with Windows, single instance lock | Tray icon, close-to-tray, single-instance lock, and Windows Run autostart fully ported and verified | **100%** | None (100% parity achieved in Phase B) |
 | **Browser Integration UI** | Live status scanner, setup wizard, extension store deep-links, confirmation review | Loopback server and native host binary exist, but UI APIs and snapshot are completely stubbed or hardcoded to unavailable | **35%** | User cannot view browser status, trigger browser setup, or review browser downloads |
-| **Desktop Shell & Tray** | System tray icon, minimize-to-tray, close-to-tray, autostart with Windows, single instance lock | No system tray, no close-to-tray, no autostart registration, no single instance lock | **0%** | Closing the window kills the app; background daemon behavior is completely absent |
 | **Window Management** | Unlimited concurrent progress windows, dedicated options/add/scheduler windows, close confirmation prompts | Single hardcoded progress window label, auxiliary windows stubbed to in-page modals, no close confirmation | **30%** | Only 1 download details window can exist at a time; no safety prompt when closing active transfers |
 | **Application Menu & Shortcuts**| Full native menu bar with accelerators (Ctrl+N, Ctrl+F, Del), URL text import/export, about dialog | No application menu, no accelerators, no `downloader:command` event generation, no import/export | **0%** | Traditional desktop menu bar and URL batch file import/export are completely missing |
 | **System Notifications** | Windows native notifications on completion and updates | No notification plugin or calls | **0%** | Downloads complete silently without OS desktop toast notifications |
@@ -96,20 +96,13 @@ Even though the loopback bridge server (`LoopbackBridge`) and native host binary
 
 ## 4. Desktop Shell, Window Management & Lifecycle
 
-### 4.1 System Tray & Close-to-Tray Lifecycle (100% Missing)
-- **Legacy Behavior:** (`desktop/main.cjs:330-338`)
-  - Created a Windows System Tray icon with tooltip *"Awesome Downloader"*.
-  - Right-click tray menu: *"Show downloads"*, *"Quit"*.
-  - Left-click / double-click: Restores and focuses the main window.
-  - **Minimize on Close:** When the user clicks the window close button (`X`), the event was intercepted:
-    ```javascript
-    window.on('close', event => { if (!quitting) { event.preventDefault(); window.hide(); } });
-    ```
-    The application continued running in the background to handle browser downloads and scheduled tasks.
-- **Current Tauri State:**
-  - No tray configuration in `tauri.conf.json` or `src-tauri/src/lib.rs`.
-  - Closing the main window exits the entire application process immediately.
-  - Background downloads and loopback bridge terminate when the user closes the window.
+### 4.1 System Tray, Close-to-Tray, Autostart & Single Instance (COMPLETED - 100% Parity)
+Implemented and verified in Phase B:
+- **System Tray:** Configured in `src-tauri/src/presentation/tray.rs` with tooltip `"Awesome Downloader"`, custom icon, and context menu (`Show downloads`, `Quit`). Left click and double click activate and unminimize main window.
+- **Close-to-Tray:** Intercepts main window `CloseRequested` events in `lib.rs`; hides the window instead of quitting unless `is_quitting` atomic flag is set.
+- **Single Instance Lock:** `tauri-plugin-single-instance` enforces a single app instance, focusing and unminimizing the running window when a second instance is invoked.
+- **Autostart with Windows:** Windows Registry persistence (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Awesome Downloader`) with `--background` parameter via `reg.exe` commands, automatically synchronized with `startWithWindows` setting.
+- **Silent Background Launch:** Supports `--background` CLI argument to launch directly to tray without window flashing.
 
 ### 4.2 Multi-Window Progress / Details Limitation
 - **Legacy Behavior:** (`desktop/main.cjs:17-20, 172-215`)
@@ -148,24 +141,11 @@ Even though the loopback bridge server (`LoopbackBridge`) and native host binary
     ```
   - **Deficit:** Stubs force the renderer to display in-page HTML `<dialog>` elements inside the main window rather than opening independent native windows.
 
-### 4.5 Windows Autostart Registration (`startWithWindows`)
-- **Legacy Behavior:** (`desktop/main.cjs:38-41`)
-  - Called `app.setLoginItemSettings({ openAtLogin: engine.settings.startWithWindows !== false, path: app.getPath('exe'), args: ['--background'] })`.
-- **Current Tauri State:**
-  - `start_with_windows` is persisted in `settings.json`, but **is never registered with the Windows Registry** (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`).
-  - The application cannot start automatically on Windows boot.
+### 4.5 Windows Autostart Registration (COMPLETED in Phase B)
+- Ported with Windows Registry `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` synchronization.
 
-### 4.6 Single-Instance Lock & CLI Launch Arguments
-- **Legacy Behavior:** (`desktop/main.cjs:14-28`)
-  - `app.requestSingleInstanceLock()` prevented multiple instances.
-  - If a second instance launched:
-    - Focused the existing window.
-    - Handled `--browser-setup` by opening the integration wizard.
-    - Handled `--background` by launching silently to tray.
-- **Current Tauri State:**
-  - `tauri-plugin-single-instance` is not installed.
-  - Launching the app multiple times starts independent duplicate processes.
-  - CLI flags (`--background`, `--browser-setup`, `--native-host`) are unhandled by the main executable.
+### 4.6 Single-Instance Lock & CLI Launch Arguments (COMPLETED in Phase B)
+- Ported via `tauri-plugin-single-instance`, focusing/unminimizing on second instance launch, and handling `--background` and `--browser-setup` flags.
 
 ---
 

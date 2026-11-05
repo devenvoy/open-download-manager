@@ -1,4 +1,5 @@
 pub mod atomic_file;
+pub mod autostart;
 pub mod bridge;
 pub mod browser;
 pub(crate) mod data_file_policy;

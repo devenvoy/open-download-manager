@@ -67,5 +67,6 @@ pub fn update_settings(
     state
         .download_transfer
         .set_speed_limit(updated.speed_limit_kbps);
+    let _ = crate::infrastructure::autostart::sync_autostart(updated.start_with_windows);
     Ok(updated)
 }
