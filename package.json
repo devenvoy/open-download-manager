@@ -17,6 +17,7 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "clean": "cargo clean",
+    "pack:extension": "bun scripts/pack-extension.mjs",
     "test": "cargo test && bun run test:extension",
     "test:extension": "bun test extension renderer"
   },

@@ -5,6 +5,7 @@ integration/runtime-path.txt
 integration/desktop-launch.json
 release/
 release-*/
+dist/
 research/
 TODO.md
 tests/QA.md
