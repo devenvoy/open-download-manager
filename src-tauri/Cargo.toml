@@ -4,6 +4,7 @@ version = "0.1.2"
 description = "Open Download Manager desktop application"
 authors = ["Open Download Manager contributors"]
 edition = "2021"
+default-run = "open-download-manager"
 
 [lib]
 name = "open_download_manager_lib"

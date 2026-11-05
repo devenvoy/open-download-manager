@@ -16,7 +16,8 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml && bun run test:extension",
+    "clean": "cargo clean",
+    "test": "cargo test && bun run test:extension",
     "test:extension": "bun test extension renderer"
   },
   "devDependencies": {

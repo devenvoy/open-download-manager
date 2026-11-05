@@ -395,7 +395,7 @@ impl DownloadTransferService {
 
     pub fn start_scheduler(&self) {
         let service = self.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(
                 SCHEDULER_POLL_INTERVAL_MILLISECONDS,
             ));
