@@ -50,6 +50,19 @@ impl Snapshot {
         }
     }
 
+    pub fn with_summaries(
+        settings: Settings,
+        downloads: Vec<DownloadSummary>,
+        integration: IntegrationStatus,
+    ) -> Self {
+        Self {
+            downloads,
+            settings,
+            integration,
+            file_icons: BTreeMap::new(),
+        }
+    }
+
     pub fn with_file_icons(mut self, file_icons: BTreeMap<String, String>) -> Self {
         self.file_icons = file_icons;
         self

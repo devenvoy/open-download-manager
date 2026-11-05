@@ -664,7 +664,8 @@ impl HttpDownloadExecutor {
             .map_err(|error| {
                 AppError::download(format!("Could not assemble the download file: {error}"))
             })?;
-        let mut buffer = vec![0; 64 * 1024];
+        const CONCAT_BUFFER_SIZE: usize = 128 * 1024;
+        let mut buffer = vec![0; CONCAT_BUFFER_SIZE];
         for (index, _) in segments.iter().enumerate() {
             let segment_index = u8::try_from(index)
                 .map_err(|_| AppError::download("The segment index is invalid."))?;

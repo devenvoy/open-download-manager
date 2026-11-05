@@ -10,7 +10,7 @@ use crate::{
         download::{DownloadAction, DownloadRequest, ReviewDownloadRequest},
         media::{AddPlaylistDownloadsRequest, PlaylistMetadata},
         settings::SettingsPatch,
-        snapshot::{IntegrationStatus, Snapshot},
+        snapshot::{DownloadSummary, IntegrationStatus, Snapshot},
     },
     infrastructure::media::ytdlp::YtDlpTools,
 };
@@ -26,12 +26,15 @@ pub fn snapshot(state: State<'_, AppState>) -> AppResult<Snapshot> {
     let integration = state.integration.get_integration_info().unwrap_or_else(|e| {
         IntegrationStatus::unavailable(e.message)
     });
-    let downloads = state.download_history.downloads()?;
-    state.file_icons.load(&downloads);
-    let icons = state.file_icons.snapshot();
-    Ok(Snapshot::with_integration(
+    let (summaries, icons) = state.download_history.with_downloads(|records| {
+        state.file_icons.load(records);
+        let icons = state.file_icons.snapshot();
+        let summaries: Vec<DownloadSummary> = records.iter().map(DownloadSummary::from).collect();
+        (summaries, icons)
+    })?;
+    Ok(Snapshot::with_summaries(
         settings.settings().clone(),
-        downloads,
+        summaries,
         integration,
     ).with_file_icons(icons))
 }

@@ -33,6 +33,36 @@ pub struct DownloadSummary {
     pub connections_progress: Vec<DownloadSegmentProgress>,
 }
 
+impl From<&DownloadRecord> for DownloadSummary {
+    fn from(download: &DownloadRecord) -> Self {
+        Self {
+            id: download.id.clone(),
+            url: redact_download_url(&download.url),
+            filename: download.filename.clone(),
+            status: download.status.clone(),
+            downloaded: download.downloaded,
+            total: download.total,
+            speed: download.speed,
+            created_at: download.created_at.clone(),
+            needs_review: download.needs_review,
+            scheduled_at: download.scheduled_at.clone(),
+            description: download.description.clone(),
+            category: download.category.clone(),
+            directory: download.directory.clone(),
+            path: download.path.clone(),
+            last_try: download.last_try.clone(),
+            error: download.error.clone(),
+            notice: download.notice.clone(),
+            estimated: download.estimated,
+            kind: download.kind.clone(),
+            resumable: download.resumable,
+            duration: download.duration,
+            connections: download.connections,
+            connections_progress: download.connections_progress.clone(),
+        }
+    }
+}
+
 impl From<DownloadRecord> for DownloadSummary {
     fn from(download: DownloadRecord) -> Self {
         Self {
