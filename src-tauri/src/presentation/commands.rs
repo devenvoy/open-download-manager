@@ -111,3 +111,21 @@ pub fn update_settings(
     let _ = crate::infrastructure::autostart::sync_autostart(updated.start_with_windows);
     Ok(updated)
 }
+
+#[tauri::command]
+pub fn export_downloads_to_file(app: tauri::AppHandle) -> AppResult<()> {
+    super::menu::export_downloads_flow(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn import_downloads_from_file(app: tauri::AppHandle) -> AppResult<()> {
+    super::menu::import_downloads_flow(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn show_about_dialog(app: tauri::AppHandle) -> AppResult<()> {
+    super::menu::show_about_dialog(&app);
+    Ok(())
+}

@@ -192,7 +192,7 @@ test('review invokes review_download Rust command with request', async () => {
 
   assert.deepEqual(result, ['download-123']);
   assert.equal(calls[0][0], 'review_download');
-  assert.deepEqual(calls[0][1], { request });
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ request }));
 });
 
 test('integration invokes get_integration_info Rust command', async () => {
@@ -225,7 +225,7 @@ test('browserSetup invokes browser_setup_action Rust command', async () => {
   const result = await api.browserSetup({ action: 'copy', browser: 'Chrome' });
   assert.deepEqual(result, { browser: 'Chrome' });
   assert.equal(calls[0][0], 'browser_setup_action');
-  assert.deepEqual(calls[0][1], { action: 'copy', browser: 'Chrome' });
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ action: 'copy', browser: 'Chrome' }));
 });
 
 test('registerBrowser invokes register_browser Rust command', async () => {
@@ -241,10 +241,35 @@ test('registerBrowser invokes register_browser Rust command', async () => {
 
   await api.registerBrowser({ browser: 'Chrome', extensionId: 'abcdefghijklmnopabcdefghijklmnop' });
   assert.equal(calls[0][0], 'register_browser');
-  assert.deepEqual(calls[0][1], { browser: 'Chrome', extensionId: 'abcdefghijklmnopabcdefghijklmnop' });
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ browser: 'Chrome', extensionId: 'abcdefghijklmnopabcdefghijklmnop' }));
 });
 
-test('openIntegration resolves cleanly', async () => {
-  const api = loadApi();
-  await assert.doesNotReject(api.openIntegration());
+test('auxiliary window and dialog methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.openIntegration();
+  await api.openOptions();
+  await api.openAdd({ paste: true, scheduled: '2026-12-01T00:00:00Z' });
+  await api.openScheduler();
+  await api.exportDownloads();
+  await api.importDownloads();
+  await api.showAbout();
+
+  assert.equal(calls.length, 7);
+  assert.equal(calls[0][0], 'open_integration_window');
+  assert.equal(calls[1][0], 'open_options_window');
+  assert.equal(calls[2][0], 'open_add_window');
+  assert.equal(JSON.stringify(calls[2][1]), JSON.stringify({ options: { paste: true, scheduled: '2026-12-01T00:00:00Z' } }));
+  assert.equal(calls[3][0], 'open_scheduler_window');
+  assert.equal(calls[4][0], 'export_downloads_to_file');
+  assert.equal(calls[5][0], 'import_downloads_from_file');
+  assert.equal(calls[6][0], 'show_about_dialog');
 });

@@ -10,11 +10,15 @@ use infrastructure::{
 use presentation::{
     app_state::AppState,
     commands::{
-        add_download, browser_setup_action, download_action, get_integration_info,
-        register_browser, remove_completed, review_download, snapshot, update_settings,
+        add_download, browser_setup_action, download_action, export_downloads_to_file,
+        get_integration_info, import_downloads_from_file, register_browser, remove_completed,
+        review_download, show_about_dialog, snapshot, update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
-    window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
+    window_manager::{
+        close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
+        open_progress_window, open_scheduler_window, resize_progress_window,
+    },
 };
 use tauri::Manager;
 
@@ -30,7 +34,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if argv.iter().any(|arg| arg == "--browser-setup") {
-                presentation::tray::show_main_window(app);
+                let _ = presentation::window_manager::open_integration_window(app.clone());
             } else if !argv.iter().any(|arg| arg == "--background" || arg == "--browser-download") {
                 presentation::tray::show_main_window(app);
             }
@@ -101,9 +105,19 @@ pub fn run() {
             let _tray = presentation::tray::setup_system_tray(&app.handle(), is_quitting.clone())
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
 
+            let menu = presentation::menu::build_application_menu(&app.handle())
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let _ = app.set_menu(menu);
+
+            app.on_menu_event(|app, event| {
+                presentation::menu::handle_menu_event(app, event.id().as_ref());
+            });
+
             let is_background = std::env::args().any(|arg| arg == "--background");
+            let is_browser_setup = std::env::args().any(|arg| arg == "--browser-setup");
+
             if let Some(main_window) = app.get_webview_window("main") {
-                if !is_background {
+                if !is_background && !is_browser_setup {
                     let _ = main_window.show();
                 }
                 let is_quitting_window = is_quitting.clone();
@@ -116,6 +130,10 @@ pub fn run() {
                         }
                     }
                 });
+            }
+
+            if is_browser_setup {
+                let _ = presentation::window_manager::open_integration_window(app.handle().clone());
             }
 
             app.manage(AppState::new(
@@ -138,7 +156,14 @@ pub fn run() {
             get_integration_info,
             register_browser,
             browser_setup_action,
-            review_download
+            review_download,
+            open_options_window,
+            open_add_window,
+            open_scheduler_window,
+            open_integration_window,
+            export_downloads_to_file,
+            import_downloads_from_file,
+            show_about_dialog
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Awesome Downloader");

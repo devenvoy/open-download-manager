@@ -79,8 +79,11 @@ window.downloader = Object.freeze({
   integration: () => invoke('get_integration_info'),
   browserSetup: ({ action, browser }) => invoke('browser_setup_action', { action, browser }),
   registerBrowser: ({ browser, extensionId }) => invoke('register_browser', { browser, extensionId }),
-  openIntegration: () => Promise.resolve(),
-  openOptions: () => Promise.resolve(),
-  openAdd: () => Promise.resolve(),
-  openScheduler: () => Promise.resolve()
+  openIntegration: () => invoke('open_integration_window'),
+  openOptions: () => invoke('open_options_window'),
+  openAdd: options => invoke('open_add_window', { options: options || null }),
+  openScheduler: () => invoke('open_scheduler_window'),
+  exportDownloads: () => invoke('export_downloads_to_file'),
+  importDownloads: () => invoke('import_downloads_from_file'),
+  showAbout: () => invoke('show_about_dialog')
 });
