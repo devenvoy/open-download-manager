@@ -60,6 +60,21 @@ pub fn run() {
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
             download_transfer.start_scheduler();
 
+            let bridge_data_dir = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let bridge_transfer = download_transfer.clone();
+            let bridge_settings = settings.settings().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = crate::infrastructure::bridge::LoopbackBridge::start(
+                    bridge_data_dir,
+                    bridge_transfer,
+                    bridge_settings,
+                )
+                .await
+                {
+                    eprintln!("Could not start loopback bridge: {}", e.message);
+                }
+            });
+
             app.manage(AppState::new(settings, download_history, download_transfer));
             Ok(())
         })

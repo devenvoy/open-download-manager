@@ -49,6 +49,20 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    pub fn bridge(message: impl Into<String>) -> Self {
+        Self {
+            code: "bridge_error",
+            message: message.into(),
+        }
+    }
+
+    pub fn browser(message: impl Into<String>) -> Self {
+        Self {
+            code: "browser_error",
+            message: message.into(),
+        }
+    }
 }
 
 pub type AppResult<T> = Result<T, AppError>;

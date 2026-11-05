@@ -1,4 +1,6 @@
 pub mod atomic_file;
+pub mod bridge;
+pub mod browser;
 pub(crate) mod data_file_policy;
 pub mod download_history_store;
 pub mod http_download_executor;
