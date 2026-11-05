@@ -16,7 +16,7 @@
   }
   async function onPlayer(event){
     if(!connected())return;
-    if(event.source!==window || event.origin!==location.origin || event.data?.type!=='awesome-player-response')return;
+    if(event.source!==window || event.origin!==location.origin || event.data?.type!=='odm-player-response')return;
     const data=event.data.data;
     if(!data || !/^[\w-]{11}$/.test(data.videoId||'') || !Array.isArray(data.formats) || data.formats.length>150)return;
     try{
@@ -29,8 +29,8 @@
     if(!connected() || sender.id!==api.runtime.id || message.action!=='refreshPlayer')return;
     let timer;const done=(ok=true)=>{clearTimeout(timer);pending.delete(done);try{respond({ok});}catch{}};
     pending.add(done);timer=setTimeout(done,1500);
-    dispatchEvent(new Event('awesome-request-player'));return true;
+    dispatchEvent(new Event('odm-request-player'));return true;
   }
   api.runtime.onMessage.addListener(onMessage);
-  dispatchEvent(new Event('awesome-request-player'));
+  dispatchEvent(new Event('odm-request-player'));
 })();

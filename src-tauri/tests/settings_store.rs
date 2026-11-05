@@ -1,6 +1,6 @@
 use std::fs;
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::settings_service::{SettingsRepository, SettingsService},
     domain::category::DownloadCategory,
     domain::settings::SettingsPatch,

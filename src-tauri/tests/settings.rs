@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::settings_service::{SettingsRepository, SettingsService},
     domain::{
         category::DownloadCategory,
@@ -14,7 +14,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     let dir = tempfile::Builder::new()
-        .prefix("awesome-downloader-settings-test-")
+        .prefix("open-download-manager-settings-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep();

@@ -6,7 +6,7 @@ use std::{
 };
 use base64::prelude::*;
 use tokio::sync::watch;
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_executor::{DownloadControl, DownloadProgressHandler, DownloadStopReason},
         download_history_service::DownloadHistoryService,
@@ -587,7 +587,7 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
     assert_eq!(result.path.file_name().unwrap(), "sabr_output.mp4");
     assert!(result.downloaded > 0);
 
-    let parts_dir = dir.join(format!(".awesome-downloader-sabr-{}", download.id));
+    let parts_dir = dir.join(format!(".open-download-manager-sabr-{}", download.id));
     assert!(!parts_dir.exists(), "parts dir should be deleted after mux");
 
     let events = progress_events.lock().unwrap();
@@ -686,7 +686,7 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         .await;
 
     assert!(res.is_err(), "transfer should be aborted");
-    let parts_dir = dir.join(format!(".awesome-downloader-sabr-{}", download.id));
+    let parts_dir = dir.join(format!(".open-download-manager-sabr-{}", download.id));
     assert!(!parts_dir.exists(), "parts dir should be deleted on cancellation");
 }
 

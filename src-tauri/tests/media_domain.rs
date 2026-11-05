@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use awesome_downloader_lib::domain::media::{
+use open_download_manager_lib::domain::media::{
     calculate_stream_progress, choices_from_info, parse_hls, scoped_headers, youtube_error,
     youtube_url, ParsedHls, StreamSegment,
 };

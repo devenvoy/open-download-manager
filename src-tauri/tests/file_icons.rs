@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     domain::{download::DownloadRecord, download::DownloadStatus, settings::Settings, snapshot::Snapshot},
     infrastructure::file_icons::{extension_key, is_safe_extension, FileIconProvider},
 };

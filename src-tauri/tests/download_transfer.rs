@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::download_history_service::DownloadHistoryService,
     application::download_transfer_service::DownloadTransferService,
     domain::{
@@ -20,7 +20,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-transfer-test-")
+        .prefix("open-download-manager-transfer-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()
@@ -369,7 +369,7 @@ async fn failed_http_status_is_reported_without_leaving_a_partial_file() {
     );
     assert!(!directory.join("missing.bin").exists());
     assert!(!directory
-        .join(format!(".awesome-downloader-{}.part", ids[0]))
+        .join(format!(".open-download-manager-{}.part", ids[0]))
         .exists());
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
@@ -437,7 +437,7 @@ async fn paused_download_resumes_from_its_saved_byte_range() {
         wait_for_terminal_status(&history, &ids[0]).await,
         DownloadStatus::Paused
     );
-    let partial = directory.join(format!(".awesome-downloader-{}.part", ids[0]));
+    let partial = directory.join(format!(".open-download-manager-{}.part", ids[0]));
     let partial_size = fs::metadata(&partial)
         .expect("paused download should retain its partial file")
         .len();
@@ -498,7 +498,7 @@ async fn cancelling_download_removes_partial_output() {
     );
     for _ in 0..100 {
         if !directory
-            .join(format!(".awesome-downloader-{}.part", ids[0]))
+            .join(format!(".open-download-manager-{}.part", ids[0]))
             .exists()
         {
             break;
@@ -506,7 +506,7 @@ async fn cancelling_download_removes_partial_output() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(!directory
-        .join(format!(".awesome-downloader-{}.part", ids[0]))
+        .join(format!(".open-download-manager-{}.part", ids[0]))
         .exists());
     assert!(!directory.join("cancelled.bin").exists());
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
@@ -601,7 +601,7 @@ async fn cancelling_a_paused_download_removes_its_partial_file() {
     );
     for _ in 0..100 {
         if !directory
-            .join(format!(".awesome-downloader-{}.part", ids[0]))
+            .join(format!(".open-download-manager-{}.part", ids[0]))
             .exists()
         {
             break;
@@ -609,7 +609,7 @@ async fn cancelling_a_paused_download_removes_its_partial_file() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(!directory
-        .join(format!(".awesome-downloader-{}.part", ids[0]))
+        .join(format!(".open-download-manager-{}.part", ids[0]))
         .exists());
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }

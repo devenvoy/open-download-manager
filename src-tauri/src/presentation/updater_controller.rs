@@ -21,7 +21,7 @@ pub async fn run_update_check(
             if mode == UpdateCheckMode::Manual {
                 show_error_dialog(
                     app,
-                    "Awesome Downloader could not check for updates.",
+                    "Open Download Manager could not check for updates.",
                     crate::domain::updater::friendly_update_error(&err.message),
                 );
             }
@@ -40,7 +40,7 @@ pub async fn run_update_check(
         }
         UpdateCheckOutcome::UpToDate { version } => {
             app.dialog()
-                .message("Awesome Downloader is up to date.")
+                .message("Open Download Manager is up to date.")
                 .title("No updates available")
                 .kind(MessageDialogKind::Info)
                 .buttons(MessageDialogButtons::Ok)
@@ -55,14 +55,14 @@ pub async fn run_update_check(
             let _ = app
                 .notification()
                 .builder()
-                .title("Awesome Downloader update available")
+                .title("Open Download Manager update available")
                 .body(format!("Version {} is ready to download.", info.version))
                 .show();
         }
         UpdateCheckOutcome::Error { friendly_detail, .. } => {
             show_error_dialog(
                 app,
-                "Awesome Downloader could not check for updates.",
+                "Open Download Manager could not check for updates.",
                 &friendly_detail,
             );
         }
@@ -76,7 +76,7 @@ pub fn prompt_for_download(app: &AppHandle, update_service: &UpdateService, info
     let info_clone = info.clone();
 
     app.dialog()
-        .message(format!("Awesome Downloader {} is available.\n\nDownload it now? You can continue using the app while it downloads.", info.version))
+        .message(format!("Open Download Manager {} is available.\n\nDownload it now? You can continue using the app while it downloads.", info.version))
         .title("Update available")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::OkCancelCustom(
@@ -88,8 +88,8 @@ pub fn prompt_for_download(app: &AppHandle, update_service: &UpdateService, info
                 if let Some(ref download_url) = info_clone.download_url {
                     let download_url = download_url.clone();
                     let dest = std::env::temp_dir()
-                        .join("awesome-downloader-update")
-                        .join(format!("Awesome-Downloader-Setup-{}.exe", info_clone.version));
+                        .join("open-download-manager-update")
+                        .join(format!("Open-Download-Manager-Setup-{}.exe", info_clone.version));
                     let app_for_dl = app_clone.clone();
                     let service_for_dl = service_clone.clone();
                     let info_for_dl = info_clone.clone();
@@ -99,7 +99,7 @@ pub fn prompt_for_download(app: &AppHandle, update_service: &UpdateService, info
                         .notification()
                         .builder()
                         .title("Downloading update")
-                        .body(format!("Downloading Awesome Downloader {} in background...", info_for_dl.version))
+                        .body(format!("Downloading Open Download Manager {} in background...", info_for_dl.version))
                         .show();
 
                     tauri::async_runtime::spawn(async move {
@@ -157,13 +157,13 @@ pub fn prompt_for_install(
             if count == 1 { " is" } else { "s are" }
         ),
         InstallDecision::ReadyToInstall => {
-            "Restart Awesome Downloader to install the update. Your download history and settings will be kept.".to_string()
+            "Restart Open Download Manager to install the update. Your download history and settings will be kept.".to_string()
         }
     };
 
     let app_clone = app.clone();
     app.dialog()
-        .message(format!("Awesome Downloader {} is ready to install.\n\n{}", info.version, detail))
+        .message(format!("Open Download Manager {} is ready to install.\n\n{}", info.version, detail))
         .title("Update ready")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::OkCancelCustom(

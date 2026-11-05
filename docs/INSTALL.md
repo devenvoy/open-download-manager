@@ -1,12 +1,12 @@
-# Install and use Awesome Downloader
+# Install and use Open Download Manager
 
 ## Download
 
 Windows 10/11, 64-bit Intel/AMD PCs are the intended target. Native ARM builds
 are not provided. YouTube speed and compatibility vary.
 
-Open the project's [latest release](https://github.com/devenvoy/awesome-downloader/releases/latest)
-and download **Awesome-Downloader-Setup.exe** from Assets. You do not need a GitHub
+Open the project's [latest release](https://github.com/devenvoy/open-download-manager/releases/latest)
+and download **Open-Download-Manager-Setup.exe** from Assets. You do not need a GitHub
 account, Git, Node.js, or a terminal to install the application. Do not download
 the automatically generated "Source code" archives to install it.
 
@@ -14,7 +14,7 @@ The installer is currently unsigned. Windows may show an unknown-publisher
 warning. Do not disable antivirus or other security protections; check the source
 of your download and the release's SHA-256 checksum before deciding to run it.
 
-Run the installer and follow the wizard. Launch **Awesome Downloader** from the
+Run the installer and follow the wizard. Launch **Open Download Manager** from the
 Start menu. Keep the app installed at its chosen location so browser integration
 can find it.
 
@@ -26,13 +26,13 @@ permission prompt for browser setup. Declining it still installs the app normall
 Close and reopen your browser after installation, then accept its extension
 confirmation. The browser decides when to show that confirmation; managed-browser
 policies or an earlier removal of the extension may prevent automatic setup.
-Awesome Downloader never opens a store page automatically on startup.
+Open Download Manager never opens a store page automatically on startup.
 When you finish an installation with browser setup selected, the app opens its
 Browser integration window so you can see what still needs your approval.
 
 If a browser says **Enable extension**, it has downloaded the extension but needs
-your approval. Open that browser's **Action required** menu and enable **Awesome
-Downloader Integration**. If the prompt is missing, open its Extensions page and
+your approval. Open that browser's **Action required** menu and enable **Open
+Download Manager Integration**. If the prompt is missing, open its Extensions page and
 enable the extension there. A **Reinstall needed** status means the extension was
 previously removed in that browser profile: click **Reinstall extension** in the
 app, then **Add to Chrome** (or the equivalent button) in the store. Browser
@@ -43,12 +43,12 @@ not through a force-install policy. You can still disable or remove the extensio
 Chrome and Edge have documented support for this mechanism. Brave currently shares
 Chrome's registration mechanism, but its actual prompt must be verified separately.
 The final app uninstall removes registrations created by these installers once no
-other registered Awesome Downloader installation needs them; Windows requests
+other registered Open Download Manager installation needs them; Windows requests
 administrator permission for that cleanup too.
 
 To install manually or retry setup, open **Browser integration**, choose
 your browser, and click **Install browser extension**. Confirm the installation
-in that browser. Keep Awesome Downloader running, click **Refresh** in browser
+in that browser. Keep Open Download Manager running, click **Refresh** in browser
 integration, and refresh the video page. No Developer mode, folder picker, or
 extension ID is needed for this published extension.
 
@@ -81,10 +81,10 @@ builds; Chrome, Edge and Brave users should use the published extension above:
 7. Click **Select Folder** (some versions say **Select**) at the bottom of that
    Windows window. Choose the **extension folder itself**, not a file inside it
    and not its `icons` subfolder.
-8. The browser's Extensions page should now show **Awesome Downloader
+8. The browser's Extensions page should now show **Open Download Manager
    Integration**. Make sure its switch is on. Leave Developer mode on while using
    this unpacked preview extension.
-9. Return to Awesome Downloader and click **Refresh**. The selected browser's
+9. Return to Open Download Manager and click **Refresh**. The selected browser's
    card changes to **Connected** after the extension is found and its local
    connector is registered. No extension ID or commands need to be entered.
 10. Return to the video website, refresh the page, and play the video briefly.
@@ -95,7 +95,7 @@ builds; Chrome, Edge and Brave users should use the published extension above:
 The exact location for your computer is displayed as **Extension folder** in the
 selected browser's guide. A normal installed copy uses:
 
-`C:\Users\YOUR-WINDOWS-USERNAME\.awesome-downloader\BrowserIntegration\extension`
+`C:\Users\YOUR-WINDOWS-USERNAME\.open-download-manager\BrowserIntegration\extension`
 
 That path is an example; **Copy extension folder path** copies your actual path
 with your own Windows username. **Show folder** opens that folder in
@@ -106,7 +106,7 @@ Do not move or delete this folder after loading it into your browser.
 ### If setup does not work
 
 - **“Manifest file is missing or unreadable”:** Cancel the folder selection and
-  click **Show folder** in Awesome Downloader. Confirm that the opened
+  click **Show folder** in Open Download Manager. Confirm that the opened
   folder contains `manifest.json`. Return to the Extensions page, choose **Load
   unpacked**, and select that exact opened `extension` folder—not the app's
   installation folder, Downloads, `manifest.json` itself, or the `icons` folder.
@@ -143,7 +143,7 @@ not supported. Slow YouTube transfers remain a known limitation.
 
 ## Updates and uninstall
 
-Awesome Downloader checks GitHub Releases for updates after startup and every
+Open Download Manager checks GitHub Releases for updates after startup and every
 six hours. It asks before downloading and again before restarting. Active
 downloads are never restarted automatically; choose **Later** and let them
 finish first. You can also choose **Help → Check for updates** at any time.
@@ -151,5 +151,5 @@ After an extension update, reload your video tabs if their download button is
 missing.
 
 Uninstall through Windows **Settings → Apps**. Remove the browser extension
-separately. Downloads and the `.awesome-downloader` folder in your Windows user
+separately. Downloads and the `.open-download-manager` folder in your Windows user
 folder are not automatically deleted.

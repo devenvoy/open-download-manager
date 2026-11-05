@@ -20,7 +20,7 @@ a completed redistribution audit. See docs/RELEASING.md.
 
 # YouTube SABR transport
 
-The browser-capture download path uses `googlevideo` 5.0.1, an MIT-licensed library for YouTube's UMP/SABR transport. Awesome Downloader supplies its own browser-session capture, format selection, desktop handoff, file writing, muxing, and user interface.
+The browser-capture download path uses `googlevideo` 5.0.1, an MIT-licensed library for YouTube's UMP/SABR transport. Open Download Manager supplies its own browser-session capture, format selection, desktop handoff, file writing, muxing, and user interface.
 
 Source and license: https://github.com/LuanRT/GoogleVideo
 

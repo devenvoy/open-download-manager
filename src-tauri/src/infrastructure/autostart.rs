@@ -2,7 +2,7 @@
 use crate::application::error::AppError;
 use crate::application::error::AppResult;
 
-pub const AUTOSTART_KEY_NAME: &str = "Awesome Downloader";
+pub const AUTOSTART_KEY_NAME: &str = "Open Download Manager";
 
 pub fn sync_autostart(enabled: bool) -> AppResult<()> {
     #[cfg(windows)]

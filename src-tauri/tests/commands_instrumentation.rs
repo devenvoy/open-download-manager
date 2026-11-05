@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -33,7 +33,7 @@ use tauri::Manager;
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-cmd-test-")
+        .prefix("open-download-manager-cmd-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()
@@ -93,14 +93,14 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
         shell,
     );
 
-    let file_icons = awesome_downloader_lib::infrastructure::file_icons::FileIconProvider::new(
+    let file_icons = open_download_manager_lib::infrastructure::file_icons::FileIconProvider::new(
         data_dir.join("FileTypeIcons"),
     );
 
     let update_client = std::sync::Arc::new(
-        awesome_downloader_lib::infrastructure::updater::GitHubReleaseClient::default_client(),
+        open_download_manager_lib::infrastructure::updater::GitHubReleaseClient::default_client(),
     );
-    let update_service = awesome_downloader_lib::application::updater_service::UpdateService::new(
+    let update_service = open_download_manager_lib::application::updater_service::UpdateService::new(
         update_client,
         "0.1.2",
         true,
@@ -222,7 +222,7 @@ async fn commands_open_and_open_with_through_tauri_state() {
 
     // Mark complete with existing file on disk in the store
     let store = DownloadHistoryStore::new(&dir);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     let mut records = store.load().unwrap();
     records[0].status = DownloadStatus::Completed;
     records[0].path = Some(file_path.to_string_lossy().into_owned());
@@ -277,7 +277,7 @@ async fn commands_reveal_through_tauri_state() {
     fs::write(&file_path, b"video bytes").unwrap();
 
     let store = DownloadHistoryStore::new(&dir);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     let mut records = store.load().unwrap();
     records[0].status = DownloadStatus::Completed;
     records[0].path = Some(file_path.to_string_lossy().into_owned());
@@ -330,7 +330,7 @@ async fn commands_remove_completed_through_tauri_state() {
 
     // Mark id1 complete
     let store = DownloadHistoryStore::new(&dir);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     let mut records = store.load().unwrap();
     records.iter_mut().find(|r| r.id == id1).unwrap().status = DownloadStatus::Completed;
     store.save(&records).unwrap();

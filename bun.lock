@@ -1,9 +1,9 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
+  "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "awesome-downloader",
+      "name": "open-download-manager",
       "devDependencies": {
         "@tauri-apps/cli": "^2.0.0",
       },

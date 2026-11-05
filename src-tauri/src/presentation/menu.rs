@@ -138,7 +138,7 @@ pub fn build_application_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri
     let integration_item = MenuItem::with_id(app, "cmd_integration", "Browser integration…", true, None::<&str>)?;
     let check_updates = MenuItem::with_id(app, "check_updates", "Check for updates…", true, None::<&str>)?;
     let sep_h1 = PredefinedMenuItem::separator(app)?;
-    let about_item = MenuItem::with_id(app, "about", "About Awesome Downloader", true, None::<&str>)?;
+    let about_item = MenuItem::with_id(app, "about", "About Open Download Manager", true, None::<&str>)?;
 
     let help_menu = Submenu::with_items(
         app,
@@ -220,8 +220,8 @@ pub fn show_error_dialog(app: &AppHandle, title: &str, message: &str) {
 pub fn show_about_dialog(app: &AppHandle) {
     let version = app.package_info().version.to_string();
     app.dialog()
-        .message(format!("Awesome Downloader {version}\n\nDownload manager with browser integration. Original implementation inspired by IDM. Full IDM feature parity is in development."))
-        .title("About Awesome Downloader")
+        .message(format!("Open Download Manager {version}\n\nDownload manager with browser integration. Original implementation inspired by IDM. Full IDM feature parity is in development."))
+        .title("About Open Download Manager")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::Ok)
         .show(|_| {});

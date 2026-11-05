@@ -1,4 +1,4 @@
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     domain::download::DownloadStatus,
     presentation::window_manager::{
         add_route, integration_route, needs_close_choice, options_route, progress_label,

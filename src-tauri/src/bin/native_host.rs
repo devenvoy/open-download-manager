@@ -80,9 +80,9 @@ fn load_bridge_config() -> Result<BridgeConfig, String> {
         .or_else(|_| std::env::var("HOME"))
         .map(PathBuf::from)
         .map_err(|_| "Could not find user home directory.".to_owned())?;
-    let path = home.join(".awesome-downloader").join("bridge.json");
+    let path = home.join(".open-download-manager").join("bridge.json");
     let content = std::fs::read_to_string(&path)
-        .map_err(|_| "Awesome Downloader is not running. Launch the desktop app first.".to_owned())?;
+        .map_err(|_| "Open Download Manager is not running. Launch the desktop app first.".to_owned())?;
     serde_json::from_str(&content)
         .map_err(|e| format!("Invalid bridge.json: {e}"))
 }

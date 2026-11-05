@@ -2,10 +2,10 @@
 
 ## Listing
 
-**Name:** Awesome Downloader Integration
+**Name:** Open Download Manager Integration
 
 **Summary:** Detect downloadable media and send user-selected files to the
-Awesome Downloader desktop app.
+Open Download Manager desktop app.
 
 **Category:** Productivity
 
@@ -13,8 +13,8 @@ Awesome Downloader desktop app.
 
 **Detailed description:**
 
-Awesome Downloader Integration connects supported web pages to the Awesome
-Downloader desktop application. It detects direct media and file downloads,
+Open Download Manager Integration connects supported web pages to the Open
+Download Manager desktop application. It detects direct media and file downloads,
 shows available qualities near supported video players, and sends only the
 option you choose to the desktop app.
 
@@ -24,21 +24,21 @@ option you choose to the desktop app.
 - Keep detection and download history on your computer; no project analytics or
   advertising service receives your browsing activity.
 
-The free Awesome Downloader desktop application must be installed for downloads
+The free Open Download Manager desktop application must be installed for downloads
 to start. Availability depends on the site and media format. DRM-protected,
 live, private, and sign-in-restricted media may not work. Download only content
 you own or are permitted to save.
 
-**Homepage:** https://github.com/devenvoy/awesome-downloader
+**Homepage:** https://github.com/devenvoy/open-download-manager
 
 **Privacy policy:**
-https://github.com/devenvoy/awesome-downloader/blob/main/PRIVACY.md
+https://github.com/devenvoy/open-download-manager/blob/main/PRIVACY.md
 
 ## Single purpose
 
 Detect downloadable media and file links on the page the user is viewing and,
 after the user chooses an item, transfer that download to the locally installed
-Awesome Downloader desktop application.
+Open Download Manager desktop application.
 
 ## Permission justifications
 
@@ -47,7 +47,7 @@ Awesome Downloader desktop application.
   server receives this message.
 - **storage:** Keeps the latest local error and bounded per-tab media candidates
   for the current browser session.
-- **contextMenus:** Adds “Download with Awesome Downloader” actions for links,
+- **contextMenus:** Adds “Download with Open Download Manager” actions for links,
   video, audio, and the current page.
 - **webRequest:** Observes media responses and captures only the request context
   needed to reproduce a transfer the user selects.

@@ -89,7 +89,7 @@
                 hint.textContent='Opening download options…';
                 try{
                   const response=await send({action:'download',item:{...item,startNow:false}});
-                  globalThis.awesomeMenuResult(response,{
+                  globalThis.odmMenuResult(response,{
                     accepted:()=>{chooser.remove();position();},
                     rejected:message=>{hint.textContent=friendlyError(message);}
                   });
@@ -104,7 +104,7 @@
     }
     position();
   }
-  function friendlyError(message) { return /native messaging host not found/i.test(message || '') ? 'Chrome cannot find the desktop connector. Open Awesome Downloader → Browser Integration → Refresh browsers, then reload this extension and page. Details: '+message : message; }
+  function friendlyError(message) { return /native messaging host not found/i.test(message || '') ? 'Chrome cannot find the desktop connector. Open Open Download Manager → Browser Integration → Refresh browsers, then reload this extension and page. Details: '+message : message; }
   function closeChoosers(except) {
     for(const record of records){
       if(record===except)continue;

@@ -1,4 +1,4 @@
-globalThis.awesomeMenuResult = (response, { accepted, rejected }) => {
+globalThis.odmMenuResult = (response, { accepted, rejected }) => {
   if (response?.ok) {
     accepted();
     return true;

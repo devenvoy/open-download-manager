@@ -31,7 +31,7 @@ for(const mode of ['throw','reject']){
     const h=harness('youtube-relay.js',mode);
     const callback=[...h.callbacks][0];let reply;
     callback({action:'refreshPlayer'},{id:'test-extension'},value=>{reply=value;});
-    await h.events.get('message')({source:h.context.window,origin:h.context.location.origin,data:{type:'awesome-player-response',data:{videoId:'wLdZWyLOJCI',formats:[]}}});
+    await h.events.get('message')({source:h.context.window,origin:h.context.location.origin,data:{type:'odm-player-response',data:{videoId:'wLdZWyLOJCI',formats:[]}}});
     assert.equal(h.calls,1);assert.equal(h.callbacks.size,0);assert.equal(h.events.size,0);assert.equal(reply.ok,false);
   });
 }

@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -31,7 +31,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-browser-test-")
+        .prefix("open-download-manager-browser-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()
@@ -105,7 +105,7 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
 
 #[test]
 fn native_host_manifest_structures_match_browser_specifications() {
-    let dummy_exe = PathBuf::from("/usr/local/bin/awesome-downloader-native-host");
+    let dummy_exe = PathBuf::from("/usr/local/bin/open-download-manager-native-host");
     let chrome_manifest = create_manifest(BrowserType::Chrome, "abcdefghijklmnopabcdefghijklmnop", &dummy_exe).unwrap();
     assert_eq!(chrome_manifest.name, NATIVE_HOST_NAME);
     assert_eq!(
@@ -114,11 +114,11 @@ fn native_host_manifest_structures_match_browser_specifications() {
     );
     assert!(chrome_manifest.allowed_extensions.is_none());
 
-    let firefox_manifest = create_manifest(BrowserType::Firefox, "addon@awesome.downloader", &dummy_exe).unwrap();
+    let firefox_manifest = create_manifest(BrowserType::Firefox, "addon@open.downloadmanager", &dummy_exe).unwrap();
     assert_eq!(firefox_manifest.name, NATIVE_HOST_NAME);
     assert_eq!(
         firefox_manifest.allowed_extensions.unwrap(),
-        vec!["addon@awesome.downloader".to_owned()]
+        vec!["addon@open.downloadmanager".to_owned()]
     );
     assert!(firefox_manifest.allowed_origins.is_none());
 
@@ -213,13 +213,13 @@ async fn loopback_bridge_authenticates_and_handles_browser_downloads() {
 
 struct DummyShellService;
 impl ShellService for DummyShellService {
-    fn open_path(&self, _path: &std::path::Path) -> awesome_downloader_lib::application::error::AppResult<()> {
+    fn open_path(&self, _path: &std::path::Path) -> open_download_manager_lib::application::error::AppResult<()> {
         Ok(())
     }
-    fn reveal_path(&self, _path: &std::path::Path) -> awesome_downloader_lib::application::error::AppResult<()> {
+    fn reveal_path(&self, _path: &std::path::Path) -> open_download_manager_lib::application::error::AppResult<()> {
         Ok(())
     }
-    fn open_with(&self, _path: &std::path::Path) -> awesome_downloader_lib::application::error::AppResult<()> {
+    fn open_with(&self, _path: &std::path::Path) -> open_download_manager_lib::application::error::AppResult<()> {
         Ok(())
     }
 }

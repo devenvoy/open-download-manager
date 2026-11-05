@@ -1,6 +1,6 @@
 // Observes only player responses consumed by this YouTube page. Never initiates downloads.
 (() => {
-  const publish=value=>{ const data=globalThis.youtubeMedia.playerData(value); if(data)window.postMessage({type:'awesome-player-response',data},location.origin); };
+  const publish=value=>{ const data=globalThis.youtubeMedia.playerData(value); if(data)window.postMessage({type:'odm-player-response',data},location.origin); };
   const playerEndpoint=value=>{try{const u=new URL(value,location.href);return u.origin===location.origin && /^\/youtubei\/v1\/player$/.test(u.pathname);}catch{return false;}};
   const originalFetch=window.fetch;
   window.fetch=function(...args){
@@ -19,7 +19,7 @@
     return Reflect.apply(open,this,[method,url,...rest]);
   };
   function current(){try{publish(window.ytInitialPlayerResponse);const player=document.getElementById('movie_player');if(player?.getPlayerResponse)publish(player.getPlayerResponse());}catch{}}
-  addEventListener('awesome-request-player',current);
+  addEventListener('odm-request-player',current);
   addEventListener('yt-navigate-finish',current);
   addEventListener('DOMContentLoaded',current,{once:true});
 })();

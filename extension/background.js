@@ -1,7 +1,7 @@
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
 if(typeof importScripts==='function') importScripts('hls.js','youtube-media.js');
 const api = globalThis.browser || chrome;
-const HOST = 'com.awesome.downloader';
+const HOST = 'com.open.downloadmanager';
 const CACHE_KEY = 'mediaByTab';
 const SABR_KEY = 'sabrByTab';
 let serial = Promise.resolve();
@@ -163,13 +163,13 @@ api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loadi
 api.runtime.onInstalled.addListener(async () => {
   try {
     await api.contextMenus.removeAll();
-    api.contextMenus.create({id: 'awesome-link', title: 'Download with Awesome Downloader', contexts: ['link', 'video', 'audio']});
-    api.contextMenus.create({id: 'awesome-page', title: 'Find downloadable links on this page', contexts: ['page']});
+    api.contextMenus.create({id: 'odm-link', title: 'Download with Open Download Manager', contexts: ['link', 'video', 'audio']});
+    api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
   } catch (error) { await api.storage.local.set({lastError: error.message}); }
 });
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
-    if (info.menuItemId === 'awesome-page') { await api.tabs.sendMessage(tab.id, {action: 'collectLinks'}); await api.action.setBadgeText({tabId: tab.id, text: 'LINK'}); return; }
+    if (info.menuItemId === 'odm-page') { await api.tabs.sendMessage(tab.id, {action: 'collectLinks'}); await api.action.setBadgeText({tabId: tab.id, text: 'LINK'}); return; }
     await enqueue({url: info.linkUrl || info.srcUrl, referer: tab?.url},tab?.id);
     await api.action.setBadgeText({tabId: tab.id, text: 'OK'});
   } catch (e) {
@@ -247,6 +247,6 @@ api.downloads.onCreated.addListener(async item => {
     await api.downloads.cancel(item.id);
   } catch (e) {
     if(paused&&!accepted)await api.downloads.resume(item.id).catch(()=>{});
-    await api.storage.local.set({lastError:accepted?`The browser download could not be canceled; Awesome Downloader continues the transfer: ${e.message}`:`Browser download was kept: ${e.message}`});
+    await api.storage.local.set({lastError:accepted?`The browser download could not be canceled; Open Download Manager continues the transfer: ${e.message}`:`Browser download was kept: ${e.message}`});
   }
 });

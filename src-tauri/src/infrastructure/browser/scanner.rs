@@ -12,7 +12,7 @@ use crate::{
 pub const EXTENSION_ID: &str = "dnolinbkicmedadaigcedkmndcpahmml";
 pub const STORE_URL: &str =
     "https://chromewebstore.google.com/detail/dnolinbkicmedadaigcedkmndcpahmml";
-pub const FIREFOX_EXTENSION_ID: &str = "awesome-downloader@morluto.local";
+pub const FIREFOX_EXTENSION_ID: &str = "open-download-manager@morluto.local";
 
 pub fn is_store_browser(browser: BrowserType) -> bool {
     matches!(
@@ -53,9 +53,9 @@ pub fn resolve_integration_root() -> PathBuf {
 
 pub fn resolve_host_exe(integration_root: &Path) -> PathBuf {
     #[cfg(windows)]
-    let bin_name = "awesome-downloader-native-host.exe";
+    let bin_name = "open-download-manager-native-host.exe";
     #[cfg(not(windows))]
-    let bin_name = "awesome-downloader-native-host";
+    let bin_name = "open-download-manager-native-host";
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
@@ -271,7 +271,7 @@ pub fn inspect_profile(profile_dir: &Path) -> (bool, String) {
     if found_entry.is_none() {
         for val in settings.values() {
             if let Some(manifest) = val.get("manifest") {
-                if manifest.get("name").and_then(|n| n.as_str()) == Some("Awesome Downloader Integration") {
+                if manifest.get("name").and_then(|n| n.as_str()) == Some("Open Download Manager Integration") {
                     found_entry = Some(val);
                     break;
                 }

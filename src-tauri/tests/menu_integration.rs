@@ -1,4 +1,4 @@
-use awesome_downloader_lib::presentation::menu::menu_id_to_command;
+use open_download_manager_lib::presentation::menu::menu_id_to_command;
 
 #[test]
 fn menu_commands_map_to_all_required_downloader_events() {

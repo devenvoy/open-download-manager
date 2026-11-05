@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tempfile::tempdir;
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -221,11 +221,11 @@ fn test_add_playlist_downloads_batch() {
 #[tokio::test]
 async fn test_playlist_commands_through_app_state() {
     use tauri::Manager;
-    use awesome_downloader_lib::presentation::commands::add_playlist_downloads;
-    use awesome_downloader_lib::presentation::app_state::AppState;
-    use awesome_downloader_lib::application::integration_service::IntegrationService;
-    use awesome_downloader_lib::infrastructure::file_icons::FileIconProvider;
-    use awesome_downloader_lib::application::updater_service::UpdateService;
+    use open_download_manager_lib::presentation::commands::add_playlist_downloads;
+    use open_download_manager_lib::presentation::app_state::AppState;
+    use open_download_manager_lib::application::integration_service::IntegrationService;
+    use open_download_manager_lib::infrastructure::file_icons::FileIconProvider;
+    use open_download_manager_lib::application::updater_service::UpdateService;
 
     let temp = tempdir().unwrap();
     let data_dir = temp.path().to_path_buf();
@@ -240,7 +240,7 @@ async fn test_playlist_commands_through_app_state() {
     let transfer = DownloadTransferService::new(history.clone(), executor, 2);
     let integration = IntegrationService::new(data_dir.clone());
     let file_icons = FileIconProvider::new(data_dir.join("FileTypeIcons"));
-    let update_client = Arc::new(awesome_downloader_lib::infrastructure::updater::GitHubReleaseClient::default_client());
+    let update_client = Arc::new(open_download_manager_lib::infrastructure::updater::GitHubReleaseClient::default_client());
     let updater = UpdateService::new(update_client, "0.1.2", true);
 
     let app_state = AppState::new(settings, history.clone(), transfer, integration, file_icons, updater);

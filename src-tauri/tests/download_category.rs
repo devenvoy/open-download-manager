@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use awesome_downloader_lib::domain::{category::DownloadCategory, settings::Settings};
+use open_download_manager_lib::domain::{category::DownloadCategory, settings::Settings};
 
 #[test]
 fn categories_serialize_with_the_renderer_contract_names() {

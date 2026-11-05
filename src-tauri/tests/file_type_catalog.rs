@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use awesome_downloader_lib::domain::{
+use open_download_manager_lib::domain::{
     category::DownloadCategory,
     download::sanitize_filename,
     file_type::FileType,

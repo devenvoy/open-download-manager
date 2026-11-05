@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use awesome_downloader_lib::domain::download::{
+use open_download_manager_lib::domain::download::{
     redact_download_url, sanitize_filename, DownloadProtocol, DownloadRequest,
 };
 

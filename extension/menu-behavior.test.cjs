@@ -7,7 +7,7 @@ const path = require('node:path');
 function behavior() {
   const context = { globalThis: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'menu-behavior.js'), 'utf8'), context);
-  return context.globalThis.awesomeMenuResult;
+  return context.globalThis.odmMenuResult;
 }
 
 test('successful desktop handoff closes the quality menu', () => {

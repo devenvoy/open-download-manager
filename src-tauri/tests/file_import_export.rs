@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -19,7 +19,7 @@ use awesome_downloader_lib::{
 
 fn test_directory(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "awesome-downloader-import-export-test-{}-{}-{}",
+        "open-download-manager-import-export-test-{}-{}-{}",
         std::process::id(),
         name,
         uuid::Uuid::new_v4()

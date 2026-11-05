@@ -1,6 +1,6 @@
 use std::fs;
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::download_history_service::DownloadHistoryService,
     domain::{settings::Settings, snapshot::Snapshot},
     infrastructure::download_history_store::DownloadHistoryStore,
@@ -54,13 +54,13 @@ fn legacy_history_loads_with_runtime_state_reset_and_secrets_excluded() {
     assert_eq!(downloads.len(), 2);
     assert_eq!(
         downloads[0].status,
-        awesome_downloader_lib::domain::download::DownloadStatus::Paused
+        open_download_manager_lib::domain::download::DownloadStatus::Paused
     );
     assert_eq!(downloads[0].speed, 0);
     assert_eq!(downloads[0].downloaded, 24);
     assert_eq!(
         downloads[1].status,
-        awesome_downloader_lib::domain::download::DownloadStatus::Completed
+        open_download_manager_lib::domain::download::DownloadStatus::Completed
     );
     let snapshot = Snapshot::new(
         Settings::new(directory.join("downloads")),

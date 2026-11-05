@@ -226,8 +226,8 @@ function showBrowserDetail(name) {
 	const texts =
 		browser.storeUrl && (enableExisting || browser.connected)
 			? [
-					`Click Open ${browser.name}. Use the browser's Action required menu to enable Awesome Downloader Integration if that prompt is shown.`,
-					`Otherwise, enter ${browser.extensionPage} in the address bar and enable Awesome Downloader Integration.`,
+					`Click Open ${browser.name}. Use the browser's Action required menu to enable Open Download Manager Integration if that prompt is shown.`,
+					`Otherwise, enter ${browser.extensionPage} in the address bar and enable Open Download Manager Integration.`,
 					"Return here and click Refresh, then reload your video page. If the extension is missing, use Install from Web Store.",
 				]
 			: browser.storeUrl
@@ -238,7 +238,7 @@ function showBrowserDetail(name) {
 					]
 				: browser.name === "Firefox"
 					? [
-							"Click Open Firefox. Awesome Downloader prepares the Firefox extension, registers its local connector, and opens Firefox.",
+							"Click Open Firefox. Open Download Manager prepares the Firefox extension, registers its local connector, and opens Firefox.",
 							`Enter ${browser.extensionPage} in Firefox's address bar.`,
 							"On the Firefox page, select This Firefox, then Load Temporary Add-on.",
 							"Choose manifest.json inside the extension folder shown below.",
@@ -260,7 +260,7 @@ function showBrowserDetail(name) {
 		browser.storeUrl,
 	);
 	$("#automatic-setup-copy").textContent = browser.storeUrl
-		? "Awesome Downloader prepares its connector automatically. Your browser asks you to confirm adding the published extension."
+		? "Open Download Manager prepares its connector automatically. Your browser asks you to confirm adding the published extension."
 		: browser.name === "Firefox"
 			? "Firefox requires a signed add-on for permanent installation. Until the add-on is published, Firefox asks you to load the included extension again after restarting the browser."
 			: "Use the included extension folder for this browser.";
@@ -492,7 +492,7 @@ function notify(message, error = false) {
 async function call(method, ...args) {
 	if (!api || typeof api[method] !== "function")
 		throw new Error(
-			"The download service is unavailable. Restart Awesome Downloader.",
+			"The download service is unavailable. Restart Open Download Manager.",
 		);
 	const result = await api[method](...args);
 	if (result?.error && !result.downloads)

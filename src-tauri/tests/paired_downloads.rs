@@ -7,7 +7,7 @@ use std::{
 };
 use tokio::sync::watch;
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_executor::{DownloadControl, DownloadProgressHandler},
         download_history_service::DownloadHistoryService,
@@ -25,7 +25,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-paired-test-")
+        .prefix("open-download-manager-paired-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()
@@ -111,7 +111,7 @@ fn paired_request_validation_and_record_mapping() {
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(dir.clone()))
         .expect("history");
 
-    let mock_executor = awesome_downloader_lib::infrastructure::http_download_executor::HttpDownloadExecutor::new()
+    let mock_executor = open_download_manager_lib::infrastructure::http_download_executor::HttpDownloadExecutor::new()
         .expect("mock http executor");
 
     let transfer = DownloadTransferService::new(history.clone(), mock_executor, 4);
@@ -236,7 +236,7 @@ async fn paired_download_streams_both_tracks_and_muxes() {
     assert!(result.downloaded > 0);
 
     // Temporary parts dir must be cleaned up
-    let parts_dir = dir.join(format!(".awesome-downloader-paired-{}", download.id));
+    let parts_dir = dir.join(format!(".open-download-manager-paired-{}", download.id));
     assert!(!parts_dir.exists(), "parts dir should be deleted after mux");
 
     // Progress updates should have recorded 2 connections
@@ -362,7 +362,7 @@ fn paired_download_discard_partial_cleans_up_directory() {
         sabr: None,
     };
 
-    let parts_dir = dir.join(format!(".awesome-downloader-paired-{}", download.id));
+    let parts_dir = dir.join(format!(".open-download-manager-paired-{}", download.id));
     std::fs::create_dir_all(&parts_dir).expect("create parts");
     assert!(parts_dir.exists());
 

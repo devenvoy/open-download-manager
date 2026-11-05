@@ -52,13 +52,13 @@ pub fn run() {
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
             let data_directory = home_directory.join(USER_DATA_DIRECTORY_NAME);
             let settings = SettingsService::new(
-                SettingsStore::new(data_directory),
+                SettingsStore::new(data_directory.clone()),
                 default_download_directory.clone(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
             let max_concurrent = settings.settings().max_concurrent;
             let download_history = DownloadHistoryService::with_events(
-                DownloadHistoryStore::new(home_directory.join(USER_DATA_DIRECTORY_NAME)),
+                DownloadHistoryStore::new(data_directory.clone()),
                 std::sync::Arc::new(TauriDownloadEventPublisher::new(app.handle().clone())),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
@@ -76,7 +76,7 @@ pub fn run() {
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
             download_transfer.start_scheduler();
 
-            let bridge_data_dir = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let bridge_data_dir = data_directory.clone();
             let integration_service =
                 application::integration_service::IntegrationService::new(bridge_data_dir.clone());
             let bridge_transfer = download_transfer.clone();
@@ -139,7 +139,7 @@ pub fn run() {
             }
 
             let file_icons = crate::infrastructure::file_icons::FileIconProvider::new(
-                home_directory.join(USER_DATA_DIRECTORY_NAME).join("FileTypeIcons"),
+                data_directory.join("FileTypeIcons"),
             );
 
             let version = app.package_info().version.to_string();
@@ -206,5 +206,5 @@ pub fn run() {
             add_playlist_downloads
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Awesome Downloader");
+        .expect("failed to run Open Download Manager");
 }

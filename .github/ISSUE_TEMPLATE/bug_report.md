@@ -15,4 +15,4 @@ Expected behavior:
 Actual behavior:
 
 Remove signed media URLs, account details, cookies and tokens from screenshots
-and logs. Do not attach your browser profile or `.awesome-downloader` folder.
+and logs. Do not attach your browser profile or `.open-download-manager` folder.

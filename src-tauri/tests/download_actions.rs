@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -27,7 +27,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-actions-test-")
+        .prefix("open-download-manager-actions-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()
@@ -198,7 +198,7 @@ fn remove_action_discards_partial_files_for_paused_download() {
         )
         .expect("download should be added");
 
-    let partial_file = directory.join(format!(".awesome-downloader-{}.part", ids[0]));
+    let partial_file = directory.join(format!(".open-download-manager-{}.part", ids[0]));
     fs::write(&partial_file, b"partial bytes").expect("partial file should be written");
     assert!(partial_file.exists());
 
@@ -237,7 +237,7 @@ fn remove_action_preserves_completed_file_on_disk() {
     updated_records[0].status = DownloadStatus::Completed;
     updated_records[0].path = Some(final_path.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&updated_records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -277,7 +277,7 @@ async fn active_midstream_remove_aborts_transfer_and_cleans_partial_files() {
     // Wait until transfer is actively in progress
     wait_for_downloaded_bytes(&history, &ids[0], 8192).await;
 
-    let partial_file = directory.join(format!(".awesome-downloader-{}.part", ids[0]));
+    let partial_file = directory.join(format!(".open-download-manager-{}.part", ids[0]));
     assert!(partial_file.exists(), "partial file must exist while downloading");
 
     // Human clicks Remove on active transfer
@@ -426,7 +426,7 @@ fn file_tampering_by_user_on_disk_is_handled_gracefully() {
     records[0].directory = Some(subfolder.to_string_lossy().into_owned());
     records[0].path = Some(file_path.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -503,7 +503,7 @@ fn paths_with_spaces_unicode_and_brackets_handled_without_truncation() {
     records[0].directory = Some(unicode_dir.to_string_lossy().into_owned());
     records[0].path = Some(unicode_file.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&base_dir);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -571,7 +571,7 @@ fn interleaved_batch_removal_and_atomic_disk_reload() {
     }
 
     // d1: Completed, d2: Paused (with partial file), d3: Failed, d4: Completed, d5: Queued
-    let partial_file = directory.join(format!(".awesome-downloader-{}.part", ids[1]));
+    let partial_file = directory.join(format!(".open-download-manager-{}.part", ids[1]));
     fs::write(&partial_file, b"partial").unwrap();
 
     let mut records = history.downloads().unwrap();
@@ -587,7 +587,7 @@ fn interleaved_batch_removal_and_atomic_disk_reload() {
         }
     }
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -651,7 +651,7 @@ fn open_action_validates_status_and_existence_and_calls_shell() {
     records[0].status = DownloadStatus::Completed;
     records[0].path = Some(non_existent_path.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -723,7 +723,7 @@ fn open_with_action_validates_status_and_existence_and_calls_shell() {
     records[0].status = DownloadStatus::Completed;
     records[0].path = Some(real_path.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -782,7 +782,7 @@ fn reveal_action_reveals_completed_file_and_falls_back_to_directory() {
     records[0].status = DownloadStatus::Completed;
     records[0].path = Some(real_path.to_string_lossy().into_owned());
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(
@@ -847,7 +847,7 @@ fn remove_completed_prunes_only_completed_downloads() {
         }
     }
     let store = DownloadHistoryStore::new(&directory);
-    use awesome_downloader_lib::application::download_history_repository::DownloadHistoryRepository;
+    use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     store.save(&records).unwrap();
     let history = DownloadHistoryService::new(store).unwrap();
     let service = DownloadTransferService::with_shell(

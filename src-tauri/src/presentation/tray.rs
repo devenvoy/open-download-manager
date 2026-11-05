@@ -8,7 +8,7 @@ use tauri::{
     AppHandle, Manager,
 };
 
-pub const TRAY_TOOLTIP: &str = "Awesome Downloader";
+pub const TRAY_TOOLTIP: &str = "Open Download Manager";
 
 pub fn show_main_window<R: tauri::Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {

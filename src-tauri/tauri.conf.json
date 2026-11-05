@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Awesome Downloader",
+  "productName": "Open Download Manager",
   "version": "0.1.2",
-  "identifier": "com.awesomedownloader.desktop",
+  "identifier": "com.opendownloadmanager.desktop",
   "build": {
     "frontendDist": "../renderer"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Awesome Downloader",
+        "title": "Open Download Manager",
         "width": 805,
         "height": 465,
         "minWidth": 760,

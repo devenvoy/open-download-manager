@@ -1,8 +1,8 @@
-# Awesome Downloader privacy policy
+# Open Download Manager privacy policy
 
 Effective date: October 29, 2026
 
-Awesome Downloader is a local desktop download manager with a companion browser
+Open Download Manager is a local desktop download manager with a companion browser
 extension. The project does not operate an analytics, advertising, account, or
 download-proxy service.
 
@@ -22,7 +22,7 @@ browser sessions.
 
 When the user explicitly selects a download, the extension sends only the
 selected media information and the request context needed for that transfer to
-the Awesome Downloader desktop application through the browser's native
+the Open Download Manager desktop application through the browser's native
 messaging system. The desktop application connects directly to the website that
 hosts the selected file. Selected download history and settings remain on the
 user's computer until the user removes them or uninstalls and deletes the app's
@@ -34,7 +34,7 @@ The project developer does not receive, store, sell, rent, or use browsing data,
 download data, authentication information, or personal information for
 advertising, profiling, credit decisions, or any unrelated purpose. The
 extension contains no analytics or advertising SDK. Data is shared only with
-the local Awesome Downloader desktop application and the website hosting a file
+the local Open Download Manager desktop application and the website hosting a file
 that the user chooses to download.
 
 The use of information received from Google APIs will adhere to the Chrome Web
@@ -42,8 +42,8 @@ Store User Data Policy, including the Limited Use requirements.
 
 ## Software updates
 
-Installed desktop builds contact GitHub Releases to check for new Awesome
-Downloader versions. The update check uses GitHub's standard release service and
+Installed desktop builds contact GitHub Releases to check for new Open
+Download Manager versions. The update check uses GitHub's standard release service and
 does not add a project-specific identifier or analytics event. Updates require
 the user's approval before download and again before restart.
 
@@ -56,7 +56,7 @@ browser session data is cleared by closing the relevant tab or browser session.
 ## Contact
 
 Questions or privacy reports can be filed in the public project issue tracker:
-https://github.com/devenvoy/awesome-downloader/issues
+https://github.com/devenvoy/open-download-manager/issues
 
 Do not include private URLs, cookies, authorization headers, or other secrets in
 a public issue.

@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use awesome_downloader_lib::{
+use open_download_manager_lib::{
     application::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -25,7 +25,7 @@ use awesome_downloader_lib::{
 
 fn temporary_directory() -> PathBuf {
     tempfile::Builder::new()
-        .prefix("awesome-downloader-hls-test-")
+        .prefix("open-download-manager-hls-test-")
         .tempdir()
         .expect("temporary test directory")
         .keep()

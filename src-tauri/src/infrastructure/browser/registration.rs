@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::error::{AppError, AppResult};
 
-pub const NATIVE_HOST_NAME: &str = "com.awesome.downloader";
+pub const NATIVE_HOST_NAME: &str = "com.open.downloadmanager";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BrowserType {
@@ -78,7 +78,7 @@ pub fn create_manifest(
         }
         Ok(NativeHostManifest {
             name: NATIVE_HOST_NAME.to_owned(),
-            description: "Awesome Downloader browser bridge".to_owned(),
+            description: "Open Download Manager browser bridge".to_owned(),
             path: host_exe_path.to_string_lossy().into_owned(),
             host_type: "stdio".to_owned(),
             allowed_origins: None,
@@ -92,7 +92,7 @@ pub fn create_manifest(
         }
         Ok(NativeHostManifest {
             name: NATIVE_HOST_NAME.to_owned(),
-            description: "Awesome Downloader browser bridge".to_owned(),
+            description: "Open Download Manager browser bridge".to_owned(),
             path: host_exe_path.to_string_lossy().into_owned(),
             host_type: "stdio".to_owned(),
             allowed_origins: Some(vec![format!("chrome-extension://{extension_id}/")]),
