@@ -1,6 +1,11 @@
-use application::settings_service::SettingsService;
-use infrastructure::settings_store::SettingsStore;
-use presentation::commands::{snapshot, update_settings, AppState};
+use application::{
+    download_history_service::DownloadHistoryService, settings_service::SettingsService,
+};
+use infrastructure::{download_history_store::DownloadHistoryStore, settings_store::SettingsStore};
+use presentation::{
+    commands::{snapshot, update_settings, AppState},
+    window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
+};
 use tauri::Manager;
 
 pub mod application;
@@ -25,14 +30,24 @@ pub fn run() {
             let data_directory = home_directory.join(".awesome-downloader");
             let settings = SettingsService::new(
                 SettingsStore::new(data_directory),
-                default_download_directory,
+                default_download_directory.clone(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
+            let download_history = DownloadHistoryService::new(DownloadHistoryStore::new(
+                home_directory.join(".awesome-downloader"),
+            ))
+            .map_err(|error| std::io::Error::other(error.message))?;
 
-            app.manage(AppState::new(settings));
+            app.manage(AppState::new(settings, download_history));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![snapshot, update_settings])
+        .invoke_handler(tauri::generate_handler![
+            snapshot,
+            update_settings,
+            open_progress_window,
+            close_auxiliary_window,
+            resize_progress_window
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run Awesome Downloader");
 }

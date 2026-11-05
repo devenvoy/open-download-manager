@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for the Awesome Downloader main window",
-  "windows": ["main"],
+  "windows": ["main", "progress"],
   "permissions": [
     "core:default",
     "dialog:allow-open",

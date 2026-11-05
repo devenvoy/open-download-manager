@@ -62,6 +62,28 @@ test('settings passes a typed patch to the Rust command', async () => {
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ patch }));
 });
 
+test('download details use the native progress window commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.openProgress({ id: 'download-123' });
+  await api.resizeProgress({ expanded: true });
+  await api.closeProgress();
+
+  assert.equal(JSON.stringify(calls), JSON.stringify([
+    ['open_progress_window', { id: 'download-123' }],
+    ['resize_progress_window', { expanded: true }],
+    ['close_auxiliary_window', undefined]
+  ]));
+});
+
 test('Rust errors preserve their message and stable code', async () => {
   const api = loadApi({
     core: {

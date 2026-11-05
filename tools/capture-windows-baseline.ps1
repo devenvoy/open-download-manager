@@ -68,13 +68,9 @@ $sourceTreeState = if ([string]::IsNullOrWhiteSpace(($sourceTreeStatus -join '')
 } else {
   'dirty'
 }
-$nodeVersion = node --version
+$bunVersion = bun --version
 if ($LASTEXITCODE -ne 0) {
-  throw 'Could not read the Node.js version.'
-}
-$npmVersion = npm --version
-if ($LASTEXITCODE -ne 0) {
-  throw 'Could not read the npm version.'
+  throw 'Could not read the Bun version.'
 }
 
 $startupTimer = [Diagnostics.Stopwatch]::StartNew()
@@ -140,8 +136,7 @@ $result = [PSCustomObject]@{
   ApplicationProcessCount = $applicationProcesses.Count
   IdleWorkingSetBytes    = $workingSetBytes
   IdlePrivateBytes       = $privateBytes
-  NodeVersion            = ($nodeVersion -join '').Trim()
-  NpmVersion             = ($npmVersion -join '').Trim()
+  BunVersion             = ($bunVersion -join '').Trim()
 }
 
 $outputFullPath = [IO.Path]::GetFullPath($OutputPath)

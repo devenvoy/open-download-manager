@@ -41,13 +41,13 @@ selection does not invoke it. Firefox YouTube capture has not reached parity.
 ## Develop
 
 The Tauri shell is an early scaffold; the Rust download service and Windows
-packaging are not implemented yet. Install Rust, the platform's Tauri
-prerequisites, and Node.js 22+:
+packaging are not implemented yet. Install Bun, Rust, and the platform's Tauri
+prerequisites:
 
 ```powershell
-npm ci
-npm test
-npm run dev
+bun install --frozen-lockfile
+bun run test
+bun run dev
 ```
 
 See the [migration plan](docs/TAURI-MIGRATION-PLAN.md) for phase status and

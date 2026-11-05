@@ -249,9 +249,19 @@ measurements are deferred and do not block Tauri implementation.
   blocker for implementing the Tauri app. Capture them later only if a measured
   performance comparison is needed.
 - **Phase 2:** A Tauri v2 shell now loads the existing renderer, serves an
-  initial snapshot, persists validated settings, and provides native folder
-  selection and clipboard reads. Download operations, native window workflows,
-  tray behavior, notifications, and command/event parity remain to be migrated.
+  initial snapshot, persists validated settings, provides native folder
+  selection and clipboard reads, and opens/resizes/closes a native download
+  details window. Download operations, other window workflows, tray behavior,
+  notifications, and command/event parity remain to be migrated.
+- **Phase 3:** On first run, validated settings are imported from a version 1
+  legacy `downloads.json` into versioned `settings.json`. The legacy history
+  file remains unchanged, and invalid or unsupported legacy data fails
+  explicitly. The Tauri snapshot now reads version 1 download records without
+  rewriting the legacy file, resets interrupted runtime statuses to paused,
+  and excludes transient headers, validators, segmented URLs, and SABR session
+  data and URL query/fragment credentials from renderer snapshots. A versioned
+  writable Tauri history format and the complete command/event compatibility
+  contract remain outstanding.
 - The Electron shell, JavaScript backend, native host, and their tests were
   moved to the ignored local `reference/electron-legacy/` archive as requested.
   That archive is not present in fresh clones. The pre-migration sources remain

@@ -107,14 +107,14 @@ release decision.
 
 ## Run and report tests
 
-Install Rust and Node.js 22 or newer, then run from the repository root:
+Install Bun and Rust, then run from the repository root:
 
 ```powershell
-npm ci
-npm test
+bun install --frozen-lockfile
+bun run test
 ```
 
-`npm test` runs the Rust scaffold tests and the retained browser-extension tests.
+`bun run test` runs the Rust tests and retained browser-extension tests.
 The previous Electron backend and its tests are not part of this checkout. Add
 new Rust tests alongside each migrated use case and preserve the old tests'
 behavioral requirements from the Git history when porting features.
@@ -123,7 +123,7 @@ For a focused check, run the relevant file directly, for example:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml
-node --test extension/background.test.cjs
+bun test extension/background.test.cjs
 ```
 
 In every PR, state the exact commands, operating system, runtime version, and commit tested. Separate evidence into these categories:

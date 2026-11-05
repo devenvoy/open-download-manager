@@ -8,8 +8,7 @@ inputs for the Tauri candidate.
 ## Prepare the test machine
 
 - Use a Windows x64 machine with stable power and close unrelated applications.
-  Record the Windows edition, version/build, CPU, RAM, Node.js version, and npm
-  version.
+  Record the Windows edition, version/build, CPU, RAM, and Bun version.
 - Use a clean user account or VM snapshot. Do not include an existing
   `%USERPROFILE%\.awesome-downloader` directory in installed-size measurements.
 - Check out the exact source revision to be measured. Record `git rev-parse HEAD`
@@ -17,13 +16,14 @@ inputs for the Tauri candidate.
 - Build and test on Windows:
 
   ```powershell
-  npm ci
-  npm test
-  npm run dist
+  bun install --frozen-lockfile
+  bun run test
+  bun run build
   ```
 
-  The expected installer is `release\Awesome-Downloader-Setup.exe`. Record the
-  exact path if the build output differs.
+  Installer packaging is disabled while the Tauri migration is in progress.
+  Record the build output and do not treat a successful app build as an installer
+  or runtime validation.
 - Install the application from that installer. Record the install directory and
   the path to `Awesome Downloader.exe`. Do not launch it until the package hash
   and installed size have been captured.
@@ -92,7 +92,7 @@ Keep the raw CSV and a companion record with the following fields:
 | Source revision / working-tree state | |
 | Windows edition and version/build | |
 | Machine model / CPU / RAM | |
-| Node.js / npm versions | |
+| Bun version | |
 | Installer path / bytes / SHA-256 | |
 | Install directory / installed bytes | |
 | Startup trials / median / range | |

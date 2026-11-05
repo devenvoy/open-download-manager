@@ -11,17 +11,17 @@ maintainer before coding. Propose features outside the backlog for approval firs
 
 ## Development
 
-Install Rust, Tauri's platform prerequisites, and Node.js 22 or newer with npm.
+Install Bun, Rust, and Tauri's platform prerequisites.
 Fork this repository, clone your fork, and create a branch for one focused
 change.
 
 ```powershell
-npm ci
-npm test
-npm run dev
+bun install --frozen-lockfile
+bun run test
+bun run dev
 ```
 
-`npm run build` builds the current Tauri app. Tauri packaging and the Rust
+`bun run build` builds the current Tauri app. Tauri packaging and the Rust
 download service are still in progress; this branch is not ready to distribute.
 Review the [migration plan](docs/TAURI-MIGRATION-PLAN.md) before choosing work
 and [release requirements](docs/RELEASING.md) before distributing binaries.

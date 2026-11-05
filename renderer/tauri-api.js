@@ -69,16 +69,16 @@ window.downloader = Object.freeze({
   clipboard: readClipboard,
   subscribe: callback => subscribe('downloader:change', callback),
   onCommand: callback => subscribe('downloader:command', callback),
+  openProgress: ({ id }) => invoke('open_progress_window', { id }),
+  closeProgress: () => invoke('close_auxiliary_window'),
+  resizeProgress: ({ expanded }) => invoke('resize_progress_window', { expanded }),
   add: () => unavailable('Downloads'),
   action: () => unavailable('Download actions'),
   review: () => unavailable('Browser download review'),
   integration: () => unavailable('Browser integration'),
   browserSetup: () => unavailable('Browser setup'),
-  openProgress: () => unavailable('Download details'),
   openIntegration: () => unavailable('Browser integration'),
   openOptions: () => Promise.resolve(),
   openAdd: () => Promise.resolve(),
-  openScheduler: () => Promise.resolve(),
-  closeProgress: () => Promise.resolve(),
-  resizeProgress: () => Promise.resolve()
+  openScheduler: () => Promise.resolve()
 });

@@ -4,6 +4,7 @@ use tauri::State;
 
 use crate::{
     application::{
+        download_history_service::DownloadHistoryService,
         error::{AppError, AppResult},
         settings_service::SettingsService,
     },
@@ -12,12 +13,14 @@ use crate::{
 
 pub struct AppState {
     settings: Mutex<SettingsService>,
+    download_history: DownloadHistoryService,
 }
 
 impl AppState {
-    pub fn new(settings: SettingsService) -> Self {
+    pub fn new(settings: SettingsService, download_history: DownloadHistoryService) -> Self {
         Self {
             settings: Mutex::new(settings),
+            download_history,
         }
     }
 }
@@ -28,7 +31,10 @@ pub fn snapshot(state: State<'_, AppState>) -> AppResult<Snapshot> {
         .settings
         .lock()
         .map_err(|_| AppError::storage("Application settings are unavailable."))?;
-    Ok(Snapshot::empty(settings.settings().clone()))
+    Ok(Snapshot::new(
+        settings.settings().clone(),
+        state.download_history.downloads().to_vec(),
+    ))
 }
 
 #[tauri::command]

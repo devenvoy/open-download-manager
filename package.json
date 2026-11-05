@@ -4,12 +4,13 @@
   "private": true,
   "description": "A Windows download manager built with Rust and Tauri",
   "license": "MIT",
+  "packageManager": "bun@1.3.14",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml && npm run test:extension",
-    "test:extension": "node --test extension/*.test.cjs renderer/*.test.cjs"
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml && bun run test:extension",
+    "test:extension": "bun test extension renderer"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

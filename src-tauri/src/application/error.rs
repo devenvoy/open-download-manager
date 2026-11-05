@@ -21,6 +21,13 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    pub fn window(message: impl Into<String>) -> Self {
+        Self {
+            code: "window_error",
+            message: message.into(),
+        }
+    }
 }
 
 pub type AppResult<T> = Result<T, AppError>;
