@@ -85,12 +85,50 @@ pub fn prompt_for_download(app: &AppHandle, update_service: &UpdateService, info
         ))
         .show(move |download_approved| {
             if download_approved {
-                prompt_for_install(&app_clone, &service_clone, info_clone);
+                if let Some(ref download_url) = info_clone.download_url {
+                    let download_url = download_url.clone();
+                    let dest = std::env::temp_dir()
+                        .join("awesome-downloader-update")
+                        .join(format!("Awesome-Downloader-Setup-{}.exe", info_clone.version));
+                    let app_for_dl = app_clone.clone();
+                    let service_for_dl = service_clone.clone();
+                    let info_for_dl = info_clone.clone();
+
+                    use tauri_plugin_notification::NotificationExt;
+                    let _ = app_for_dl
+                        .notification()
+                        .builder()
+                        .title("Downloading update")
+                        .body(format!("Downloading Awesome Downloader {} in background...", info_for_dl.version))
+                        .show();
+
+                    tauri::async_runtime::spawn(async move {
+                        match service_for_dl.download_update_payload(&download_url, &dest).await {
+                            Ok(()) => {
+                                prompt_for_install(&app_for_dl, &service_for_dl, info_for_dl, Some(dest));
+                            }
+                            Err(err) => {
+                                show_error_dialog(
+                                    &app_for_dl,
+                                    "Could not download update installer.",
+                                    &err.message,
+                                );
+                            }
+                        }
+                    });
+                } else {
+                    prompt_for_install(&app_clone, &service_clone, info_clone, None);
+                }
             }
         });
 }
 
-pub fn prompt_for_install(app: &AppHandle, update_service: &UpdateService, info: UpdateReleaseInfo) {
+pub fn prompt_for_install(
+    app: &AppHandle,
+    update_service: &UpdateService,
+    info: UpdateReleaseInfo,
+    installer_path: Option<std::path::PathBuf>,
+) {
     let active = if let Some(state) = app.try_state::<AppState>() {
         state
             .download_history
@@ -134,6 +172,22 @@ pub fn prompt_for_install(app: &AppHandle, update_service: &UpdateService, info:
         ))
         .show(move |restart_approved| {
             if restart_approved {
+                if let Some(ref path) = installer_path {
+                    if path.exists() {
+                        #[cfg(windows)]
+                        {
+                            let _ = std::process::Command::new(path)
+                                .arg("/S")
+                                .spawn();
+                        }
+                        #[cfg(not(windows))]
+                        {
+                            let _ = opener::open(path);
+                        }
+                        app_clone.exit(0);
+                        return;
+                    }
+                }
                 app_clone.restart();
             }
         });

@@ -277,3 +277,17 @@ fn version_comparison_and_error_classification_functions() {
         "GitHub Releases returned an unexpected response. Please try again later."
     );
 }
+
+#[tokio::test]
+async fn update_payload_download_delegates_to_client() {
+    let mock = Arc::new(MockUpdateClient::new(Ok(None)));
+    let service = UpdateService::new(mock.clone(), "0.1.2", false);
+
+    let temp_dest = tempfile::tempdir().unwrap().path().join("Setup.exe");
+    service
+        .download_update_payload("https://example.com/Setup.exe", &temp_dest)
+        .await
+        .expect("download should succeed");
+
+    assert_eq!(mock.download_count.load(Ordering::SeqCst), 1);
+}

@@ -180,16 +180,16 @@ pub struct ParsedSabrSeed {
     pub po_token: Option<Vec<u8>>,
 }
 
-struct ProtoReader<'a> {
-    data: &'a [u8],
+pub struct ProtoReader<'a> {
+    pub data: &'a [u8],
 }
 
 impl<'a> ProtoReader<'a> {
-    fn new(data: &'a [u8]) -> Self {
+    pub fn new(data: &'a [u8]) -> Self {
         Self { data }
     }
 
-    fn read_varint(&mut self) -> Result<u64, String> {
+    pub fn read_varint(&mut self) -> Result<u64, String> {
         let mut result = 0u64;
         let mut shift = 0;
         while !self.data.is_empty() {
@@ -207,14 +207,14 @@ impl<'a> ProtoReader<'a> {
         Err("Unexpected end of protobuf varint.".to_owned())
     }
 
-    fn read_tag(&mut self) -> Result<(u32, u8), String> {
+    pub fn read_tag(&mut self) -> Result<(u32, u8), String> {
         let varint = self.read_varint()?;
         let field_number = (varint >> 3) as u32;
         let wire_type = (varint & 0x07) as u8;
         Ok((field_number, wire_type))
     }
 
-    fn read_length_delimited(&mut self) -> Result<&'a [u8], String> {
+    pub fn read_length_delimited(&mut self) -> Result<&'a [u8], String> {
         let len = self.read_varint()? as usize;
         if self.data.len() < len {
             return Err("Unexpected end of length-delimited protobuf field.".to_owned());
@@ -224,7 +224,7 @@ impl<'a> ProtoReader<'a> {
         Ok(bytes)
     }
 
-    fn skip_field(&mut self, wire_type: u8) -> Result<(), String> {
+    pub fn skip_field(&mut self, wire_type: u8) -> Result<(), String> {
         match wire_type {
             0 => {
                 let _ = self.read_varint()?;
@@ -251,6 +251,83 @@ impl<'a> ProtoReader<'a> {
             _ => Err(format!("Unsupported protobuf wire type: {wire_type}")),
         }
     }
+}
+
+pub fn encode_varint(mut val: u64, buf: &mut Vec<u8>) {
+    while val >= 0x80 {
+        buf.push(((val & 0x7F) as u8) | 0x80);
+        val >>= 7;
+    }
+    buf.push((val & 0x7F) as u8);
+}
+
+pub fn encode_varint_field(buf: &mut Vec<u8>, field_no: u32, val: u64) {
+    let tag = ((field_no as u64) << 3) | 0;
+    encode_varint(tag, buf);
+    encode_varint(val, buf);
+}
+
+pub fn encode_bytes_field(buf: &mut Vec<u8>, field_no: u32, bytes: &[u8]) {
+    let tag = ((field_no as u64) << 3) | 2;
+    encode_varint(tag, buf);
+    encode_varint(bytes.len() as u64, buf);
+    buf.extend_from_slice(bytes);
+}
+
+pub fn encode_ump_chunk(part_type: u64, payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    encode_varint(part_type, &mut out);
+    encode_varint(payload.len() as u64, &mut out);
+    out.extend_from_slice(payload);
+    out
+}
+
+pub fn parse_media_header_itag(payload: &[u8]) -> Option<u32> {
+    let mut reader = ProtoReader::new(payload);
+    while !reader.data.is_empty() {
+        if let Ok((field_no, wire_type)) = reader.read_tag() {
+            if field_no == 2 && wire_type == 0 {
+                if let Ok(itag) = reader.read_varint() {
+                    return Some(itag as u32);
+                }
+            } else {
+                let _ = reader.skip_field(wire_type);
+            }
+        } else {
+            break;
+        }
+    }
+    None
+}
+
+pub fn build_sabr_request_body(session: &NormalizedSabrSession) -> Vec<u8> {
+    if let Some(ref rb) = session.request_body {
+        if let Ok(bytes) = BASE64_STANDARD.decode(rb.as_bytes()) {
+            if !bytes.is_empty() {
+                return bytes;
+            }
+        }
+    }
+    let mut body = Vec::new();
+    encode_varint_field(&mut body, 3, session.audio_itag as u64);
+    if let Some(video_itag) = session.video_itag {
+        encode_varint_field(&mut body, 4, video_itag as u64);
+    }
+    let mut streamer_ctx = Vec::new();
+    let mut client_bytes = Vec::new();
+    encode_varint_field(&mut client_bytes, 1, session.client_info.client_name as u64);
+    if !session.client_info.client_version.is_empty() {
+        encode_bytes_field(&mut client_bytes, 2, session.client_info.client_version.as_bytes());
+    }
+    encode_bytes_field(&mut streamer_ctx, 6, &client_bytes);
+
+    if let Some(ref po_token_b64) = session.po_token {
+        if let Ok(po_bytes) = BASE64_STANDARD.decode(po_token_b64.as_bytes()) {
+            encode_bytes_field(&mut streamer_ctx, 19, &po_bytes);
+        }
+    }
+    encode_bytes_field(&mut body, 10, &streamer_ctx);
+    body
 }
 
 pub fn parse_sabr_protobuf_request(bytes: &[u8]) -> Result<ParsedSabrSeed, String> {

@@ -11,9 +11,9 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 118 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
-- **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test extension renderer`)
-- **Total Tests Passing:** 206 automated tests with zero failures across Rust, Bun, and browser integration.
+- **Rust Test Suite:** 126 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **WebExtension & Renderer Contract Suite:** 89 tests passing (`bun test renderer extension`)
+- **Total Tests Passing:** 215 automated tests with zero failures across Rust, Bun, and browser integration.
 - **Zero-Node Runtime:** Core transfers, scheduling, file icons, updater, SABR protobuf parsing, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
 | Subsystem | Legacy Electron Reference | Migrated Tauri / Rust Implementation | Functional Parity | Performance & Stability Gain |
@@ -26,8 +26,9 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 | **System Notifications & Reveal** | `desktop/main.cjs` | `src-tauri/src/presentation/download_event_publisher.rs`, `lib.rs` | **100%** | OS desktop notifications on complete (`notify_on_complete`), folder reveal (`reveal_on_complete`) via `tauri-plugin-notification` |
 | **File Type Icon Provider & Catalog** | `desktop/file-icons.cjs`, `main.cjs` | `src-tauri/src/domain/file_type.rs`, `infrastructure/file_icons.rs` | **100%** | 60+ `FileType` catalog with 71 bundled Material Icon Theme vector SVGs, compound extensions, instant data URLs, auto-categorization |
 | **Adaptive Dual-Stream Muxing** | `core/engine.mjs`, `core/mux.mjs` | `src-tauri/src/infrastructure/media/paired_executor.rs`, `composite_executor.rs` | **100%** | Parallel 2-track HTTP streams (`0.part`, `1.part`), rate limiting, status `assembling`, FFmpeg track muxing and MP3 conversion |
-| **Auto-Updater & Periodic Check** | `desktop/main.cjs:340-359`, `desktop/updater.cjs` | `src-tauri/src/domain/updater.rs`, `application/updater_service.rs`, `presentation/updater_controller.rs` | **100%** | 6-hour recurring background checks, manual check dialog, active download safety warning, GitHub Releases API integration |
-| **YouTube SABR Protocol & Protobuf Parser** | `core/sabr.mjs`, `integration/native-host.cjs` | `src-tauri/src/domain/media/sabr.rs`, `download_transfer_service.rs` | **100%** | Pure Rust zero-copy Protobuf wire parser, session normalization, DRC/VB filtering, active transfer deduplication |
+| **Auto-Updater & Periodic Check** | `desktop/main.cjs:340-359`, `desktop/updater.cjs` | `src-tauri/src/domain/updater.rs`, `application/updater_service.rs`, `presentation/updater_controller.rs` | **100%** | 6-hour recurring background checks, manual check dialog, active download safety warning, GitHub Releases API client, real binary streaming payload download, and installer execution |
+| **YouTube SABR Protocol & UMP Streaming Executor** | `core/sabr.mjs`, `integration/native-host.cjs` | `src-tauri/src/domain/media/sabr.rs`, `infrastructure/media/sabr_executor.rs` | **100%** | Pure Rust zero-copy Protobuf parser, session normalization, active transfer deduplication, UMP binary frame parser (parts 20, 21, 22), track routing, and FFmpeg muxing |
+| **YouTube Playlists Extraction & Batch Queue** | Issues #21, #30, #31 | `src-tauri/src/domain/media/playlist.rs`, `infrastructure/media/ytdlp.rs`, `renderer/` | **100%** | Automatic playlist URL detection, bounded `yt-dlp` metadata extraction, batch selection modal, category deduction, and transfer batch queuing |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |

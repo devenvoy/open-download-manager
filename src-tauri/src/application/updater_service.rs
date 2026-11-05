@@ -121,4 +121,14 @@ impl UpdateService {
             InstallDecision::ReadyToInstall
         }
     }
+
+    pub async fn download_update_payload(
+        &self,
+        download_url: &str,
+        destination: &std::path::Path,
+    ) -> AppResult<()> {
+        self.client
+            .download_update_installer(download_url, destination)
+            .await
+    }
 }
