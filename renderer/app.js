@@ -831,11 +831,24 @@ function showDialog(id) {
 	const dialog = $(id);
 	if (!dialog.open) dialog.showModal();
 }
+function isYouTubePlaylistUrl(text) {
+	if (!text || typeof text !== "string") return false;
+	const trimmed = text.trim();
+	if (!/^https?:\/\//i.test(trimmed)) return false;
+	return /(?:youtube\.com\/(?:playlist\?list=|watch\?.*[?&]list=)|youtu\.be\/.*[?&]list=)([\w-]{10,64})/i.test(trimmed);
+}
+function checkPlaylistUrl() {
+	const banner = $("#playlist-banner");
+	if (banner) {
+		banner.hidden = !isYouTubePlaylistUrl($("#download-urls").value);
+	}
+}
 function openAdd(text = "", scheduled = "") {
 	pendingReviewId = null;
 	$("#add-error").hidden = true;
 	$("#download-urls").value = text;
 	$("#download-urls").readOnly = false;
+	checkPlaylistUrl();
 	$("#download-filename").value = "";
 	$("#download-description").value = "";
 	$("#download-category").value = "";
@@ -1476,10 +1489,127 @@ document.addEventListener("keydown", (event) => {
 $("#paste-button").addEventListener("click", async () => {
 	try {
 		$("#download-urls").value = await call("clipboard");
+		checkPlaylistUrl();
 		$("#download-urls").focus();
 	} catch (error) {
 		$("#add-error").textContent = messageOf(error);
 		$("#add-error").hidden = false;
+	}
+});
+$("#download-urls").addEventListener("input", checkPlaylistUrl);
+
+let currentPlaylistMetadata = null;
+
+function renderPlaylistItems(entries) {
+	const container = $("#playlist-items");
+	container.innerHTML = "";
+	for (const entry of entries) {
+		const row = document.createElement("label");
+		row.className = "playlist-item";
+		const cb = document.createElement("input");
+		cb.type = "checkbox";
+		cb.checked = true;
+		cb.dataset.id = entry.id;
+
+		const thumb = document.createElement("img");
+		thumb.className = "playlist-item-thumb";
+		thumb.src = entry.thumbnail || "";
+		thumb.alt = "";
+
+		const info = document.createElement("div");
+		info.className = "playlist-item-info";
+		const title = document.createElement("div");
+		title.className = "playlist-item-title";
+		title.textContent = entry.title;
+		const meta = document.createElement("div");
+		meta.className = "playlist-item-meta";
+		const durationStr = entry.duration
+			? `${Math.floor(entry.duration / 60)}:${String(Math.floor(entry.duration % 60)).padStart(2, "0")}`
+			: "";
+		meta.textContent = [entry.channel, durationStr].filter(Boolean).join(" • ");
+
+		info.appendChild(title);
+		if (meta.textContent) info.appendChild(meta);
+
+		row.appendChild(cb);
+		row.appendChild(thumb);
+		row.appendChild(info);
+		container.appendChild(row);
+	}
+}
+
+$("#playlist-banner-btn")?.addEventListener("click", async () => {
+	const url = $("#download-urls").value.trim();
+	if (!url) return;
+	const btn = $("#playlist-banner-btn");
+	const errorEl = $("#add-error");
+	errorEl.hidden = true;
+	try {
+		btn.disabled = true;
+		btn.textContent = "Loading…";
+		const metadata = await call("getPlaylistInfo", url);
+		currentPlaylistMetadata = metadata;
+		$("#playlist-name").textContent = metadata.title || "YouTube Playlist";
+		$("#playlist-uploader").textContent = metadata.uploader ? `By ${metadata.uploader}` : "";
+		$("#playlist-count").textContent = `${metadata.entryCount || metadata.entries?.length || 0} videos`;
+		$("#playlist-error").hidden = true;
+		renderPlaylistItems(metadata.entries || []);
+		showDialog("#playlist-dialog");
+	} catch (err) {
+		errorEl.textContent = messageOf(err);
+		errorEl.hidden = false;
+	} finally {
+		btn.disabled = false;
+		btn.textContent = "Select Videos…";
+	}
+});
+
+$("#playlist-select-all")?.addEventListener("click", () => {
+	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = true));
+});
+
+$("#playlist-deselect-all")?.addEventListener("click", () => {
+	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = false));
+});
+
+$("#playlist-form")?.addEventListener("submit", async (e) => {
+	e.preventDefault();
+	if (!currentPlaylistMetadata) return;
+	const checkboxes = $$("#playlist-items input[type='checkbox']");
+	const items = (currentPlaylistMetadata.entries || []).map((entry, idx) => ({
+		id: entry.id,
+		url: entry.url,
+		title: entry.title,
+		selected: !!checkboxes[idx]?.checked,
+	}));
+
+	const selectedCount = items.filter((i) => i.selected).length;
+	if (selectedCount === 0) {
+		$("#playlist-error").textContent = "Select at least one video to download.";
+		$("#playlist-error").hidden = false;
+		return;
+	}
+
+	const btn = $("#playlist-download-btn");
+	try {
+		btn.disabled = true;
+		await call("addPlaylistDownloads", {
+			playlistId: currentPlaylistMetadata.id,
+			playlistTitle: currentPlaylistMetadata.title,
+			items,
+			commonCategory: $("#download-category").value || undefined,
+			commonDirectory: $("#add-directory").value || undefined,
+		});
+		$("#playlist-dialog").close();
+		$("#add-dialog").close();
+		setView("all");
+		await refresh();
+		notify(`Added ${selectedCount} playlist videos to downloads.`);
+	} catch (err) {
+		$("#playlist-error").textContent = messageOf(err);
+		$("#playlist-error").hidden = false;
+	} finally {
+		btn.disabled = false;
 	}
 });
 $("#add-browse").addEventListener("click", async () => {

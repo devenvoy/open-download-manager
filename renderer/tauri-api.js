@@ -85,5 +85,7 @@ window.downloader = Object.freeze({
   openScheduler: () => invoke('open_scheduler_window'),
   exportDownloads: () => invoke('export_downloads_to_file'),
   importDownloads: () => invoke('import_downloads_from_file'),
-  showAbout: () => invoke('show_about_dialog')
+  showAbout: () => invoke('show_about_dialog'),
+  getPlaylistInfo: url => invoke('get_playlist_info', { url }),
+  addPlaylistDownloads: request => invoke('add_playlist_downloads', { request })
 });

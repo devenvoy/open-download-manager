@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     application::{
@@ -7,7 +7,7 @@ use crate::{
         integration_service::IntegrationService, settings_service::SettingsService,
         updater_service::UpdateService,
     },
-    infrastructure::file_icons::FileIconProvider,
+    infrastructure::{file_icons::FileIconProvider, media::ytdlp::YtDlpTools},
 };
 
 pub struct AppState {
@@ -17,6 +17,7 @@ pub struct AppState {
     pub(super) integration: IntegrationService,
     pub(super) file_icons: FileIconProvider,
     pub(super) update_service: UpdateService,
+    pub(super) ytdlp: Option<Arc<YtDlpTools>>,
 }
 
 impl AppState {
@@ -35,6 +36,12 @@ impl AppState {
             integration,
             file_icons,
             update_service,
+            ytdlp: YtDlpTools::new().map(Arc::new),
         }
+    }
+
+    pub fn with_ytdlp(mut self, ytdlp: Option<Arc<YtDlpTools>>) -> Self {
+        self.ytdlp = ytdlp;
+        self
     }
 }

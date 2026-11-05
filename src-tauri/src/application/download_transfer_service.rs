@@ -28,6 +28,7 @@ use crate::{
             filename_from_url, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
             ReviewDownloadRequest,
         },
+        media::AddPlaylistDownloadsRequest,
         settings::Settings,
     },
     infrastructure::system_shell::SystemShellService,
@@ -211,6 +212,74 @@ impl DownloadTransferService {
             }
         }
         Ok(ids)
+    }
+
+    pub fn add_playlist_downloads(
+        &self,
+        request: AddPlaylistDownloadsRequest,
+        settings: &Settings,
+    ) -> AppResult<usize> {
+        let target_dir = request
+            .common_directory
+            .filter(|d| !d.trim().is_empty())
+            .unwrap_or_else(|| settings.default_directory.to_string_lossy().to_string());
+        let category = request.common_category.unwrap_or(DownloadCategory::Video);
+
+        let selected_items: Vec<_> = request.items.into_iter().filter(|i| i.selected).collect();
+        if selected_items.is_empty() {
+            return Ok(0);
+        }
+
+        let total_count = selected_items.len();
+        let records: Vec<DownloadRecord> = selected_items
+            .into_iter()
+            .enumerate()
+            .map(|(idx, item)| {
+                let clean_title = sanitize_filename::sanitize(&item.title);
+                let clean_title = if clean_title.trim().is_empty() {
+                    format!("video_{}", item.id)
+                } else {
+                    clean_title
+                };
+                let filename = if clean_title.ends_with(".mp4") || clean_title.ends_with(".mkv") {
+                    clean_title
+                } else {
+                    format!("{clean_title}.mp4")
+                };
+
+                DownloadRecord {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    url: item.url,
+                    filename,
+                    status: DownloadStatus::Paused,
+                    downloaded: 0,
+                    total: None,
+                    speed: 0,
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    needs_review: false,
+                    scheduled_at: None,
+                    description: Some(format!("From playlist: {}", request.playlist_title)),
+                    category: Some(category),
+                    directory: Some(target_dir.clone()),
+                    path: None,
+                    last_try: None,
+                    error: None,
+                    notice: Some(format!("Playlist item {} of {}.", idx + 1, total_count)),
+                    estimated: NEW_DOWNLOAD_IS_ESTIMATED,
+                    kind: Some(HTTP_DOWNLOAD_KIND.to_owned()),
+                    resumable: Some(NEW_DOWNLOAD_IS_RESUMABLE),
+                    duration: None,
+                    connections: settings.connections,
+                    connections_progress: Vec::new(),
+                    audio_url: None,
+                    sabr: None,
+                }
+            })
+            .collect();
+
+        let count = records.len();
+        self.history.add_records(records)?;
+        Ok(count)
     }
 
     pub fn review_download(

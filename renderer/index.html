@@ -313,6 +313,12 @@
 					<p class="field-help address-help">
 						Enter one URL per line for a batch download.
 					</p>
+					<div id="playlist-banner" class="banner-notice" hidden>
+						<span>YouTube playlist detected!</span>
+						<button type="button" class="button" id="playlist-banner-btn">
+							Select Videos…
+						</button>
+					</div>
 					<div class="form-line">
 						<label for="download-category">Category:</label
 						><select id="download-category">
@@ -387,6 +393,58 @@
 						class="button"
 						data-close>
 						Cancel
+					</button>
+				</div>
+			</form>
+		</dialog>
+
+		<dialog
+			id="playlist-dialog"
+			aria-labelledby="playlist-title">
+			<form id="playlist-form">
+				<div class="dialog-title">
+					<strong id="playlist-title">YouTube Playlist</strong>
+					<button
+						type="button"
+						class="close-button"
+						data-close
+						aria-label="Close">
+						×
+					</button>
+				</div>
+				<div class="dialog-body playlist-dialog-body">
+					<div class="playlist-header">
+						<div class="playlist-meta">
+							<h3 id="playlist-name"></h3>
+							<p id="playlist-uploader" class="field-help"></p>
+							<p id="playlist-count" class="field-help"></p>
+						</div>
+						<div class="playlist-actions-bar">
+							<button type="button" class="button" id="playlist-select-all">Select All</button>
+							<button type="button" class="button" id="playlist-deselect-all">Deselect All</button>
+						</div>
+					</div>
+					<div class="playlist-items-list" id="playlist-items" tabindex="0">
+						<!-- items populated dynamically -->
+					</div>
+					<p
+						class="form-error"
+						id="playlist-error"
+						role="alert"
+						hidden></p>
+				</div>
+				<div class="dialog-footer">
+					<button
+						type="button"
+						class="button"
+						data-close>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="button primary"
+						id="playlist-download-btn">
+						Download Selected
 					</button>
 				</div>
 			</form>

@@ -273,3 +273,41 @@ test('auxiliary window and dialog methods invoke corresponding Rust commands', a
   assert.equal(calls[5][0], 'import_downloads_from_file');
   assert.equal(calls[6][0], 'show_about_dialog');
 });
+
+test('playlist methods invoke get_playlist_info and add_playlist_downloads', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        if (args[0] === 'get_playlist_info') {
+          return { id: 'PL12345', title: 'Test Playlist', entries: [] };
+        }
+        if (args[0] === 'add_playlist_downloads') {
+          return 5;
+        }
+        return null;
+      }
+    }
+  });
+
+  const info = await api.getPlaylistInfo('https://www.youtube.com/playlist?list=PL12345');
+  assert.equal(info.id, 'PL12345');
+  assert.equal(calls[0][0], 'get_playlist_info');
+  assert.deepEqual(calls[0][1], { url: 'https://www.youtube.com/playlist?list=PL12345' });
+
+  const added = await api.addPlaylistDownloads({
+    playlistId: 'PL12345',
+    playlistTitle: 'Test Playlist',
+    items: [{ id: 'abc', url: 'https://youtube.com/watch?v=abc', title: 'Video', selected: true }]
+  });
+  assert.equal(added, 5);
+  assert.equal(calls[1][0], 'add_playlist_downloads');
+  assert.deepEqual(calls[1][1], {
+    request: {
+      playlistId: 'PL12345',
+      playlistTitle: 'Test Playlist',
+      items: [{ id: 'abc', url: 'https://youtube.com/watch?v=abc', title: 'Video', selected: true }]
+    }
+  });
+});

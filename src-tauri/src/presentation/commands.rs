@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::State;
 
 use crate::{
@@ -7,9 +8,11 @@ use crate::{
     },
     domain::{
         download::{DownloadAction, DownloadRequest, ReviewDownloadRequest},
+        media::{AddPlaylistDownloadsRequest, PlaylistMetadata},
         settings::SettingsPatch,
         snapshot::{IntegrationStatus, Snapshot},
     },
+    infrastructure::media::ytdlp::YtDlpTools,
 };
 
 use super::app_state::AppState;
@@ -143,4 +146,37 @@ pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>
     )
     .await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_playlist_info(
+    state: State<'_, AppState>,
+    url: String,
+) -> AppResult<PlaylistMetadata> {
+    let ytdlp = state
+        .ytdlp
+        .clone()
+        .or_else(|| YtDlpTools::new().map(Arc::new))
+        .ok_or_else(|| {
+            AppError::download(
+                "yt-dlp is not available. Ensure yt-dlp is installed and available in PATH or the app tools directory.",
+            )
+        })?;
+    ytdlp.fetch_playlist_info(&url).await
+}
+
+#[tauri::command]
+pub fn add_playlist_downloads(
+    state: State<'_, AppState>,
+    request: AddPlaylistDownloadsRequest,
+) -> AppResult<usize> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::storage("Application settings are unavailable."))?
+        .settings()
+        .clone();
+    state
+        .download_transfer
+        .add_playlist_downloads(request, &settings)
 }
