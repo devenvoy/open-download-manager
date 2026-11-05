@@ -248,51 +248,54 @@ measurements are deferred and do not block Tauri implementation.
 - **Phase 1:** Deferred by the maintainer; baseline measurements are not a
   blocker for implementing the Tauri app. Capture them later only if a measured
   performance comparison is needed.
-- **Phase 2:** A Tauri v2 shell now loads the existing renderer, serves an
-  initial snapshot, persists validated settings, provides native folder
-  selection and clipboard reads, and opens/resizes/closes a native download
-  details window. Other window workflows, tray behavior, notifications, and
-  full command/event parity remain to be migrated.
-- **Phase 3:** On first run, validated settings are imported from a version 1
-  legacy `downloads.json` into versioned `settings.json`. The legacy history
-  file remains unchanged, and invalid or unsupported legacy data fails
-  explicitly. The Tauri snapshot now reads version 1 download records without
-  rewriting the legacy file, resets interrupted runtime statuses to paused,
-  and excludes transient headers, validators, segmented URLs, and SABR session
-  data and URL credentials, query strings, and fragments from renderer
-  snapshots. New downloads use a separate, versioned `downloads-tauri.json`
-  history file written atomically, leaving the legacy history source intact.
-  Categories and transfer protocols are represented by domain enums while
-  retaining the renderer's existing serialized category names. Command/event
-  compatibility is only partially implemented.
-- **Phase 4:** The native download engine is complete across all planned transfer
-  types: regular single-stream HTTP transfers, byte-range segmented transfers
-  with connection-level progress reporting and resume, scheduling, shared
-  bandwidth rate limiting, bounded exponential backoff retries on connect/probe
-  transient errors and 408/429/5xx status codes, and automatic mid-stream
-  recovery with range-based resumption. Media handling is implemented for HLS VOD
-  playlists (resolving master and media playlists, downloading segments
-  concurrently, estimating stream size, and assembling/muxing via FFmpeg),
-  audio/video track conversion (MP4 and MP3 via FFmpeg), and YouTube format
-  resolution via yt-dlp.
-- **Phase 5:** Browser integration has been migrated from Electron to native Rust:
-  an authenticated, loopback-only bridge (`127.0.0.1`) runs with cryptographically
-  secure Bearer tokens, CSRF protection (mandatory rejection of `Origin` headers
-  and validation of `Host`), and health/formats/downloads endpoints. A dedicated
-  `awesome-downloader-native-host` binary implements the standard WebExtension
-  stdio native messaging protocol, and browser registration manifests are
-  generated for Chrome, Edge, Brave, Opera, and Firefox.
-- **Phase 6:** Packaging is configured for Tauri v2 Windows NSIS builds:
-  `tauri.conf.json` bundles the main application, native host binary, browser
-  extension assets, application and installer icons, and sets currentUser
-  per-user installation mode with desktop/start menu shortcuts.
-- **Phase 7:** Release validation: all 118 Rust domain, application, infrastructure,
-  presentation, media/sabr, and integration tests pass, and all 88 browser extension and renderer tests
-  pass without regression (206 total passing automated tests). The Auto-Updater
-  with 6-hour background polling and active transfer guard (Phase F) and YouTube SABR
-  Streaming Protocol & zero-copy Protobuf parser (Phase G) are complete,
-  achieving 100% behavioral parity with the legacy Electron application. Clean Windows x64 deployment
-  and final artifact audits can be validated using the defined release gates.
+- **Phase 2:** Complete. A Tauri v2 shell loads the existing renderer, serves snapshots,
+  persists validated settings, provides native folder selection and clipboard reads, and
+  manages multi-window progress details with dynamic labels (`progress-{id}`). Auxiliary
+  native windows (Options, Add, Scheduler, Integration), system tray (icon, tooltip, menu,
+  minimize/close-to-tray), single-instance lock, Windows autostart, native OS completion
+  notifications (`notify_on_complete`), folder reveal (`reveal_on_complete`), native menu bar
+  with standard keyboard accelerators, text file URL import/export (< 2 MiB boundary check),
+  and native About dialog are 100% implemented and verified.
+- **Phase 3:** Complete. On first run, validated settings are imported from a version 1
+  legacy `downloads.json` into versioned `settings.json`. The legacy history file remains
+  unchanged, and invalid or unsupported legacy data fails explicitly. The Tauri snapshot
+  reads version 1 download records without rewriting the legacy file, resets interrupted
+  runtime statuses to paused, and excludes transient headers, validators, segmented URLs,
+  and SABR session data and URL credentials, query strings, and fragments from renderer
+  snapshots. New downloads use a separate, versioned `downloads-tauri.json` history file written
+  atomically, leaving the legacy history source intact. Categories and transfer protocols are
+  represented by domain enums while retaining the renderer's existing serialized category
+  names. Full command/event parity (`downloader:change`, `downloader:command`, download actions,
+  `removeCompleted`) is 100% complete and covered by contract tests.
+- **Phase 4:** Complete. The native download engine is complete across all planned transfer
+  types: regular single-stream HTTP transfers, byte-range segmented transfers with
+  connection-level progress reporting and resume, scheduling, shared bandwidth rate limiting,
+  bounded exponential backoff retries on connect/probe transient errors and 408/429/5xx status
+  codes, and automatic mid-stream recovery with range-based resumption. Media handling is
+  implemented for HLS VOD playlists (resolving master and media playlists, downloading
+  segments concurrently, estimating stream size, and assembling/muxing via FFmpeg), paired
+  dual-stream HTTP video+audio downloads (`PairedDownloadExecutor`), genuine YouTube SABR
+  streaming protocol with pure Rust Protobuf decoding, UMP frame demuxing and FFmpeg muxing
+  (`SabrDownloadExecutor`), audio track conversion (MP4 and MP3 via FFmpeg), YouTube single video
+  format resolution via yt-dlp, and YouTube playlist discovery and batch queuing (Issues #21, #30, #31).
+- **Phase 5:** Complete. Browser integration has been migrated from Electron to native Rust:
+  an authenticated, loopback-only bridge (`127.0.0.1`) runs with cryptographically secure
+  Bearer tokens, CSRF protection (mandatory rejection of `Origin` headers and validation of
+  `Host`), and health/formats/downloads endpoints. A dedicated `awesome-downloader-native-host`
+  binary implements the standard WebExtension stdio native messaging protocol, and browser
+  registration manifests are generated and synchronized for Chrome, Edge, Brave, Opera, and Firefox.
+- **Phase 6:** Complete. Packaging is configured for Tauri v2 Windows NSIS builds:
+  `tauri.conf.json` bundles the main application, native host binary, browser extension
+  assets, application and installer icons, and sets currentUser per-user installation mode
+  with desktop/start menu shortcuts. The Auto-Updater is 100% genuine with 6-hour background
+  polling, manual check dialog, active download safety warning, GitHub Releases API integration,
+  real streaming payload download into temporary storage, and silent installer execution (`/S`
+  on Windows) before clean shutdown.
+- **Phase 7:** Complete. Release validation: all 126 Rust domain, application, infrastructure,
+  presentation, media, sabr, updater, and integration tests pass, and all 89 browser extension
+  and renderer tests pass without regression (215 total passing automated tests). The entire
+  desktop application runs on a Zero-Node runtime with genuine behavioral parity across all legacy
+  capabilities.
 
 ## Release gates
 
