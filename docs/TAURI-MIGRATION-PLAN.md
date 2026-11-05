@@ -271,10 +271,11 @@ measurements are deferred and do not block Tauri implementation.
   failure states, and transient URL credential redaction in snapshots and
   persisted history. The application transfer use case depends on an executor
   port; its HTTP/file implementation lives in infrastructure. Policy values
-  and substantial data types are kept in focused modules. Pausing, cancellation,
-  retry/resume, scheduling, speed limiting, segmented transfers, media handling,
-  and download actions remain outstanding. The UI can submit direct downloads,
-  but queued-only entries cannot yet be resumed through a Tauri action.
+  and substantial data types are kept in focused modules. Queue-only HTTP
+  downloads can be started once through a typed Tauri action. Pausing,
+  cancellation, retry and byte-range resume, scheduling, speed limiting,
+  segmented transfers, and media handling remain outstanding; unsupported
+  actions report an explicit migration error.
 - The Electron shell, JavaScript backend, native host, and their tests were
   moved to the ignored local `reference/electron-legacy/` archive as requested.
   That archive is not present in fresh clones. The pre-migration sources remain

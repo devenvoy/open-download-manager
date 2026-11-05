@@ -538,26 +538,10 @@ function selected() {
 	return state.downloads.find((d) => d.id === selectedId);
 }
 function canResume(d) {
-	return (
-		d &&
-		!d.needsReview &&
-		["paused", "queued", "scheduled", "failed", "cancelled"].includes(
-			statusOf(d),
-		)
-	);
+	return d && !d.needsReview && statusOf(d) === "queued";
 }
-function canPause(d) {
-	return (
-		d &&
-		!d.needsReview &&
-		[
-			"downloading",
-			"connecting",
-			"queued",
-			"scheduled",
-			"assembling",
-		].includes(statusOf(d))
-	);
+function canPause() {
+	return false;
 }
 function matches(d) {
 	const status = statusOf(d);

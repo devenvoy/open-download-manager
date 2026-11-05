@@ -36,6 +36,13 @@ impl AppError {
         }
     }
 
+    pub fn not_migrated(message: impl Into<String>) -> Self {
+        Self {
+            code: "feature_not_migrated",
+            message: message.into(),
+        }
+    }
+
     pub fn window(message: impl Into<String>) -> Self {
         Self {
             code: "window_error",

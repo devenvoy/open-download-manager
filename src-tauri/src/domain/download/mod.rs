@@ -1,3 +1,4 @@
+mod action;
 mod address;
 mod download_policy;
 mod filename;
@@ -7,6 +8,7 @@ mod request;
 mod status;
 mod validated_request;
 
+pub use action::DownloadAction;
 pub use address::DownloadAddress;
 pub use filename::{filename_from_url, redact_download_url, sanitize_filename};
 pub use protocol::DownloadProtocol;

@@ -117,14 +117,22 @@ test('adding a download invokes the Rust HTTP download command', async () => {
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ request }));
 });
 
-test('download actions that are not migrated reject explicitly', async () => {
-  const api = loadApi();
-
-  await assert.rejects(api.action(), error => {
-    assert.equal(error.code, 'feature_not_migrated');
-    assert.match(error.message, /Download actions/);
-    return true;
+test('download actions invoke the typed Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
   });
+  const request = { id: 'download-123', action: 'resume' };
+
+  await api.action(request);
+
+  assert.equal(calls[0][0], 'download_action');
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify(request));
 });
 
 test('folder picker uses the restricted native directory dialog', async () => {

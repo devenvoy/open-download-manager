@@ -12,7 +12,9 @@ use crate::{
         error::{AppError, AppResult},
     },
     domain::{
-        download::{filename_from_url, DownloadRecord, DownloadRequest, DownloadStatus},
+        download::{
+            filename_from_url, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
+        },
         settings::Settings,
     },
 };
@@ -94,38 +96,57 @@ impl DownloadTransferService {
         self.history.add_records(records)?;
 
         if !request.queue_only {
-            for id in &ids {
-                self.spawn_download(id.clone());
-            }
+            self.start_queued_downloads(&ids)?;
         }
         Ok(ids)
+    }
+
+    pub fn action(&self, id: &str, action: DownloadAction) -> AppResult<()> {
+        match action {
+            DownloadAction::Resume => self.start_queued_downloads(&[id.to_owned()]),
+            DownloadAction::Pause
+            | DownloadAction::Retry
+            | DownloadAction::Cancel
+            | DownloadAction::Remove
+            | DownloadAction::Open
+            | DownloadAction::Reveal => Err(AppError::not_migrated(format!(
+                "The {} action is not available in the Tauri migration yet.",
+                action.as_str()
+            ))),
+        }
     }
 
     pub fn set_max_concurrent(&self, value: u8) {
         self.concurrency.set_max_concurrent(value);
     }
 
-    fn spawn_download(&self, id: String) {
+    fn start_queued_downloads(&self, ids: &[String]) -> AppResult<()> {
+        let records = self
+            .history
+            .begin_queued_downloads(ids, chrono::Utc::now().to_rfc3339())?;
+        for record in records {
+            self.spawn_download(record);
+        }
+        Ok(())
+    }
+
+    fn spawn_download(&self, record: DownloadRecord) {
+        let id = record.id.clone();
         let service = self.clone();
         tokio::spawn(async move {
-            if let Err(error) = service.run_download(&id).await {
+            if let Err(error) = service.run_download(record).await {
                 eprintln!("Download {id} failed: {}", error.message);
                 service.fail_download(&id, error.message);
             }
         });
     }
 
-    async fn run_download(&self, id: &str) -> AppResult<()> {
-        let record = self.history.find_download(id)?;
+    async fn run_download(&self, record: DownloadRecord) -> AppResult<()> {
+        let id = record.id.clone();
         let _permit = self.concurrency.acquire().await?;
-        self.history.update_download(id, |download| {
-            download.status = DownloadStatus::Connecting;
-            download.last_try = Some(chrono::Utc::now().to_rfc3339());
-            download.error = None;
-        })?;
 
         let history = self.history.clone();
-        let download_id = id.to_owned();
+        let download_id = id.clone();
         let progress_handler: DownloadProgressHandler = Arc::new(move |progress| {
             if let Err(error) = history.update_download(&download_id, |download| {
                 download.status = DownloadStatus::Downloading;
@@ -140,7 +161,7 @@ impl DownloadTransferService {
             }
         });
         let result = self.executor.execute(record, progress_handler).await?;
-        self.history.update_download(id, |download| {
+        self.history.update_download(&id, |download| {
             download.status = DownloadStatus::Completed;
             download.downloaded = result.downloaded;
             download.total = result.total;

@@ -90,16 +90,55 @@ impl DownloadHistoryService {
         Ok(())
     }
 
-    pub(crate) fn find_download(&self, id: &str) -> AppResult<DownloadRecord> {
-        let downloads = self
+    pub(crate) fn begin_queued_downloads(
+        &self,
+        ids: &[String],
+        last_try: String,
+    ) -> AppResult<Vec<DownloadRecord>> {
+        let mut downloads = self
             .downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
-        downloads
+        let indexes = ids
             .iter()
-            .find(|download| download.id == id)
-            .cloned()
-            .ok_or_else(|| AppError::download("The download no longer exists."))
+            .map(|id| {
+                downloads
+                    .iter()
+                    .position(|download| download.id == *id)
+                    .ok_or_else(|| AppError::download("The download no longer exists."))
+            })
+            .collect::<AppResult<Vec<_>>>()?;
+        if indexes
+            .iter()
+            .any(|index| !matches!(&downloads[*index].status, DownloadStatus::Queued))
+        {
+            return Err(AppError::download(
+                "Only queued downloads can be started by this action.",
+            ));
+        }
+
+        let previous = indexes
+            .iter()
+            .map(|index| downloads[*index].clone())
+            .collect::<Vec<_>>();
+        for index in &indexes {
+            downloads[*index].status = DownloadStatus::Connecting;
+            downloads[*index].last_try = Some(last_try.clone());
+            downloads[*index].error = None;
+        }
+        if let Err(error) = self.repository.save(&downloads) {
+            for (index, previous) in indexes.iter().zip(previous) {
+                downloads[*index] = previous;
+            }
+            return Err(error);
+        }
+        let started = indexes
+            .iter()
+            .map(|index| downloads[*index].clone())
+            .collect();
+        drop(downloads);
+        self.publish_change();
+        Ok(started)
     }
 
     pub(crate) fn update_download(

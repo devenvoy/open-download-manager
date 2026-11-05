@@ -9,7 +9,7 @@ use infrastructure::{
 };
 use presentation::{
     app_state::AppState,
-    commands::{add_download, snapshot, update_settings},
+    commands::{add_download, download_action, snapshot, update_settings},
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
 };
@@ -60,6 +60,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             snapshot,
             add_download,
+            download_action,
             update_settings,
             open_progress_window,
             close_auxiliary_window,

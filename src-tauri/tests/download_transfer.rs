@@ -12,7 +12,7 @@ use awesome_downloader_lib::{
     application::download_history_service::DownloadHistoryService,
     application::download_transfer_service::DownloadTransferService,
     domain::{
-        download::{DownloadRequest, DownloadStatus},
+        download::{DownloadAction, DownloadRequest, DownloadStatus},
         settings::Settings,
     },
     infrastructure::download_history_store::DownloadHistoryStore,
@@ -159,5 +159,43 @@ async fn failed_http_status_is_reported_without_leaving_a_partial_file() {
     assert!(!directory
         .join(format!(".awesome-downloader-{}.part", ids[0]))
         .exists());
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn queued_download_can_be_started_once_with_the_resume_action() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let url = serve_once("200 OK", b"queued bytes");
+    let settings = Settings::new(directory.clone());
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let mut request = download_request(url, "queued.bin");
+    request.queue_only = true;
+
+    let ids = service
+        .add(request, &settings)
+        .expect("queue-only download should be accepted");
+    assert_eq!(
+        history.downloads().unwrap()[0].status,
+        DownloadStatus::Queued
+    );
+    service
+        .action(&ids[0], DownloadAction::Resume)
+        .expect("queued download should start");
+    let duplicate = service
+        .action(&ids[0], DownloadAction::Resume)
+        .expect_err("a started download must not be spawned a second time");
+    assert_eq!(duplicate.code, "download_error");
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("queued.bin")).unwrap(),
+        b"queued bytes"
+    );
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }

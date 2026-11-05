@@ -2,7 +2,11 @@ use tauri::State;
 
 use crate::{
     application::error::{AppError, AppResult},
-    domain::{download::DownloadRequest, settings::SettingsPatch, snapshot::Snapshot},
+    domain::{
+        download::{DownloadAction, DownloadRequest},
+        settings::SettingsPatch,
+        snapshot::Snapshot,
+    },
 };
 
 use super::app_state::AppState;
@@ -31,6 +35,15 @@ pub async fn add_download(
         .settings()
         .clone();
     state.download_transfer.add(request, &settings)
+}
+
+#[tauri::command]
+pub fn download_action(
+    state: State<'_, AppState>,
+    id: String,
+    action: DownloadAction,
+) -> AppResult<()> {
+    state.download_transfer.action(&id, action)
 }
 
 #[tauri::command]
