@@ -23,6 +23,7 @@ use crate::{
         shell_service::ShellService,
     },
     domain::{
+        category::DownloadCategory,
         download::{
             filename_from_url, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
             ReviewDownloadRequest,
@@ -73,8 +74,23 @@ impl DownloadTransferService {
     }
 
     pub fn add(&self, request: DownloadRequest, settings: &Settings) -> AppResult<Vec<String>> {
-        let default_directory = request
-            .category
+        let detected_category = request.category.or_else(|| {
+            if let Some(ref filename) = request.filename {
+                return Some(DownloadCategory::from_path(std::path::Path::new(filename)));
+            }
+            if let Some(first_url) = request.urls.first() {
+                if let Ok(parsed) = url::Url::parse(first_url) {
+                    if let Some(segment) = parsed.path_segments().and_then(|mut s| s.next_back()) {
+                        if !segment.is_empty() {
+                            return Some(DownloadCategory::from_path(std::path::Path::new(segment)));
+                        }
+                    }
+                }
+            }
+            None
+        });
+
+        let default_directory = detected_category
             .and_then(|category| settings.category_directories.get(&category))
             .cloned()
             .unwrap_or_else(|| settings.default_directory.clone());
@@ -97,6 +113,9 @@ impl DownloadTransferService {
                     .filename
                     .clone()
                     .unwrap_or_else(|| filename_from_url(url.url()));
+                let category = request.category.or_else(|| {
+                    Some(DownloadCategory::from_path(std::path::Path::new(&filename)))
+                });
                 DownloadRecord {
                     id: uuid::Uuid::new_v4().to_string(),
                     url: url.url().as_str().to_owned(),
@@ -115,7 +134,7 @@ impl DownloadTransferService {
                     needs_review: request.review_only,
                     scheduled_at: request.scheduled_at.clone(),
                     description: request.description.clone(),
-                    category: request.category,
+                    category,
                     directory: Some(directory.to_owned()),
                     path: None,
                     last_try: None,

@@ -2,10 +2,7 @@ use std::{
     io::{Read, Write},
     net::TcpListener,
     path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
 };
 use tokio::sync::watch;
@@ -26,14 +23,12 @@ use awesome_downloader_lib::{
     },
 };
 
-static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(1);
-
 fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-paired-test-{}-{id}",
-        std::process::id()
-    ))
+    tempfile::Builder::new()
+        .prefix("awesome-downloader-paired-test-")
+        .tempdir()
+        .expect("temporary test directory")
+        .keep()
 }
 
 fn serve_media_tracks(video_data: Vec<u8>, audio_data: Vec<u8>) -> String {

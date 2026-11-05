@@ -1,7 +1,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
@@ -16,16 +16,12 @@ use awesome_downloader_lib::{
     presentation::tray::{show_main_window, TRAY_TOOLTIP},
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
 fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "awesome-downloader-shell-test-{}-{id}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).expect("temporary test directory should be created");
-    dir
+    tempfile::Builder::new()
+        .prefix("awesome-downloader-shell-test-")
+        .tempdir()
+        .expect("temporary test directory")
+        .keep()
 }
 
 #[test]

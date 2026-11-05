@@ -1,35 +1,36 @@
 use url::Url;
 
 use super::download_policy::{
-    DEFAULT_DOWNLOAD_FILENAME, INVALID_FILENAME_CHARACTERS, INVALID_URL_DISPLAY_TEXT,
-    MAX_DOWNLOAD_FILENAME_CHARACTERS, WINDOWS_RESERVED_BASENAMES,
+    DEFAULT_DOWNLOAD_FILENAME, INVALID_URL_DISPLAY_TEXT, MAX_DOWNLOAD_FILENAME_CHARACTERS,
+    WINDOWS_RESERVED_BASENAMES,
 };
 
 pub fn sanitize_filename(value: &str) -> String {
-    let mut filename: String = value
-        .chars()
-        .map(|character| {
-            if character.is_control() || INVALID_FILENAME_CHARACTERS.contains(&character) {
-                '_'
-            } else {
-                character
-            }
-        })
-        .collect();
-    while matches!(filename.chars().last(), Some('.' | ' ')) {
-        filename.pop();
+    if value.trim_matches(['.', ' ']).is_empty() {
+        return String::new();
     }
-    truncate_filename(&mut filename);
 
-    let basename = filename
+    let basename = value
         .split('.')
         .next()
         .unwrap_or_default()
         .trim_end_matches(['.', ' ']);
-    if WINDOWS_RESERVED_BASENAMES.contains(&basename.to_ascii_lowercase().as_str()) {
-        filename.insert_str(0, "download_");
-        truncate_filename(&mut filename);
+    let safe_input = if WINDOWS_RESERVED_BASENAMES.contains(&basename.to_ascii_lowercase().as_str()) {
+        format!("download_{value}")
+    } else {
+        value.to_string()
+    };
+
+    let options = sanitize_filename::Options {
+        windows: true,
+        truncate: true,
+        replacement: "_",
+    };
+    let mut filename = sanitize_filename::sanitize_with_options(&safe_input, options);
+    while matches!(filename.chars().last(), Some('.' | ' ')) {
+        filename.pop();
     }
+    truncate_filename(&mut filename);
     filename
 }
 

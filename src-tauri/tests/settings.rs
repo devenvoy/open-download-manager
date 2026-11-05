@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use awesome_downloader_lib::{
@@ -13,14 +12,13 @@ use awesome_downloader_lib::{
     infrastructure::settings_store::SettingsStore,
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
 fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-settings-test-{}-{id}",
-        std::process::id()
-    ))
+    let dir = tempfile::Builder::new()
+        .prefix("awesome-downloader-settings-test-")
+        .tempdir()
+        .expect("temporary test directory")
+        .keep();
+    dir.join("store")
 }
 
 #[test]

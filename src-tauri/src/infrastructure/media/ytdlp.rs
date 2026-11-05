@@ -99,15 +99,5 @@ fn find_ytdlp_path() -> Option<PathBuf> {
         }
     }
 
-    let default_binary = if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" };
-    if let Ok(paths) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&paths) {
-            let full_path = dir.join(default_binary);
-            if full_path.is_file() {
-                return Some(full_path);
-            }
-        }
-    }
-
-    None
+    which::which("yt-dlp").ok()
 }

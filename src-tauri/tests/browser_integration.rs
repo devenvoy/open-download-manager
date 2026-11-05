@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     fs,
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use awesome_downloader_lib::{
@@ -30,14 +29,12 @@ use awesome_downloader_lib::{
     },
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
 fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-browser-test-{}-{id}",
-        std::process::id()
-    ))
+    tempfile::Builder::new()
+        .prefix("awesome-downloader-browser-test-")
+        .tempdir()
+        .expect("temporary test directory")
+        .keep()
 }
 
 #[test]

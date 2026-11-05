@@ -3,7 +3,6 @@ use std::{
     io::{Read, Write},
     net::TcpListener,
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
     thread,
     time::Duration,
 };
@@ -24,14 +23,12 @@ use awesome_downloader_lib::{
     },
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
 fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-hls-test-{}-{id}",
-        std::process::id()
-    ))
+    tempfile::Builder::new()
+        .prefix("awesome-downloader-hls-test-")
+        .tempdir()
+        .expect("temporary test directory")
+        .keep()
 }
 
 fn serve_hls(pieces: Vec<Vec<u8>>) -> String {

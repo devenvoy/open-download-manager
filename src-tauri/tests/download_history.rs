@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::fs;
 
 use awesome_downloader_lib::{
     application::download_history_service::DownloadHistoryService,
@@ -10,20 +6,14 @@ use awesome_downloader_lib::{
     infrastructure::download_history_store::DownloadHistoryStore,
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
-fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-history-test-{}-{id}",
-        std::process::id()
-    ))
+fn temporary_directory() -> tempfile::TempDir {
+    tempfile::tempdir().expect("temporary data directory should be created")
 }
 
 #[test]
 fn legacy_history_loads_with_runtime_state_reset_and_secrets_excluded() {
-    let directory = temporary_directory();
-    fs::create_dir_all(&directory).expect("temporary data directory should be created");
+    let temp = temporary_directory();
+    let directory = temp.path();
     let history_path = directory.join("downloads.json");
     let original_history = br#"{
         "version": 1,
@@ -93,15 +83,14 @@ fn legacy_history_loads_with_runtime_state_reset_and_secrets_excluded() {
         fs::read(&history_path).expect("legacy history should remain readable"),
         original_history
     );
-
-    fs::remove_dir_all(directory).expect("temporary data directory should be removed");
 }
 
 #[test]
 fn missing_history_is_an_empty_list() {
-    let directory = temporary_directory();
+    let temp = temporary_directory();
+    let directory = temp.path();
 
-    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(directory))
         .expect("missing history is expected for a fresh installation");
 
     assert!(history
@@ -112,12 +101,12 @@ fn missing_history_is_an_empty_list() {
 
 #[test]
 fn malformed_or_unsupported_history_returns_an_error() {
-    let directory = temporary_directory();
-    fs::create_dir_all(&directory).expect("temporary data directory should be created");
+    let temp = temporary_directory();
+    let directory = temp.path();
     let path = directory.join("downloads.json");
     fs::write(&path, b"{not-json").expect("malformed history should be written");
 
-    let malformed = match DownloadHistoryService::new(DownloadHistoryStore::new(&directory)) {
+    let malformed = match DownloadHistoryService::new(DownloadHistoryStore::new(directory)) {
         Ok(_) => panic!("malformed history should not be hidden"),
         Err(error) => error,
     };
@@ -125,11 +114,9 @@ fn malformed_or_unsupported_history_returns_an_error() {
 
     fs::write(&path, br#"{"version":2,"downloads":[]}"#)
         .expect("unsupported history version should be written");
-    let unsupported = match DownloadHistoryService::new(DownloadHistoryStore::new(&directory)) {
+    let unsupported = match DownloadHistoryService::new(DownloadHistoryStore::new(directory)) {
         Ok(_) => panic!("unsupported history versions should be reported"),
         Err(error) => error,
     };
     assert_eq!(unsupported.code, "storage_error");
-
-    fs::remove_dir_all(directory).expect("temporary data directory should be removed");
 }

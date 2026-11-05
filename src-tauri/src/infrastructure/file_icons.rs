@@ -1,14 +1,10 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
-use base64::Engine;
-use image::{Rgba, RgbaImage};
-
-use crate::domain::download::DownloadRecord;
+use crate::domain::{category::DownloadCategory, download::DownloadRecord, file_type::FileType};
 
 pub fn is_safe_extension(ext: &str) -> bool {
     if !ext.starts_with('.') {
@@ -120,35 +116,16 @@ impl FileIconProvider {
 }
 
 pub fn generate_icon_data_url(extension: &str) -> String {
-    let mut img = RgbaImage::new(16, 16);
-    let color = match extension {
-        ".mp4" | ".mkv" | ".avi" | ".mov" | ".webm" | ".flv" => Rgba([99, 102, 241, 255]),
-        ".mp3" | ".wav" | ".flac" | ".aac" | ".ogg" | ".m4a" => Rgba([245, 158, 11, 255]),
-        ".png" | ".jpg" | ".jpeg" | ".gif" | ".webp" | ".svg" => Rgba([16, 185, 129, 255]),
-        ".zip" | ".rar" | ".7z" | ".tar" | ".gz" | ".bz2" => Rgba([234, 179, 8, 255]),
-        ".pdf" => Rgba([239, 68, 68, 255]),
-        ".exe" | ".msi" | ".dmg" | ".app" | ".deb" | ".rpm" => Rgba([139, 92, 246, 255]),
-        _ => Rgba([156, 163, 175, 255]),
-    };
-
-    for y in 1..15 {
-        for x in 2..14 {
-            if x >= 10 && y <= 4 && (x - 10 + y) > 4 {
-                continue;
-            }
-            if x == 2 || x == 13 || y == 1 || y == 14 || (x >= 10 && y <= 4 && (x - 10 + y) == 4) {
-                img.put_pixel(x, y, color);
-            } else {
-                img.put_pixel(x, y, Rgba([color[0], color[1], color[2], 40]));
-            }
-        }
+    let clean_ext = extension.trim_start_matches('.');
+    if let Some(file_type) = FileType::from_extension(clean_ext) {
+        return file_type.svg_data_url();
     }
-
-    let mut buffer = Cursor::new(Vec::new());
-    if img.write_to(&mut buffer, image::ImageFormat::Png).is_ok() {
-        let base64_str = base64::engine::general_purpose::STANDARD.encode(buffer.into_inner());
-        format!("data:image/png;base64,{base64_str}")
-    } else {
-        String::new()
+    match DownloadCategory::from_extension(clean_ext) {
+        DownloadCategory::Video => FileType::Video.svg_data_url(),
+        DownloadCategory::Audio => FileType::Audio.svg_data_url(),
+        DownloadCategory::Archives => FileType::Zip.svg_data_url(),
+        DownloadCategory::Documents => FileType::Text.svg_data_url(),
+        DownloadCategory::Programs => FileType::Exe.svg_data_url(),
+        DownloadCategory::Other => FileType::default_svg_data_url(),
     }
 }

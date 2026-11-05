@@ -158,16 +158,5 @@ fn find_ffmpeg_path() -> Option<PathBuf> {
         }
     }
 
-    let default_binary = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
-    // Check if in PATH
-    if let Ok(paths) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&paths) {
-            let full_path = dir.join(default_binary);
-            if full_path.is_file() {
-                return Some(full_path);
-            }
-        }
-    }
-
-    None
+    which::which("ffmpeg").ok()
 }

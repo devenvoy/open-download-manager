@@ -1,23 +1,12 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use awesome_downloader_lib::{
     domain::{download::DownloadRecord, download::DownloadStatus, settings::Settings, snapshot::Snapshot},
     infrastructure::file_icons::{extension_key, is_safe_extension, FileIconProvider},
 };
-
-static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(1);
-
-fn temporary_directory() -> PathBuf {
-    let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "awesome-downloader-file-icons-test-{}-{id}",
-        std::process::id()
-    ))
-}
 
 #[test]
 fn file_icon_keys_are_safe_lowercase_extensions() {
@@ -39,8 +28,8 @@ fn file_icon_keys_are_safe_lowercase_extensions() {
 
 #[test]
 fn file_icon_provider_loads_and_caches_probe_files() {
-    let dir = temporary_directory();
-    let cache_dir = dir.join("FileTypeIcons");
+    let temp = tempfile::tempdir().unwrap();
+    let cache_dir = temp.path().join("FileTypeIcons");
     let provider = FileIconProvider::new(cache_dir.clone());
 
     let downloads = vec![
@@ -134,8 +123,8 @@ fn file_icon_provider_loads_and_caches_probe_files() {
     let snapshot = provider.snapshot();
     let keys: Vec<_> = snapshot.keys().cloned().collect();
     assert_eq!(keys, vec![".mp3", ".mp4"]);
-    assert!(snapshot[".mp4"].starts_with("data:image/png;base64,"));
-    assert!(snapshot[".mp3"].starts_with("data:image/png;base64,"));
+    assert!(snapshot[".mp4"].starts_with("data:image/svg+xml;base64,"));
+    assert!(snapshot[".mp3"].starts_with("data:image/svg+xml;base64,"));
 
     // Second load with another .mp4 should be a no-op (cached)
     let extra = vec![DownloadRecord {
@@ -166,8 +155,6 @@ fn file_icon_provider_loads_and_caches_probe_files() {
     }];
     let loaded_again = provider.load(&extra);
     assert!(!loaded_again, "already loaded extension should not reload");
-
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

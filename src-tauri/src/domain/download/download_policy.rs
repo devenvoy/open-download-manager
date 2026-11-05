@@ -8,8 +8,6 @@ pub(super) const HTTP_PROTOCOL: &str = "http";
 pub(super) const HTTPS_PROTOCOL: &str = "https";
 pub(super) const DASH_MANIFEST_EXTENSION: &str = ".mpd";
 pub(super) const UNSUPPORTED_MEDIA_HOSTS: [&str; 2] = ["youtube.com", "youtu.be"];
-pub(super) const INVALID_FILENAME_CHARACTERS: [char; 9] =
-    ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 pub(super) const WINDOWS_RESERVED_BASENAMES: [&str; 22] = [
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
