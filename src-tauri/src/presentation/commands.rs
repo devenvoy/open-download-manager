@@ -132,3 +132,15 @@ pub fn show_about_dialog(app: tauri::AppHandle) -> AppResult<()> {
     super::menu::show_about_dialog(&app);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>) -> AppResult<()> {
+    let service = state.update_service.clone();
+    super::updater_controller::run_update_check(
+        &app,
+        &service,
+        crate::domain::updater::UpdateCheckMode::Manual,
+    )
+    .await;
+    Ok(())
+}

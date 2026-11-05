@@ -10,9 +10,10 @@ use infrastructure::{
 use presentation::{
     app_state::AppState,
     commands::{
-        add_download, browser_setup_action, download_action, export_downloads_to_file,
-        get_integration_info, import_downloads_from_file, register_browser, remove_completed,
-        review_download, show_about_dialog, snapshot, update_settings,
+        add_download, browser_setup_action, check_for_updates, download_action,
+        export_downloads_to_file, get_integration_info, import_downloads_from_file,
+        register_browser, remove_completed, review_download, show_about_dialog, snapshot,
+        update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -141,12 +142,42 @@ pub fn run() {
                 home_directory.join(USER_DATA_DIRECTORY_NAME).join("FileTypeIcons"),
             );
 
+            let version = app.package_info().version.to_string();
+            let is_dev_mode = cfg!(debug_assertions);
+            let update_client = std::sync::Arc::new(
+                crate::infrastructure::updater::GitHubReleaseClient::default_client(),
+            );
+            let update_service = application::updater_service::UpdateService::new(
+                update_client,
+                version,
+                is_dev_mode,
+            );
+
+            let update_service_bg = update_service.clone();
+            let app_handle_bg = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+                    crate::domain::updater::CHECK_INTERVAL_SECONDS,
+                ));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    presentation::updater_controller::run_update_check(
+                        &app_handle_bg,
+                        &update_service_bg,
+                        crate::domain::updater::UpdateCheckMode::Background,
+                    )
+                    .await;
+                }
+            });
+
             app.manage(AppState::new(
                 settings,
                 download_history,
                 download_transfer,
                 integration_service,
                 file_icons,
+                update_service,
             ));
             Ok(())
         })
@@ -169,7 +200,8 @@ pub fn run() {
             open_integration_window,
             export_downloads_to_file,
             import_downloads_from_file,
-            show_about_dialog
+            show_about_dialog,
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Awesome Downloader");

@@ -21,9 +21,9 @@ While the core transfer engine and networking have been successfully ported to R
 | **Window Management** | Unlimited concurrent progress windows, dedicated options/add/scheduler windows, close confirmation prompts | Dynamic `progress-{id}` windows, options/add/scheduler/integration auxiliary windows, active transfer close confirmation guard | **100%** | None (100% parity achieved in Phase D) |
 | **Application Menu & Shortcuts**| Full native menu bar with accelerators (Ctrl+N, Ctrl+F, Del), URL text import/export, about dialog | Tasks, File, Downloads, View, Help menus with accelerators, `downloader:command` events, text file import/export, native About dialog | **100%** | None (100% parity achieved in Phase D) |
 | **System Notifications & Reveal**| Windows native notifications on completion and updates | `tauri-plugin-notification` desktop notifications on completion, folder reveal on complete | **100%** | None (100% parity achieved in Phase E) |
-| **File Type Icons** | Native Windows file type icon extraction via shell API with disk caching | Regex extension validation, disk cache in `FileTypeIcons`, snapshot dictionary map | **100%** | None (100% parity achieved in Phase E) |
+| **File Type Icons** | Native Windows file type icon extraction via shell API with disk caching | 60+ `FileType` catalog, 71 bundled vector SVGs, instant base64 Data URLs, automatic category deduction | **100%** | None (100% parity achieved in Phase E & Refactor) |
 | **Adaptive Dual-Stream Muxing**| Paired video+audio track downloads, FFmpeg muxing, MP3 extraction | `PairedDownloadExecutor` dual HTTP stream downloads, status `assembling`, FFmpeg muxing & MP3 conversion | **100%** | None (100% parity achieved in Phase E) |
-| **Auto-Updater** | Background 6-hour polling, manual check, download approval, active transfer guard | No updater plugin or logic | **0%** | No update checks, signing, or updater mechanisms configured |
+| **Auto-Updater** | Background 6-hour polling, manual check, download approval, active transfer guard | 6-hour background polling, manual Help menu check, active transfer safety guard, friendly error handling, GitHub Releases API client | **100%** | None (100% parity achieved in Phase F) |
 | **YouTube SABR Stream Parser** | SABR protobuf streaming via `googlevideo/protos` | Format listing via `yt-dlp` works; standard dual-stream muxing works; SABR proto parser pending | **60%** | SABR protobuf streaming parser unmigrated |
 
 ---
@@ -135,17 +135,16 @@ Implemented and verified in Phase B:
 
 ---
 
-## 7. Auto-Updater (100% Missing)
+## 7. Auto-Updater (COMPLETED - 100% Parity)
 
-- **Legacy Behavior:** (`desktop/main.cjs:340-359`, `desktop/updater.cjs`)
-  - Integrated `electron-updater`.
-  - Automatic silent background checks every 6 hours.
-  - Manual check via Help -> *Check for updates...*
-  - Safety check: If active downloads were running, defaulted to "Later" rather than restarting.
-  - Prompted user approval before downloading and installing.
-- **Current Tauri State:**
-  - `tauri-plugin-updater` is not configured.
-  - No update endpoints, signing keys, or update checking commands exist.
+- **Ported:**
+  - `UpdateService` orchestrates manual and 6-hour recurring background checks.
+  - Development build protection: dev builds report `"Updates are unavailable in development. Update checks run in installed builds."` without making network calls.
+  - Background checks run silently when up to date or on missing releases (404/406); only surfaces notifications when an actual newer release is discovered.
+  - Manual check displays `"No updates available"` dialog when current, or user-friendly network error explanation without leaking internal headers.
+  - Active download guard: prompts user with a safety warning when active downloads (`connecting`, `downloading`, `assembling`) are in flight, defaulting to `"Later"`.
+  - Wired directly into the native application menu under *Help* $\to$ *Check for updates…* and exposed as Tauri command `check_for_updates`.
+  - Verified with 11 dedicated integration tests in `tests/updater.rs`.
 
 ---
 

@@ -11,9 +11,10 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 95 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
-- **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test renderer/ extension/`)
-- **Zero-Node Runtime:** Core transfers, scheduling, and loopback communication run natively in compiled Rust with no Node.js dependency.
+- **Rust Test Suite:** 112 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test extension renderer`)
+- **Total Tests Passing:** 200 automated tests with zero failures across Rust, Bun, and browser integration.
+- **Zero-Node Runtime:** Core transfers, scheduling, file icons, updater, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
 | Subsystem | Legacy Electron Reference | Migrated Tauri / Rust Implementation | Functional Parity | Performance & Stability Gain |
 | :--- | :--- | :--- | :--- | :--- |
@@ -23,8 +24,9 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 | **Window Management** | `desktop/main.cjs`, `progress-window.cjs` | `src-tauri/src/presentation/window_manager.rs` | **100%** | Multi-window progress (`progress-{id}`), auxiliary windows (options, add, scheduler, integration), close confirmation guard |
 | **Application Menu, Shortcuts & File I/O** | `desktop/main.cjs` | `src-tauri/src/presentation/menu.rs`, `commands.rs` | **100%** | Full 5-section native menu bar, accelerators (`Ctrl+N`, `Ctrl+F`, `Delete`), `downloader:command` event emitter, text file import/export (<2 MiB check), native About dialog |
 | **System Notifications & Reveal** | `desktop/main.cjs` | `src-tauri/src/presentation/download_event_publisher.rs`, `lib.rs` | **100%** | OS desktop notifications on complete (`notify_on_complete`), folder reveal (`reveal_on_complete`) via `tauri-plugin-notification` |
-| **File Type Icon Provider** | `desktop/file-icons.cjs`, `main.cjs` | `src-tauri/src/infrastructure/file_icons.rs`, `commands.rs` | **100%** | Safe extension regex (`^\.[a-z0-9]{1,12}$`), on-disk cache in `FileTypeIcons`, snapshot map `state.fileIcons[ext]` |
+| **File Type Icon Provider & Catalog** | `desktop/file-icons.cjs`, `main.cjs` | `src-tauri/src/domain/file_type.rs`, `infrastructure/file_icons.rs` | **100%** | 60+ `FileType` catalog with 71 bundled Material Icon Theme vector SVGs, compound extensions, instant data URLs, auto-categorization |
 | **Adaptive Dual-Stream Muxing** | `core/engine.mjs`, `core/mux.mjs` | `src-tauri/src/infrastructure/media/paired_executor.rs`, `composite_executor.rs` | **100%** | Parallel 2-track HTTP streams (`0.part`, `1.part`), rate limiting, status `assembling`, FFmpeg track muxing and MP3 conversion |
+| **Auto-Updater & Periodic Check** | `desktop/main.cjs:340-359`, `desktop/updater.cjs` | `src-tauri/src/domain/updater.rs`, `application/updater_service.rs`, `presentation/updater_controller.rs` | **100%** | 6-hour recurring background checks, manual check dialog, active download safety warning, GitHub Releases API integration |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |

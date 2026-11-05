@@ -228,13 +228,18 @@ pub fn show_about_dialog(app: &AppHandle) {
 }
 
 pub fn show_check_updates_dialog(app: &AppHandle) {
-    let version = app.package_info().version.to_string();
-    app.dialog()
-        .message(format!("Awesome Downloader {version} is up to date."))
-        .title("Check for updates")
-        .kind(MessageDialogKind::Info)
-        .buttons(MessageDialogButtons::Ok)
-        .show(|_| {});
+    if let Some(state) = app.try_state::<AppState>() {
+        let app_clone = app.clone();
+        let service = state.update_service.clone();
+        tauri::async_runtime::spawn(async move {
+            crate::presentation::updater_controller::run_update_check(
+                &app_clone,
+                &service,
+                crate::domain::updater::UpdateCheckMode::Manual,
+            )
+            .await;
+        });
+    }
 }
 
 pub fn export_downloads_flow(app: &AppHandle) {

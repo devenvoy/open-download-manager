@@ -14,3 +14,4 @@ pub mod error;
 pub mod integration_service;
 pub mod settings_service;
 pub mod shell_service;
+pub mod updater_service;

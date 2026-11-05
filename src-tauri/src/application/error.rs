@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {
     pub code: &'static str,
@@ -60,6 +60,20 @@ impl AppError {
     pub fn browser(message: impl Into<String>) -> Self {
         Self {
             code: "browser_error",
+            message: message.into(),
+        }
+    }
+
+    pub fn network(message: impl Into<String>) -> Self {
+        Self {
+            code: "network_error",
+            message: message.into(),
+        }
+    }
+
+    pub fn update(message: impl Into<String>) -> Self {
+        Self {
+            code: "update_error",
             message: message.into(),
         }
     }

@@ -97,7 +97,23 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
         data_dir.join("FileTypeIcons"),
     );
 
-    let app_state = AppState::new(settings, history, transfer, integration, file_icons);
+    let update_client = std::sync::Arc::new(
+        awesome_downloader_lib::infrastructure::updater::GitHubReleaseClient::default_client(),
+    );
+    let update_service = awesome_downloader_lib::application::updater_service::UpdateService::new(
+        update_client,
+        "0.1.2",
+        true,
+    );
+
+    let app_state = AppState::new(
+        settings,
+        history,
+        transfer,
+        integration,
+        file_icons,
+        update_service,
+    );
     app.manage(app_state);
     app
 }
