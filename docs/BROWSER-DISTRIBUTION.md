@@ -1,5 +1,10 @@
 # Browser installation
 
+Browser packaging and native-host registration are paused during the Tauri
+migration. The current checkout does not contain the previous Electron
+packaging scripts. See commit `302fc1c` for the tracked pre-migration source;
+do not use the historical workflow as evidence of Tauri compatibility.
+
 The current preview automatically connects an extension after it is installed.
 It does not yet install the extension in a new browser.
 
@@ -20,21 +25,10 @@ flow; permanent distribution requires a signed XPI or an AMO listing.
 
 ## Prepare the submission
 
-Run `powershell -File integration/package-extension.ps1` from the project root.
-The ZIP in `release-extension` has manifest.json at the archive root and excludes
-tests and the Firefox-specific manifest. It is a store submission package, not a
-replacement for a reviewed store listing.
-
-Publish it through the owner's Chrome Web Store developer account. Complete the
-store's privacy and permission disclosures based on the actual extension, and
-retain the resulting extension ID. Publishing and approval are still pending.
-
-Once the listing is available, wire its ID into the native messaging allowlist
-and the Windows install/uninstall registration. Keep development extension IDs
-working alongside it. Verify the complete flow on a fresh Windows browser profile:
-install the desktop app, accept the browser's extension prompt, select a video,
-and receive the download dialog. Do not claim automatic installation until this
-flow has been verified.
+Resume this work after the Rust native-messaging host and Tauri packaging are
+implemented and tested. Revalidate the extension package, permissions,
+privacy disclosures, native messaging allowlist, and install/uninstall
+registration against the migrated app before submitting it to a store.
 
 Official distribution references:
 

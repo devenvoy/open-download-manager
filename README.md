@@ -7,6 +7,11 @@ Download Manager and not a complete feature-for-feature replacement.
 **Early preview:** Private/sign-in-required, DRM and live media are unsupported. Please report bugs
 without sharing session tokens or signed media links.
 
+**Migration in progress:** The current source tree is being moved to Rust and
+Tauri. The downloadable Windows preview is a previous Electron release; its
+source is not included in the current checkout. See the
+[migration plan](docs/TAURI-MIGRATION-PLAN.md) before building this branch.
+
 ## Just want to use it?
 
 Download **Awesome-Downloader-Setup.exe** from the project's
@@ -35,22 +40,23 @@ selection does not invoke it. Firefox YouTube capture has not reached parity.
 
 ## Develop
 
-On Windows x64 with Node.js 22+:
+The Tauri shell is an early scaffold; the Rust download service and Windows
+packaging are not implemented yet. Install Rust, the platform's Tauri
+prerequisites, and Node.js 22+:
 
 ```powershell
 npm ci
 npm test
-npm start
+npm run dev
 ```
 
-`npm run package` builds the unpacked application. `npm run dist` builds a local
-NSIS installer, without publishing. `npm run dist:portable` builds a portable
-executable. See [release requirements](docs/RELEASING.md) before distributing
-either. Current builds are unsigned. Version 0.1.1 and later can check GitHub
-Releases for updates and always ask before downloading or restarting.
+See the [migration plan](docs/TAURI-MIGRATION-PLAN.md) for phase status and
+the [release checklist](docs/RELEASING.md). Do not use this branch to produce
+or distribute a Windows installer yet.
 
-The optional legacy extractor is described in [THIRD-PARTY.md](THIRD-PARTY.md).
-Do not commit its executable. `npm ci` installs the locked media dependencies.
+The optional legacy extractor and bundled media dependencies are not yet wired
+into the Tauri application. See [third-party notes](THIRD-PARTY.md) before
+changing distribution or bundling.
 
 ## Contribute
 

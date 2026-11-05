@@ -1,6 +1,8 @@
 # Third-party media component
 
-This application uses ffmpeg-static 5.3.0 (GPL-3.0-or-later) to supply FFmpeg binary release b6.1.1. FFmpeg remains a separate executable invoked for local media assembly/conversion.
+The previously published Electron preview uses ffmpeg-static 5.3.0
+(GPL-3.0-or-later) to supply FFmpeg binary release b6.1.1. FFmpeg remains a
+separate executable invoked for local media assembly/conversion.
 
 Package source, license and binary provenance: https://github.com/eugeneware/ffmpeg-static
 
@@ -8,8 +10,10 @@ Binary release and associated source/build information: https://github.com/eugen
 
 FFmpeg source and licensing: https://ffmpeg.org/download.html and https://ffmpeg.org/legal.html
 
-Bundled Electron and dependency license files retain their upstream notices. The
-installer includes FFmpeg's GPL text and build provenance under `resources/licenses`.
+The legacy Electron installer bundles Electron and dependency license files with
+their upstream notices, plus FFmpeg's GPL text and build provenance under
+`resources/licenses`. The Tauri application has not adopted these binaries or
+dependencies yet.
 Corresponding source/build material for this exact binary and its linked libraries
 must be prepared before a public binary release; upstream links here alone are not
 a completed redistribution audit. See docs/RELEASING.md.

@@ -1,16 +1,16 @@
 # Contributor start here
 
-Awesome Downloader is an early Windows x64 preview. Downloads and Chrome/Edge
-integration exist, but reliability, sustained speed and user experience still
-need work. Linux, macOS, Windows ARM64, broader browser support and playlists are
-approved development goals, not released capabilities.
+The latest published Windows preview is an Electron release. This checkout is
+mid-migration to Rust and Tauri; the Electron implementation is in the ignored
+local `reference/electron-legacy/` archive and is not included in fresh clones.
+Commit `302fc1c` is the tracked pre-migration baseline. Linux, macOS, Windows
+ARM64, broader browser support and playlists are not released capabilities.
 
 ## Our strategy
 
-Keep working downloads reliable while adding capabilities in small, reviewed
-steps. Measure speed improvements and verify completed files. Build shared
-platform support once, then implement and validate each operating system.
-Each change should leave the existing Windows application usable.
+Follow the [migration plan](TAURI-MIGRATION-PLAN.md) in phase order. Collect
+the Windows baseline before interpreting performance changes. Keep the existing
+extension and renderer behavior stable while porting the shell and backend.
 
 The maintainer approves scope and merges PRs. An approved issue approves an
 objective; it does not approve every possible implementation or guarantee a
@@ -107,23 +107,22 @@ release decision.
 
 ## Run and report tests
 
-Use the repository's documented Windows x64 development environment with Node.js 22 or newer and npm. From the repository root, run:
+Install Rust and Node.js 22 or newer, then run from the repository root:
 
 ```powershell
 npm ci
 npm test
 ```
 
-The test command uses Node's built-in test runner and discovers test files under `tests/`, `integration/`, and `extension/`. The current suite includes regression coverage for transfer integrity and recovery, HLS/SABR handling, HTTP redirects, browser media selection and lifecycle, native-host validation, and resource handling.
-
-The manifest/reference regression test added in [#55](https://github.com/Ahmadkhattak1/awesome-downloader/pull/55) already checks local files referenced by the extension manifests and renderer/extension HTML, and syntax-checks the renderer and browser entry scripts. Do not add a duplicate renderer syntax-only check; extend the existing test when a genuinely uncovered reference or entry point is introduced.
+`npm test` runs the Rust scaffold tests and the retained browser-extension tests.
+The previous Electron backend and its tests are not part of this checkout. Add
+new Rust tests alongside each migrated use case and preserve the old tests'
+behavioral requirements from the Git history when porting features.
 
 For a focused check, run the relevant file directly, for example:
 
 ```powershell
-node --test tests/manifest-references.test.mjs
-node --test tests/engine.test.mjs
-node --test integration/native-host.test.cjs
+cargo test --manifest-path src-tauri/Cargo.toml
 node --test extension/background.test.cjs
 ```
 
@@ -134,7 +133,10 @@ In every PR, state the exact commands, operating system, runtime version, and co
 - **Packaged Windows tests:** identify the artifact and checksum, Windows environment, and whether clean install, launch, native-host handoff, upgrade, and uninstall were actually verified. A successful build is not an install test.
 - **Other platforms/devices:** claim support only after testing the actual operating system and architecture. Do not infer support from shared code or fixture tests.
 
-The pull-request test workflow runs on Windows with Node.js 22. The manual release-candidate workflow builds an unsigned artifact after running the tests; it is not evidence of live-browser compatibility or clean-machine installation. Report failed, blocked, and not-run checks explicitly. Never describe a check as passing unless its result is available for the exact candidate commit.
+The pull-request test workflow runs the current scaffold tests on Windows. The
+old Electron release workflow has been removed; Tauri packaging is not ready.
+Report failed, blocked, and not-run checks explicitly. Never describe a check
+as passing unless its result is available for the exact candidate commit.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for development commands,
 [SECURITY.md](../SECURITY.md) for private vulnerability reports, and

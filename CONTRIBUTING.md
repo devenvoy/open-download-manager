@@ -1,7 +1,8 @@
 # Contributing
 
-Issues and pull requests are welcome. This is an early Windows preview, not a
-finished replacement for every commercial downloader feature.
+Issues and pull requests are welcome. This checkout is an early Rust + Tauri migration, not the current published
+Windows preview or a finished replacement for every commercial downloader
+feature.
 
 Read the [contributor start guide](docs/CONTRIBUTOR-START-HERE.md) before choosing
 work. It explains our roadmap, labels and implementation order. For new feature
@@ -10,21 +11,20 @@ maintainer before coding. Propose features outside the backlog for approval firs
 
 ## Development
 
-Use Windows x64 and Node.js 22 or newer with npm. Fork this repository, clone your
-fork, and create a branch for one focused change.
+Install Rust, Tauri's platform prerequisites, and Node.js 22 or newer with npm.
+Fork this repository, clone your fork, and create a branch for one focused
+change.
 
 ```powershell
 npm ci
 npm test
-npm start
+npm run dev
 ```
 
-The legacy manual YouTube URL resolver needs the optional executable described
-in THIRD-PARTY.md; the browser-capture path does not invoke it.
-
-Run `npm run package` to build the unpacked app or `npm run dist` for a local
-Windows installer. These commands do not publish a release. Review
-[release requirements](docs/RELEASING.md) before distributing binaries.
+`npm run build` builds the current Tauri app. Tauri packaging and the Rust
+download service are still in progress; this branch is not ready to distribute.
+Review the [migration plan](docs/TAURI-MIGRATION-PLAN.md) before choosing work
+and [release requirements](docs/RELEASING.md) before distributing binaries.
 
 ## Pull requests
 

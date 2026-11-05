@@ -24,3 +24,6 @@ test-results/
 output/
 build/browser-setup-helper.exe
 reference/
+target/
+src-tauri/target/
+src-tauri/gen/

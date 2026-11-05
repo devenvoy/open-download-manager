@@ -1,0 +1,20 @@
+[package]
+name = "awesome-downloader"
+version = "0.1.2"
+description = "Awesome Downloader desktop application"
+authors = ["Awesome Downloader contributors"]
+edition = "2021"
+
+[lib]
+name = "awesome_downloader_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"

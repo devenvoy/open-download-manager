@@ -73,9 +73,10 @@ and is handled according to the published privacy policy.
 
 ## Submission files
 
-Run `powershell -ExecutionPolicy Bypass -File integration/package-extension.ps1`.
-Upload the resulting ZIP from `release-extension`. The package deliberately
-excludes tests and the Firefox-only manifest.
+Extension packaging is paused during the Tauri migration. The old
+`integration/package-extension.ps1` script is not present in the current
+checkout. Resume submission after the new native host and Tauri packaging are
+validated; then rebuild and review the ZIP rather than reusing an old artifact.
 
 The listing also requires the 128×128 icon already included in the package and
 at least one 1280×800 or 640×400 screenshot of the real extension experience.

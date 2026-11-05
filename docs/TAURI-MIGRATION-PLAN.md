@@ -95,9 +95,9 @@ This is a staged migration, not a one-step rewrite. Rust and Tauri may reduce
 framework overhead, but they do not automatically improve download throughput.
 Measure the current application and the Tauri implementation to verify gains.
 
-## Current architecture
+## Pre-migration architecture (Electron reference)
 
-- **Desktop shell:** Electron, packaged for Windows x64 with `electron-builder`.
+- **Desktop shell:** Electron, previously packaged for Windows x64 with `electron-builder`.
 - **UI:** Plain HTML, CSS, and JavaScript in `renderer/`.
 - **Download engine:** JavaScript modules in `core/`, including HTTP transfers,
   segmented downloads, HLS, queueing, scheduling, and persistence.
@@ -107,13 +107,16 @@ Measure the current application and the Tauri implementation to verify gains.
 - **User data:** Download history and settings are stored under
   `%USERPROFILE%\.awesome-downloader`.
 
-The UI is a good candidate to reuse initially. The backend, browser handoff,
-packaging, and update process need deliberate migration and compatibility work.
+The renderer and browser extension remain in the active source tree. The legacy
+shell and backend are archived locally under the ignored
+`reference/electron-legacy/` directory; their tracked pre-migration source is
+available at commit `302fc1c`. The backend, browser handoff, packaging, and
+update process need deliberate migration and compatibility work.
 
 ## Principles
 
-1. Keep the existing Windows application usable until the replacement passes
-   release gates.
+1. Keep previously published Windows releases available until the replacement
+   passes release gates.
 2. Preserve download behavior, user data, and browser-extension behavior unless
    a change is separately scoped and tested.
 3. Keep credentials and signed media URLs transient; do not persist or log them.
@@ -150,6 +153,8 @@ repeatable.
   management, tray behavior, notifications, file dialogs, and startup behavior.
 - Keep the API typed and narrow; do not expose unrestricted filesystem or
   process access to the webview.
+- Keep each Rust layer and test in focused modules/files; do not place domain,
+  application, storage, and command logic in the Tauri entry point.
 
 **Exit criteria:** The Tauri app launches, renders the current UI, and passes
 smoke tests for its shell commands and events.
@@ -230,11 +235,27 @@ cleanly on a Windows machine without development tools.
   uninstall.
 - Compare installer size, installed size, startup time, idle memory, and
   representative transfer behavior against the baseline.
-- Keep the Electron release path available until the Tauri candidate passes all
-  gates; make the release switch a deliberate maintainer decision.
+- Keep previously published Electron releases available as a user fallback
+  until the Tauri candidate passes all gates; do not overwrite or replace them
+  before a deliberate release decision.
 
 **Exit criteria:** No critical regressions remain, all required release checks
-pass, and measured results meet the targets set in Phase 1.
+pass, and measured results meet the agreed performance targets. Phase 1
+measurements are deferred and do not block Tauri implementation.
+
+## Current implementation status
+
+- **Phase 1:** Deferred by the maintainer; baseline measurements are not a
+  blocker for implementing the Tauri app. Capture them later only if a measured
+  performance comparison is needed.
+- **Phase 2:** A Tauri v2 shell now loads the existing renderer, serves an
+  initial snapshot, persists validated settings, and provides native folder
+  selection and clipboard reads. Download operations, native window workflows,
+  tray behavior, notifications, and command/event parity remain to be migrated.
+- The Electron shell, JavaScript backend, native host, and their tests were
+  moved to the ignored local `reference/electron-legacy/` archive as requested.
+  That archive is not present in fresh clones. The pre-migration sources remain
+  available in Git history at commit `302fc1c`.
 
 ## Release gates
 
@@ -272,10 +293,11 @@ pass, and measured results meet the targets set in Phase 1.
 
 ## Repository references
 
-- Current Electron packaging and dependencies: [`package.json`](../package.json)
-- Download engine: [`core/engine.mjs`](../core/engine.mjs)
-- Browser bridge: [`core/bridge.mjs`](../core/bridge.mjs)
-- Native-messaging host: [`integration/native-host.cjs`](../integration/native-host.cjs)
+- Tauri configuration and Rust application: [`src-tauri/`](../src-tauri/)
+- Reused renderer: [`renderer/`](../renderer/)
+- Browser extension retained during migration: [`extension/`](../extension/)
+- Legacy Electron source: local ignored `reference/electron-legacy/` archive or
+  the tracked source at commit `302fc1c`.
 - Third-party component notes: [`THIRD-PARTY.md`](../THIRD-PARTY.md)
 - Release checklist: [`RELEASING.md`](./RELEASING.md)
 - Contributor roadmap: [`CONTRIBUTOR-START-HERE.md`](./CONTRIBUTOR-START-HERE.md)
