@@ -138,24 +138,39 @@ impl IntegrationService {
 
         match action {
             "store" => {
+                let Some(store_url) = STORE_URL else {
+                    return Err(AppError::browser("Store setup is unavailable for this browser."));
+                };
                 if !is_store_browser(browser) {
                     return Err(AppError::browser("Store setup is unavailable for this browser."));
                 }
                 let host_exe = resolve_host_exe(&self.integration_root);
-                let _ = register_browser_manifest(
-                    browser,
-                    EXTENSION_ID,
-                    &self.data_directory,
-                    &host_exe,
-                )
-                .await?;
-                launch_browser(browser, Some(STORE_URL))?;
+                if let Some(ext_id) = EXTENSION_ID {
+                    let _ = register_browser_manifest(
+                        browser,
+                        ext_id,
+                        &self.data_directory,
+                        &host_exe,
+                    )
+                    .await?;
+                }
+                launch_browser(browser, Some(store_url))?;
                 Ok(BrowserSetupResult {
                     browser: Some(browser_name.to_owned()),
                     extension_path: None,
                 })
             }
             "open" => {
+                if let Some(ext_id) = EXTENSION_ID {
+                    let host_exe = resolve_host_exe(&self.integration_root);
+                    let _ = register_browser_manifest(
+                        browser,
+                        ext_id,
+                        &self.data_directory,
+                        &host_exe,
+                    )
+                    .await;
+                }
                 launch_browser(browser, None)?;
                 Ok(BrowserSetupResult {
                     browser: Some(browser_name.to_owned()),

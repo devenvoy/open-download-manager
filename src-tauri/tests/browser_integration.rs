@@ -21,7 +21,7 @@ use open_download_manager_lib::{
         bridge::LoopbackBridge,
         browser::{
             create_manifest,
-            scanner::{inspect_firefox_profile, inspect_profile, EXTENSION_ID, FIREFOX_EXTENSION_ID},
+            scanner::{inspect_firefox_profile, inspect_profile, FIREFOX_EXTENSION_ID},
             BrowserType, NATIVE_HOST_NAME,
         },
         download_history_store::DownloadHistoryStore,
@@ -418,6 +418,7 @@ async fn browser_review_cancellation_and_download_later() {
 fn profile_scanner_accurately_classifies_extension_states() {
     let temp_root = temporary_directory();
     fs::create_dir_all(&temp_root).expect("create directory");
+    let test_id = "abcdefghijklmnopabcdefghijklmnop";
 
     // 1. Profile with active connected extension
     let connected_profile = temp_root.join("ConnectedProfile");
@@ -425,9 +426,12 @@ fn profile_scanner_accurately_classifies_extension_states() {
     let connected_prefs = serde_json::json!({
         "extensions": {
             "settings": {
-                EXTENSION_ID: {
+                test_id: {
                     "state": 1,
-                    "manifest": { "version": "1.0.0" }
+                    "manifest": {
+                        "name": "Open Download Manager Integration",
+                        "version": "1.0.0"
+                    }
                 }
             }
         }
@@ -443,9 +447,12 @@ fn profile_scanner_accurately_classifies_extension_states() {
     let approval_prefs = serde_json::json!({
         "extensions": {
             "settings": {
-                EXTENSION_ID: {
+                test_id: {
                     "disable_reasons": [8192],
-                    "manifest": { "version": "1.0.0" }
+                    "manifest": {
+                        "name": "Open Download Manager Integration",
+                        "version": "1.0.0"
+                    }
                 }
             }
         }
@@ -461,9 +468,13 @@ fn profile_scanner_accurately_classifies_extension_states() {
     let disabled_prefs = serde_json::json!({
         "extensions": {
             "settings": {
-                EXTENSION_ID: {
+                test_id: {
                     "state": 0,
-                    "disable_reasons": [1]
+                    "disable_reasons": [1],
+                    "manifest": {
+                        "name": "Open Download Manager Integration",
+                        "version": "1.0.0"
+                    }
                 }
             }
         }
@@ -473,28 +484,14 @@ fn profile_scanner_accurately_classifies_extension_states() {
     assert!(!conn);
     assert_eq!(state, "disabled");
 
-    // 4. Profile with external uninstalls (removed)
-    let removed_profile = temp_root.join("RemovedProfile");
-    fs::create_dir_all(&removed_profile).unwrap();
-    let removed_prefs = serde_json::json!({
-        "extensions": {
-            "settings": {},
-            "external_uninstalls": [EXTENSION_ID]
-        }
-    });
-    fs::write(removed_profile.join("Preferences"), removed_prefs.to_string()).unwrap();
-    let (conn, state) = inspect_profile(&removed_profile);
-    assert!(!conn);
-    assert_eq!(state, "removed");
-
-    // 5. Empty profile (missing)
+    // 4. Empty profile (missing)
     let empty_profile = temp_root.join("EmptyProfile");
     fs::create_dir_all(&empty_profile).unwrap();
     let (conn, state) = inspect_profile(&empty_profile);
     assert!(!conn);
     assert_eq!(state, "missing");
 
-    // 6. Firefox profile with extensions.json
+    // 5. Firefox profile with extensions.json
     let firefox_profile = temp_root.join("FirefoxProfile");
     fs::create_dir_all(&firefox_profile).unwrap();
     let firefox_addons = serde_json::json!({

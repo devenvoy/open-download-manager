@@ -9,16 +9,16 @@ use crate::{
     infrastructure::browser::registration::BrowserType,
 };
 
-pub const EXTENSION_ID: &str = "dnolinbkicmedadaigcedkmndcpahmml";
-pub const STORE_URL: &str =
-    "https://chromewebstore.google.com/detail/dnolinbkicmedadaigcedkmndcpahmml";
-pub const FIREFOX_EXTENSION_ID: &str = "open-download-manager@morluto.local";
+pub const EXTENSION_ID: Option<&str> = None;
+pub const STORE_URL: Option<&str> = None;
+pub const FIREFOX_EXTENSION_ID: &str = "open-download-manager@opendownloadmanager.local";
 
 pub fn is_store_browser(browser: BrowserType) -> bool {
-    matches!(
-        browser,
-        BrowserType::Chrome | BrowserType::Edge | BrowserType::Brave
-    )
+    STORE_URL.is_some()
+        && matches!(
+            browser,
+            BrowserType::Chrome | BrowserType::Edge | BrowserType::Brave
+        )
 }
 
 pub fn resolve_integration_root() -> PathBuf {
@@ -267,7 +267,7 @@ pub fn inspect_profile(profile_dir: &Path) -> (bool, String) {
         }
     }
 
-    let mut found_entry = settings.get(EXTENSION_ID);
+    let mut found_entry = EXTENSION_ID.and_then(|id| settings.get(id));
     if found_entry.is_none() {
         for val in settings.values() {
             if let Some(manifest) = val.get("manifest") {
@@ -311,8 +311,10 @@ pub fn inspect_profile(profile_dir: &Path) -> (bool, String) {
         }
     }
 
-    if removed.iter().any(|s| s == EXTENSION_ID) {
-        return (false, "removed".to_owned());
+    if let Some(id) = EXTENSION_ID {
+        if removed.iter().any(|s| s == id) {
+            return (false, "removed".to_owned());
+        }
     }
 
     (false, "missing".to_owned())
@@ -415,7 +417,7 @@ pub fn scan_browsers(
         }
 
         let store_url = if is_store_browser(b_type) {
-            Some(STORE_URL.to_owned())
+            STORE_URL.map(str::to_owned)
         } else {
             None
         };

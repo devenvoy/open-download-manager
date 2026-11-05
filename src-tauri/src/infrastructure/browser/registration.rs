@@ -117,7 +117,7 @@ pub async fn register_browser_manifest(
     let json_content = serde_json::to_string_pretty(&manifest)
         .map_err(|e| AppError::browser(format!("Could not serialize manifest: {e}")))?;
 
-    tokio::fs::write(&manifest_path, json_content)
+    tokio::fs::write(&manifest_path, &json_content)
         .await
         .map_err(|e| AppError::browser(format!("Could not write manifest: {e}")))?;
 
@@ -146,6 +146,38 @@ pub async fn register_browser_manifest(
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let app_support = home.join("Library/Application Support");
+            let nm_dir = match browser {
+                BrowserType::Chrome => app_support.join("Google/Chrome/NativeMessagingHosts"),
+                BrowserType::Edge => app_support.join("Microsoft Edge/NativeMessagingHosts"),
+                BrowserType::Brave => app_support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+                BrowserType::Opera => app_support.join("com.operasoftware.Opera/NativeMessagingHosts"),
+                BrowserType::Firefox => app_support.join("Mozilla/NativeMessagingHosts"),
+            };
+            if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
+                let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
+                let _ = tokio::fs::write(&target_file, &json_content).await;
+            }
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let nm_dir = match browser {
+                BrowserType::Firefox => home.join(".mozilla/native-messaging-hosts"),
+                _ => home.join(".config/google-chrome/NativeMessagingHosts"),
+            };
+            if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
+                let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
+                let _ = tokio::fs::write(&target_file, &json_content).await;
+            }
+        }
+    }
+
     Ok(manifest_path)
 }
 
@@ -171,6 +203,32 @@ pub async fn unregister_browser_manifest(
             .arg("/f")
             .status()
             .await;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let app_support = home.join("Library/Application Support");
+            let nm_dir = match browser {
+                BrowserType::Chrome => app_support.join("Google/Chrome/NativeMessagingHosts"),
+                BrowserType::Edge => app_support.join("Microsoft Edge/NativeMessagingHosts"),
+                BrowserType::Brave => app_support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+                BrowserType::Opera => app_support.join("com.operasoftware.Opera/NativeMessagingHosts"),
+                BrowserType::Firefox => app_support.join("Mozilla/NativeMessagingHosts"),
+            };
+            let _ = tokio::fs::remove_file(nm_dir.join(format!("{NATIVE_HOST_NAME}.json"))).await;
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let nm_dir = match browser {
+                BrowserType::Firefox => home.join(".mozilla/native-messaging-hosts"),
+                _ => home.join(".config/google-chrome/NativeMessagingHosts"),
+            };
+            let _ = tokio::fs::remove_file(nm_dir.join(format!("{NATIVE_HOST_NAME}.json"))).await;
+        }
     }
 
     Ok(())
