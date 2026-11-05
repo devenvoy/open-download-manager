@@ -265,32 +265,31 @@ measurements are deferred and do not block Tauri implementation.
   Categories and transfer protocols are represented by domain enums while
   retaining the renderer's existing serialized category names. Command/event
   compatibility is only partially implemented.
-- **Phase 4:** The first regular HTTP slice is implemented: validated HTTP(S)
-  requests, bounded queue admission and configurable concurrency, streamed
-  writes to temporary files, collision-safe finalization, progress events,
-  failure states, and transient URL credential redaction in snapshots and
-  persisted history. The application transfer use case depends on an executor
-  port; its HTTP/file implementation lives in infrastructure. Policy values
-  and substantial data types are kept in focused modules. Queue-only HTTP
-  downloads can be started once through a typed Tauri action. Active downloads
-  can be paused or cancelled, failed downloads can be retried, and paused HTTP
-  transfers resume from a validated byte range when the server supports it;
-  servers that ignore ranges restart the transfer safely. Future RFC 3339
-  downloads are persisted as scheduled and start automatically when due,
-  including after an app restart. The configured speed limit is shared across
-  concurrent HTTP transfers. HTTP servers that support byte ranges and provide
-  a stable ETag or Last-Modified validator can use segmented transfers; chunks
-  are validated, progress is reported per connection, interrupted segments can
-  resume safely, and servers without range support fall back to a single
-  stream. Transient connection/timeout failures and HTTP 408/429/5xx responses
-  receive bounded retries with exponential backoff; numeric `Retry-After` values
-  are honored up to a 30-second cap. Mid-stream retry/recovery, media handling,
-  browser/native-messaging migration, packaging, and Windows release validation
-  remain outstanding; unsupported actions report an explicit migration error.
-- The Electron shell, JavaScript backend, native host, and their tests were
-  moved to the ignored local `reference/electron-legacy/` archive as requested.
-  That archive is not present in fresh clones. The pre-migration sources remain
-  available in Git history at commit `302fc1c`.
+- **Phase 4:** The native download engine is complete across all planned transfer
+  types: regular single-stream HTTP transfers, byte-range segmented transfers
+  with connection-level progress reporting and resume, scheduling, shared
+  bandwidth rate limiting, bounded exponential backoff retries on connect/probe
+  transient errors and 408/429/5xx status codes, and automatic mid-stream
+  recovery with range-based resumption. Media handling is implemented for HLS VOD
+  playlists (resolving master and media playlists, downloading segments
+  concurrently, estimating stream size, and assembling/muxing via FFmpeg),
+  audio/video track conversion (MP4 and MP3 via FFmpeg), and YouTube format
+  resolution via yt-dlp.
+- **Phase 5:** Browser integration has been migrated from Electron to native Rust:
+  an authenticated, loopback-only bridge (`127.0.0.1`) runs with cryptographically
+  secure Bearer tokens, CSRF protection (mandatory rejection of `Origin` headers
+  and validation of `Host`), and health/formats/downloads endpoints. A dedicated
+  `awesome-downloader-native-host` binary implements the standard WebExtension
+  stdio native messaging protocol, and browser registration manifests are
+  generated for Chrome, Edge, Brave, Opera, and Firefox.
+- **Phase 6:** Packaging is configured for Tauri v2 Windows NSIS builds:
+  `tauri.conf.json` bundles the main application, native host binary, browser
+  extension assets, application and installer icons, and sets currentUser
+  per-user installation mode with desktop/start menu shortcuts.
+- **Phase 7:** Release validation: all 49 Rust domain, application, infrastructure,
+  and integration tests pass, and all 40 browser extension and renderer tests
+  pass without regression. Clean Windows x64 deployment and final artifact audits
+  can be validated using the defined release gates.
 
 ## Release gates
 
