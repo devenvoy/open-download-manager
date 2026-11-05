@@ -2,8 +2,7 @@ use url::Url;
 
 use super::{
     download_policy::{
-        DASH_MANIFEST_EXTENSION, HLS_MANIFEST_EXTENSION, MAX_URL_LENGTH_BYTES,
-        UNSUPPORTED_MEDIA_HOSTS,
+        DASH_MANIFEST_EXTENSION, MAX_URL_LENGTH_BYTES, UNSUPPORTED_MEDIA_HOSTS,
     },
     DownloadProtocol,
 };
@@ -32,17 +31,17 @@ impl DownloadAddress {
             );
         }
         let path = url.path().to_ascii_lowercase();
-        if path.ends_with(HLS_MANIFEST_EXTENSION)
-            || path.ends_with(DASH_MANIFEST_EXTENSION)
-            || UNSUPPORTED_MEDIA_HOSTS.iter().any(|unsupported_host| {
-                host == *unsupported_host
-                    || host
-                        .strip_suffix(unsupported_host)
-                        .is_some_and(|prefix| prefix.ends_with('.'))
-            })
-        {
+        if path.ends_with(DASH_MANIFEST_EXTENSION) {
+            return Err("DASH manifests are not supported.".to_owned());
+        }
+        if UNSUPPORTED_MEDIA_HOSTS.iter().any(|unsupported_host| {
+            host == *unsupported_host
+                || host
+                    .strip_suffix(unsupported_host)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        }) {
             return Err(
-                "This address requires a media or browser integration that is not migrated yet."
+                "YouTube video downloads require the browser extension or format selection."
                     .to_owned(),
             );
         }

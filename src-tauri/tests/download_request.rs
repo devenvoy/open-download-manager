@@ -36,7 +36,7 @@ fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
     for url in [
         "file:///etc/passwd",
         "https://user:password@example.test/file.bin",
-        "https://example.test/video.m3u8",
+        "https://example.test/video.mpd",
         "https://youtube.com/watch?v=private",
     ] {
         assert!(
@@ -46,6 +46,14 @@ fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
             "{url} should be rejected"
         );
     }
+}
+
+#[test]
+fn accepts_hls_stream_addresses() {
+    let valid = request("https://example.test/video.m3u8")
+        .validate(PathBuf::from("/tmp/downloads"))
+        .expect("HLS address should be accepted");
+    assert_eq!(valid.urls[0].url().as_str(), "https://example.test/video.m3u8");
 }
 
 #[test]

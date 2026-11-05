@@ -45,12 +45,20 @@ pub fn redact_download_url(value: &str) -> String {
 }
 
 pub fn filename_from_url(url: &Url) -> String {
-    url.path_segments()
+    let name = url
+        .path_segments()
         .and_then(|mut segments| segments.next_back())
         .filter(|segment| !segment.is_empty())
         .map(sanitize_filename)
         .filter(|filename| !filename.is_empty())
-        .unwrap_or_else(|| DEFAULT_DOWNLOAD_FILENAME.to_owned())
+        .unwrap_or_else(|| DEFAULT_DOWNLOAD_FILENAME.to_owned());
+
+    if name.to_ascii_lowercase().ends_with(".m3u8") {
+        let base = &name[..name.len() - 5];
+        format!("{base}.ts")
+    } else {
+        name
+    }
 }
 
 fn truncate_filename(filename: &mut String) {

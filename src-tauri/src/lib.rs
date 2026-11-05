@@ -46,8 +46,12 @@ pub fn run() {
                 std::sync::Arc::new(TauriDownloadEventPublisher::new(app.handle().clone())),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            let download_executor = HttpDownloadExecutor::new()
+            let http_executor = HttpDownloadExecutor::new()
                 .map_err(|error| std::io::Error::other(error.message))?;
+            let download_executor = crate::infrastructure::media::CompositeDownloadExecutor::new(
+                http_executor,
+                reqwest::Client::new(),
+            );
             let download_transfer = DownloadTransferService::new(
                 download_history.clone(),
                 download_executor,

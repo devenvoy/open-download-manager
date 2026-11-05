@@ -6,7 +6,6 @@ pub(super) const MAX_DOWNLOAD_ID_CHARACTERS: usize = 128;
 pub(super) const MAX_DOWNLOAD_CONNECTIONS: u8 = 32;
 pub(super) const HTTP_PROTOCOL: &str = "http";
 pub(super) const HTTPS_PROTOCOL: &str = "https";
-pub(super) const HLS_MANIFEST_EXTENSION: &str = ".m3u8";
 pub(super) const DASH_MANIFEST_EXTENSION: &str = ".mpd";
 pub(super) const UNSUPPORTED_MEDIA_HOSTS: [&str; 2] = ["youtube.com", "youtu.be"];
 pub(super) const INVALID_FILENAME_CHARACTERS: [char; 9] =
