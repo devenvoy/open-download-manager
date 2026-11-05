@@ -59,7 +59,7 @@ fn legacy_history_loads_with_runtime_state_reset_and_secrets_excluded() {
 
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
         .expect("legacy history should load");
-    let downloads = history.downloads();
+    let downloads = history.downloads().expect("history should remain readable");
 
     assert_eq!(downloads.len(), 2);
     assert_eq!(
@@ -104,7 +104,10 @@ fn missing_history_is_an_empty_list() {
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
         .expect("missing history is expected for a fresh installation");
 
-    assert!(history.downloads().is_empty());
+    assert!(history
+        .downloads()
+        .expect("history should remain readable")
+        .is_empty());
 }
 
 #[test]
@@ -114,14 +117,18 @@ fn malformed_or_unsupported_history_returns_an_error() {
     let path = directory.join("downloads.json");
     fs::write(&path, b"{not-json").expect("malformed history should be written");
 
-    let malformed = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
-        .expect_err("malformed history should not be hidden");
+    let malformed = match DownloadHistoryService::new(DownloadHistoryStore::new(&directory)) {
+        Ok(_) => panic!("malformed history should not be hidden"),
+        Err(error) => error,
+    };
     assert_eq!(malformed.code, "storage_error");
 
     fs::write(&path, br#"{"version":2,"downloads":[]}"#)
         .expect("unsupported history version should be written");
-    let unsupported = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
-        .expect_err("unsupported history versions should be reported");
+    let unsupported = match DownloadHistoryService::new(DownloadHistoryStore::new(&directory)) {
+        Ok(_) => panic!("unsupported history versions should be reported"),
+        Err(error) => error,
+    };
     assert_eq!(unsupported.code, "storage_error");
 
     fs::remove_dir_all(directory).expect("temporary data directory should be removed");

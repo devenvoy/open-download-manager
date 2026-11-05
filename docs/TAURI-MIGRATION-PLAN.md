@@ -251,17 +251,26 @@ measurements are deferred and do not block Tauri implementation.
 - **Phase 2:** A Tauri v2 shell now loads the existing renderer, serves an
   initial snapshot, persists validated settings, provides native folder
   selection and clipboard reads, and opens/resizes/closes a native download
-  details window. Download operations, other window workflows, tray behavior,
-  notifications, and command/event parity remain to be migrated.
+  details window. Other window workflows, tray behavior, notifications, and
+  full command/event parity remain to be migrated.
 - **Phase 3:** On first run, validated settings are imported from a version 1
   legacy `downloads.json` into versioned `settings.json`. The legacy history
   file remains unchanged, and invalid or unsupported legacy data fails
   explicitly. The Tauri snapshot now reads version 1 download records without
   rewriting the legacy file, resets interrupted runtime statuses to paused,
   and excludes transient headers, validators, segmented URLs, and SABR session
-  data and URL query/fragment credentials from renderer snapshots. A versioned
-  writable Tauri history format and the complete command/event compatibility
-  contract remain outstanding.
+  data and URL credentials, query strings, and fragments from renderer
+  snapshots. New downloads use a separate, versioned `downloads-tauri.json`
+  history file written atomically, leaving the legacy history source intact.
+  Command/event compatibility is only partially implemented.
+- **Phase 4:** The first regular HTTP slice is implemented: validated HTTP(S)
+  requests, bounded queue admission and configurable concurrency, streamed
+  writes to temporary files, collision-safe finalization, progress events,
+  failure states, and transient URL credential redaction in snapshots and
+  persisted history. Pausing, cancellation, retry/resume, scheduling, speed
+  limiting, segmented transfers, media handling, and download actions remain
+  outstanding. The UI can submit direct downloads, but queued-only entries
+  cannot yet be resumed through a Tauri action.
 - The Electron shell, JavaScript backend, native host, and their tests were
   moved to the ignored local `reference/electron-legacy/` archive as requested.
   That archive is not present in fresh clones. The pre-migration sources remain

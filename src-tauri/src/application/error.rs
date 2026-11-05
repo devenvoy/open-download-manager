@@ -22,6 +22,20 @@ impl AppError {
         }
     }
 
+    pub fn invalid_download(message: impl Into<String>) -> Self {
+        Self {
+            code: "invalid_download",
+            message: message.into(),
+        }
+    }
+
+    pub fn download(message: impl Into<String>) -> Self {
+        Self {
+            code: "download_error",
+            message: message.into(),
+        }
+    }
+
     pub fn window(message: impl Into<String>) -> Self {
         Self {
             code: "window_error",

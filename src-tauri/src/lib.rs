@@ -1,9 +1,10 @@
 use application::{
-    download_history_service::DownloadHistoryService, settings_service::SettingsService,
+    download_history_service::DownloadHistoryService,
+    download_transfer_service::DownloadTransferService, settings_service::SettingsService,
 };
 use infrastructure::{download_history_store::DownloadHistoryStore, settings_store::SettingsStore};
 use presentation::{
-    commands::{snapshot, update_settings, AppState},
+    commands::{add_download, snapshot, update_settings, AppState, TauriDownloadEventPublisher},
     window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
 };
 use tauri::Manager;
@@ -33,16 +34,22 @@ pub fn run() {
                 default_download_directory.clone(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            let download_history = DownloadHistoryService::new(DownloadHistoryStore::new(
-                home_directory.join(".awesome-downloader"),
-            ))
+            let max_concurrent = settings.settings().max_concurrent;
+            let download_history = DownloadHistoryService::with_events(
+                DownloadHistoryStore::new(home_directory.join(".awesome-downloader")),
+                std::sync::Arc::new(TauriDownloadEventPublisher::new(app.handle().clone())),
+            )
             .map_err(|error| std::io::Error::other(error.message))?;
+            let download_transfer =
+                DownloadTransferService::new(download_history.clone(), max_concurrent)
+                    .map_err(|error| std::io::Error::other(error.message))?;
 
-            app.manage(AppState::new(settings, download_history));
+            app.manage(AppState::new(settings, download_history, download_transfer));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             snapshot,
+            add_download,
             update_settings,
             open_progress_window,
             close_auxiliary_window,

@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::domain::{
-    download::{DownloadRecord, DownloadStatus},
+    download::{redact_download_url, DownloadRecord, DownloadStatus},
     settings::Settings,
 };
 
@@ -60,7 +60,7 @@ impl From<DownloadRecord> for DownloadSummary {
     fn from(download: DownloadRecord) -> Self {
         Self {
             id: download.id,
-            url: display_url(&download.url),
+            url: redact_download_url(&download.url),
             filename: download.filename,
             status: download.status,
             downloaded: download.downloaded,
@@ -82,10 +82,6 @@ impl From<DownloadRecord> for DownloadSummary {
             duration: download.duration,
         }
     }
-}
-
-fn display_url(url: &str) -> String {
-    url.split(['?', '#']).next().unwrap_or_default().to_owned()
 }
 
 #[derive(Clone, Debug, Serialize)]

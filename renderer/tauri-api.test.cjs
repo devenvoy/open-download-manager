@@ -100,12 +100,29 @@ test('Rust errors preserve their message and stable code', async () => {
   });
 });
 
-test('unmigrated functionality rejects explicitly', async () => {
+test('adding a download invokes the Rust HTTP download command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return ['download-123'];
+      }
+    }
+  });
+  const request = { urls: ['https://example.test/file.bin'], queueOnly: false };
+
+  assert.deepEqual(await api.add(request), ['download-123']);
+  assert.equal(calls[0][0], 'add_download');
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ request }));
+});
+
+test('download actions that are not migrated reject explicitly', async () => {
   const api = loadApi();
 
-  await assert.rejects(api.add(), error => {
+  await assert.rejects(api.action(), error => {
     assert.equal(error.code, 'feature_not_migrated');
-    assert.match(error.message, /Downloads/);
+    assert.match(error.message, /Download actions/);
     return true;
   });
 });
