@@ -5,6 +5,7 @@ mod filename;
 mod protocol;
 mod record;
 mod request;
+mod review_request;
 mod status;
 mod validated_request;
 
@@ -14,5 +15,6 @@ pub use filename::{filename_from_url, redact_download_url, sanitize_filename};
 pub use protocol::DownloadProtocol;
 pub use record::{DownloadRecord, DownloadSegmentProgress};
 pub use request::DownloadRequest;
+pub use review_request::ReviewDownloadRequest;
 pub use status::DownloadStatus;
 pub use validated_request::ValidatedDownloadRequest;

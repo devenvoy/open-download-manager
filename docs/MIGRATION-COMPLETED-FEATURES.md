@@ -11,14 +11,15 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 69 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
-- **WebExtension & Renderer Contract Suite:** 83 tests passing (`bun test renderer/ extension/`)
+- **Rust Test Suite:** 75 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test renderer/ extension/`)
 - **Zero-Node Runtime:** Core transfers, scheduling, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
 | Subsystem | Legacy Electron Reference | Migrated Tauri / Rust Implementation | Functional Parity | Performance & Stability Gain |
 | :--- | :--- | :--- | :--- | :--- |
 | **Download Context Actions** | `desktop/main.cjs`, `core/engine.mjs` | `src-tauri/src/application/download_transfer_service.rs`, `system_shell.rs` | **100%** | Full `remove`, `open`, `reveal`, `openWith`, and `removeCompleted` parity |
 | **Desktop Shell & System Tray** | `desktop/main.cjs` | `src-tauri/src/presentation/tray.rs`, `autostart.rs`, `lib.rs` | **100%** | System tray icon, minimize/close-to-tray, single-instance lock, Windows Run autostart |
+| **Browser Integration UI & Review** | `desktop/main.cjs`, `browser-setup.cjs`, `engine.mjs` | `src-tauri/src/application/integration_service.rs`, `scanner.rs`, `commands.rs` | **100%** | Live browser scanner, setup actions (`store`, `open`, `prepare`, `copy`, `folder`), and `needsReview` confirmation workflow |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |
@@ -219,6 +220,20 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
   - **Single Instance Lock:** `tauri-plugin-single-instance` enforces a single app instance. Attempting to launch a second instance unminimizes, shows, and focuses the primary window.
   - **Autostart with Windows:** Windows Registry persistence (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Awesome Downloader`) with `--background` parameter, automatically synchronized whenever `startWithWindows` setting is toggled.
   - **Silent Background Launch:** Supports `--background` CLI argument to launch directly to tray without window flashing.
+
+### 6.5 Browser Integration UI, Detection Scanner & Confirmation Review
+- **Legacy:** `desktop/main.cjs`, `desktop/browser-setup.cjs`, `desktop/browser-registration.cjs`, `desktop/browser-extension-state.cjs`, `core/engine.mjs`.
+- **Migrated:** Implemented in `src-tauri/src/application/integration_service.rs`, `src-tauri/src/infrastructure/browser/scanner.rs`, `src-tauri/src/infrastructure/browser/registration.rs`, `src-tauri/src/presentation/commands.rs`, and `renderer/tauri-api.js`.
+- **Features Complete:**
+  - **Live Browser Status Scanner:** Identifies browser executables (Chrome, Edge, Brave, Opera, Firefox) and inspects profile preferences (`Preferences`, `Secure Preferences`) and Firefox `extensions.json` to detect real-time extension setup state (`connected`, `approval`, `disabled`, `removed`, `missing`).
+  - **Dynamic Snapshot Integration Info:** Populates `snapshot.integration` with active bridge port, installed browsers, connected profiles, and extension paths.
+  - **Browser Setup Actions:** Supports `store` (opens Chrome Web Store listing), `open` (launches browser), `prepare` (prepares Firefox temporary extension folder and manifest), `copy` (returns extension path), and `folder` (reveals extension folder).
+  - **Native Messaging Host Registration:** Automatically writes native messaging host manifests and configures registry entries (`register_browser`).
+  - **Download Confirmation Review (`needsReview`):**
+    - Intercepts incoming browser downloads when `confirmBrowserDownloads` is enabled, setting `needs_review: true` and holding transfer in `paused` state.
+    - Prevents premature transfer starts (`"Review this browser download before starting it."`).
+    - Exposes typed `review_download` command to validate custom filename, directory, category, description, and schedule before starting the download.
+    - Resets `needs_review` when cancelled or confirmed.
 
 ---
 

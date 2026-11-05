@@ -124,6 +124,7 @@ async fn hls_vod_downloads_segments_and_assembles_in_order() {
         category: None,
         description: Some("HLS download test".to_owned()),
         queue_only: false,
+        review_only: None,
         scheduled_at: None,
     };
 

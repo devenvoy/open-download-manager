@@ -10,7 +10,9 @@ use crate::{
         download_history_repository::DownloadHistoryRepository,
         error::{AppError, AppResult},
     },
-    domain::download::{DownloadRecord, DownloadStatus},
+    domain::download::{
+        sanitize_filename, DownloadRecord, DownloadStatus, ReviewDownloadRequest,
+    },
 };
 
 pub struct DownloadHistoryService {
@@ -207,6 +209,89 @@ impl DownloadHistoryService {
         Ok(started)
     }
 
+    pub(crate) fn review_download(
+        &self,
+        request: &ReviewDownloadRequest,
+    ) -> AppResult<DownloadRecord> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == request.id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+
+        if !downloads[index].needs_review {
+            return Err(AppError::download(
+                "This download is not waiting for confirmation.",
+            ));
+        }
+
+        if let Some(dir) = &request.directory {
+            let p = std::path::Path::new(dir);
+            if !p.is_absolute() {
+                return Err(AppError::invalid_download("Choose an absolute save folder."));
+            }
+        }
+
+        if let Some(desc) = &request.description {
+            if desc.chars().count() > 4096 {
+                return Err(AppError::invalid_download("Description is too long."));
+            }
+        }
+
+        let scheduled_time = if let Some(scheduled) = &request.scheduled_at {
+            let parsed = DateTime::parse_from_rfc3339(scheduled)
+                .map_err(|_| AppError::invalid_download("The scheduled time is invalid."))?;
+            if parsed <= Utc::now() {
+                return Err(AppError::invalid_download(
+                    "The scheduled time must be in the future.",
+                ));
+            }
+            Some(parsed.to_rfc3339())
+        } else {
+            None
+        };
+
+        let previous = downloads[index].clone();
+
+        if let Some(filename) = &request.filename {
+            downloads[index].filename = sanitize_filename(filename);
+        }
+        if let Some(directory) = &request.directory {
+            downloads[index].directory = Some(directory.clone());
+        }
+        if let Some(category) = request.category {
+            downloads[index].category = Some(category);
+        }
+        if let Some(desc) = &request.description {
+            downloads[index].description = Some(desc.clone());
+        }
+
+        downloads[index].scheduled_at = scheduled_time.clone();
+        downloads[index].needs_review = false;
+
+        let queue_only = request.queue_only.unwrap_or(false);
+        if queue_only {
+            downloads[index].status = DownloadStatus::Paused;
+        } else if scheduled_time.is_some() {
+            downloads[index].status = DownloadStatus::Scheduled;
+        } else {
+            downloads[index].status = DownloadStatus::Queued;
+        }
+
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads[index] = previous;
+            return Err(error);
+        }
+
+        let updated = downloads[index].clone();
+        drop(downloads);
+        self.publish_change();
+        Ok(updated)
+    }
+
     pub(crate) fn stop_download(
         &self,
         id: &str,
@@ -245,6 +330,7 @@ impl DownloadHistoryService {
             }
             DownloadStopReason::Cancel => {
                 downloads[index].status = DownloadStatus::Cancelled;
+                downloads[index].needs_review = false;
                 downloads[index].downloaded = 0;
                 downloads[index].total = None;
                 downloads[index].speed = 0;

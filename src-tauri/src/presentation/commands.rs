@@ -1,11 +1,14 @@
 use tauri::State;
 
 use crate::{
-    application::error::{AppError, AppResult},
+    application::{
+        error::{AppError, AppResult},
+        integration_service::BrowserSetupResult,
+    },
     domain::{
-        download::{DownloadAction, DownloadRequest},
+        download::{DownloadAction, DownloadRequest, ReviewDownloadRequest},
         settings::SettingsPatch,
-        snapshot::Snapshot,
+        snapshot::{IntegrationStatus, Snapshot},
     },
 };
 
@@ -17,10 +20,48 @@ pub fn snapshot(state: State<'_, AppState>) -> AppResult<Snapshot> {
         .settings
         .lock()
         .map_err(|_| AppError::storage("Application settings are unavailable."))?;
-    Ok(Snapshot::new(
+    let integration = state.integration.get_integration_info().unwrap_or_else(|e| {
+        IntegrationStatus::unavailable(e.message)
+    });
+    Ok(Snapshot::with_integration(
         settings.settings().clone(),
         state.download_history.downloads()?,
+        integration,
     ))
+}
+
+#[tauri::command]
+pub fn get_integration_info(state: State<'_, AppState>) -> AppResult<IntegrationStatus> {
+    state.integration.get_integration_info()
+}
+
+#[tauri::command]
+pub async fn register_browser(
+    state: State<'_, AppState>,
+    browser: String,
+    extension_id: String,
+) -> AppResult<()> {
+    state
+        .integration
+        .register_browser(&browser, &extension_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn browser_setup_action(
+    state: State<'_, AppState>,
+    action: String,
+    browser: String,
+) -> AppResult<BrowserSetupResult> {
+    state.integration.browser_setup(&action, &browser).await
+}
+
+#[tauri::command]
+pub fn review_download(
+    state: State<'_, AppState>,
+    request: ReviewDownloadRequest,
+) -> AppResult<Vec<String>> {
+    state.download_transfer.review_download(request)
 }
 
 #[tauri::command]

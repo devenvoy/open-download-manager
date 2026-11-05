@@ -17,7 +17,7 @@ use crate::{
         download_rate_limiter::DownloadRateLimiter,
         download_transfer_policy::{
             HTTP_DOWNLOAD_KIND, NEW_DOWNLOAD_IS_ESTIMATED, NEW_DOWNLOAD_IS_RESUMABLE,
-            NEW_DOWNLOAD_NEEDS_REVIEW, SCHEDULER_POLL_INTERVAL_MILLISECONDS,
+            SCHEDULER_POLL_INTERVAL_MILLISECONDS,
         },
         error::{AppError, AppResult},
         shell_service::ShellService,
@@ -25,6 +25,7 @@ use crate::{
     domain::{
         download::{
             filename_from_url, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
+            ReviewDownloadRequest,
         },
         settings::Settings,
     },
@@ -100,7 +101,9 @@ impl DownloadTransferService {
                     id: uuid::Uuid::new_v4().to_string(),
                     url: url.url().as_str().to_owned(),
                     filename,
-                    status: if is_scheduled {
+                    status: if request.review_only {
+                        DownloadStatus::Paused
+                    } else if is_scheduled {
                         DownloadStatus::Scheduled
                     } else {
                         DownloadStatus::Queued
@@ -109,7 +112,7 @@ impl DownloadTransferService {
                     total: None,
                     speed: 0,
                     created_at: chrono::Utc::now().to_rfc3339(),
-                    needs_review: NEW_DOWNLOAD_NEEDS_REVIEW,
+                    needs_review: request.review_only,
                     scheduled_at: request.scheduled_at.clone(),
                     description: request.description.clone(),
                     category: request.category,
@@ -134,12 +137,24 @@ impl DownloadTransferService {
             .collect::<Vec<_>>();
         self.history.add_records(records)?;
 
-        if !request.queue_only && !is_scheduled {
+        if !request.queue_only && !request.review_only && !is_scheduled {
             for id in &ids {
                 self.start_download(id, false)?;
             }
         }
         Ok(ids)
+    }
+
+    pub fn review_download(
+        &self,
+        request: ReviewDownloadRequest,
+    ) -> AppResult<Vec<String>> {
+        let id = request.id.clone();
+        let record = self.history.review_download(&request)?;
+        if record.status == DownloadStatus::Queued {
+            self.start_download(&id, false)?;
+        }
+        Ok(vec![id])
     }
 
     pub fn action(&self, id: &str, action: DownloadAction) -> AppResult<()> {

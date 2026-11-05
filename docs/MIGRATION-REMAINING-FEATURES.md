@@ -17,7 +17,7 @@ While the core transfer engine and networking have been successfully ported to R
 | :--- | :--- | :--- | :---: | :--- |
 | **Download Context Actions** | Full OS shell integration (`open`, `openWith`, `reveal`, `remove`, `removeCompleted`) | `open`, `openWith`, `reveal`, `remove`, `removeCompleted` fully ported with clean architecture and verified | **100%** | None (100% parity achieved in Phase A) |
 | **Desktop Shell & Tray** | System tray icon, minimize-to-tray, close-to-tray, autostart with Windows, single instance lock | Tray icon, close-to-tray, single-instance lock, and Windows Run autostart fully ported and verified | **100%** | None (100% parity achieved in Phase B) |
-| **Browser Integration UI** | Live status scanner, setup wizard, extension store deep-links, confirmation review | Loopback server and native host binary exist, but UI APIs and snapshot are completely stubbed or hardcoded to unavailable | **35%** | User cannot view browser status, trigger browser setup, or review browser downloads |
+| **Browser Integration UI** | Live status scanner, setup wizard, extension store deep-links, confirmation review | Live status scanner, setup actions, manifest registration, needsReview review workflow fully ported | **100%** | None (100% parity achieved in Phase C) |
 | **Window Management** | Unlimited concurrent progress windows, dedicated options/add/scheduler windows, close confirmation prompts | Single hardcoded progress window label, auxiliary windows stubbed to in-page modals, no close confirmation | **30%** | Only 1 download details window can exist at a time; no safety prompt when closing active transfers |
 | **Application Menu & Shortcuts**| Full native menu bar with accelerators (Ctrl+N, Ctrl+F, Del), URL text import/export, about dialog | No application menu, no accelerators, no `downloader:command` event generation, no import/export | **0%** | Traditional desktop menu bar and URL batch file import/export are completely missing |
 | **System Notifications** | Windows native notifications on completion and updates | No notification plugin or calls | **0%** | Downloads complete silently without OS desktop toast notifications |
@@ -38,59 +38,17 @@ All download context actions (`remove`, `open`, `reveal`, `openWith`, and `remov
 
 ---
 
-## 3. Browser Integration & UI Workflow Deficits
+## 3. Browser Integration & UI Workflow (COMPLETED - 100% Parity)
 
-Even though the loopback bridge server (`LoopbackBridge`) and native host binary (`awesome-downloader-native-host`) have been written in Rust, they are **disconnected from the UI layer**.
-
-### 3.1 Hardcoded `snapshot.integration` Status
-- **Legacy Behavior:** (`desktop/main.cjs:120-127`)
-  - Polled connected browsers every 15 seconds.
-  - Populated `snapshot.integration` with:
-    - `port`: Current bridge port.
-    - `connectedBrowsers`: List of browsers with active native host manifests.
-    - `browsers`: List of all supported browsers with installation state, profile counts, and setup state.
-    - `extensionPath`, `integrationPath`, `packaged`.
-- **Current Tauri State:**
-  - `src-tauri/src/domain/snapshot.rs:32-34`:
-    ```rust
-    integration: IntegrationStatus::unavailable(
-        BROWSER_HANDOFF_UNAVAILABLE_MESSAGE.to_owned(), // "Browser handoff has not been migrated to Tauri yet."
-    ),
-    ```
-  - **Deficit:** The UI unconditionally reports that browser integration is unavailable and disconnected, even when the bridge server is running in the background.
-
-### 3.2 Stubbed Frontend Bridge (`renderer/tauri-api.js`)
-- **Legacy Behavior:** Provided full IPC communication for browser management.
-- **Current Tauri State:** Lines 77-80 of `renderer/tauri-api.js`:
-  ```javascript
-  review: () => unavailable('Browser download review'),
-  integration: () => unavailable('Browser integration'),
-  browserSetup: () => unavailable('Browser setup'),
-  openIntegration: () => unavailable('Browser integration'),
-  ```
-  - **Deficit:** Clicking "Browser Integration" in the toolbar or options throws an explicit JavaScript error: *"Browser integration is not available in the Tauri migration yet."*
-
-### 3.3 Missing Browser Setup & Registration Commands
-- **Legacy Behavior:** (`desktop/main.cjs:244-270`, `desktop/browser-setup.cjs`)
-  - Handled user actions in the Browser Integration dialog:
-    - `'store'`: Registers native messaging manifest and launches the Chrome Web Store / Add-ons page for the browser.
-    - `'open'`: Launches the browser directly.
-    - `'prepare'`: Generates Firefox manifest and folder for temporary/unpacked loading.
-    - `'copy'`: Copies extension folder path to system clipboard.
-    - `'folder'`: Opens the extension folder in Windows Explorer.
-- **Current Tauri State:**
-  - `src-tauri/src/infrastructure/browser/registration.rs` contains helper functions (`register_browser_manifest`), but **no Tauri presentation commands** exist to call them from the webview.
-
-### 3.4 Missing Browser Download Review Workflow (`confirmBrowserDownloads`)
-- **Legacy Behavior:** (`desktop/main.cjs:50-55`, `core/engine.mjs`)
-  - When `confirmBrowserDownloads` was enabled in settings, incoming downloads from the browser extension were added with `needsReview: true`.
-  - Automatically popped up a confirmation dialog allowing the user to review the URL, change filename, select category/folder, or cancel before transferring bytes.
-  - Closing the confirmation dialog automatically cancelled the pending download.
-  - `api.review({ id, action: 'start' | 'cancel', ... })` finalized the download.
-- **Current Tauri State:**
-  - `src-tauri/src/infrastructure/bridge/server.rs:319` unconditionally queues or starts downloads directly.
-  - `api.review` is stubbed as `unavailable`.
-  - Closing the details window does not cancel pending unapproved downloads.
+All browser integration features, status scanning, setup actions, and confirmation review workflows have been ported and verified in Phase C:
+- **Live Status Scanner & `snapshot.integration`:** Scans installed browsers (Chrome, Edge, Brave, Opera, Firefox) across platforms. Inspects Chromium `Preferences` and `Secure Preferences` to determine accurate setup states (`connected`, `approval`, `disabled`, `removed`, `missing`) and Firefox `extensions.json`. Populates `snapshot.integration` with active loopback bridge port, connected profiles, and browser status.
+- **Frontend Bridge Wiring:** Wired `api.review`, `api.integration`, `api.browserSetup`, `api.registerBrowser`, and `api.openIntegration` in `renderer/tauri-api.js` to typed Tauri commands.
+- **Browser Setup & Registration Commands:** Implemented `get_integration_info`, `register_browser`, and `browser_setup_action` (`store`, `open`, `prepare`, `copy`, `folder`) in `IntegrationService` (Application) and Tauri presentation commands.
+- **Download Confirmation Review (`needsReview`):**
+  - When `confirmBrowserDownloads` is enabled, downloads arriving from the browser bridge receive `needs_review: true` and `status: DownloadStatus::Paused`.
+  - Resuming unreviewed downloads is rejected with `"Review this browser download before starting it."`.
+  - `review_download` updates filename (sanitized), directory (absolute path required), category, description, scheduled time, sets `needs_review: false`, and queues/starts the transfer.
+  - Cancelling an unreviewed download clears `needs_review` and marks it `Cancelled`.
 
 ---
 

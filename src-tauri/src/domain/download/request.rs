@@ -12,7 +12,7 @@ use super::{
     sanitize_filename, DownloadAddress, ValidatedDownloadRequest,
 };
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DownloadRequest {
     pub urls: Vec<String>,
@@ -22,6 +22,8 @@ pub struct DownloadRequest {
     pub description: Option<String>,
     #[serde(default)]
     pub queue_only: bool,
+    #[serde(default)]
+    pub review_only: Option<bool>,
     pub scheduled_at: Option<String>,
 }
 
@@ -95,6 +97,7 @@ impl DownloadRequest {
             category: self.category,
             description,
             queue_only: self.queue_only,
+            review_only: self.review_only.unwrap_or(false),
             scheduled_at,
         })
     }

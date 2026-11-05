@@ -12,10 +12,13 @@ use awesome_downloader_lib::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
         error::AppResult,
+        integration_service::IntegrationService,
         settings_service::SettingsService,
         shell_service::ShellService,
     },
-    domain::download::{DownloadAction, DownloadRequest, DownloadStatus},
+    domain::download::{
+        DownloadAction, DownloadRequest, DownloadStatus, ReviewDownloadRequest,
+    },
     infrastructure::{
         download_history_store::DownloadHistoryStore,
         http_download_executor::HttpDownloadExecutor,
@@ -23,7 +26,10 @@ use awesome_downloader_lib::{
     },
     presentation::{
         app_state::AppState,
-        commands::{add_download, download_action, remove_completed, snapshot},
+        commands::{
+            add_download, browser_setup_action, download_action, get_integration_info,
+            register_browser, remove_completed, review_download, snapshot,
+        },
     },
 };
 use tauri::Manager;
@@ -64,6 +70,12 @@ impl ShellService for RecordingShellService {
     }
 }
 
+impl RecordingShellService {
+    fn opened_paths(&self) -> Vec<PathBuf> {
+        self.open_paths.lock().unwrap().clone()
+    }
+}
+
 fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<tauri::test::MockRuntime> {
     let app = tauri::test::mock_app();
     let settings = SettingsService::new(
@@ -79,10 +91,16 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
         history.clone(),
         HttpDownloadExecutor::new().expect("http executor should initialize"),
         2,
+        shell.clone(),
+    );
+
+    let integration = IntegrationService::with_shell(
+        data_dir.to_path_buf(),
+        data_dir.to_path_buf(),
         shell,
     );
 
-    let app_state = AppState::new(settings, history, transfer);
+    let app_state = AppState::new(settings, history, transfer, integration);
     app.manage(app_state);
     app
 }
@@ -101,6 +119,7 @@ async fn commands_add_and_snapshot_lifecycle() {
         category: None,
         description: Some("cmd test".to_owned()),
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
 
@@ -127,6 +146,7 @@ async fn commands_remove_action_removes_from_snapshot() {
         category: None,
         description: None,
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
 
@@ -164,6 +184,7 @@ async fn commands_open_and_open_with_through_tauri_state() {
         category: None,
         description: None,
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
 
@@ -214,6 +235,7 @@ async fn commands_reveal_through_tauri_state() {
         category: None,
         description: None,
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
 
@@ -258,6 +280,7 @@ async fn commands_remove_completed_through_tauri_state() {
         category: None,
         description: None,
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
     let req2 = DownloadRequest {
@@ -267,6 +290,7 @@ async fn commands_remove_completed_through_tauri_state() {
         category: None,
         description: None,
         queue_only: true,
+        review_only: None,
         scheduled_at: None,
     };
 
@@ -290,4 +314,86 @@ async fn commands_remove_completed_through_tauri_state() {
     let snap = snapshot(state.clone()).unwrap();
     assert_eq!(snap.downloads.len(), 1);
     assert_eq!(snap.downloads[0].id, id2);
+}
+
+#[tokio::test]
+async fn commands_review_download_through_tauri_state() {
+    let dir = temporary_directory();
+    let shell = RecordingShellService::default();
+    let app = create_test_app(&dir, shell);
+    let state = app.state::<AppState>();
+
+    // Add download with review_only = true
+    let req = DownloadRequest {
+        urls: vec!["http://127.0.0.1/needs-confirm".to_owned()],
+        filename: None,
+        directory: None,
+        category: None,
+        description: None,
+        queue_only: false,
+        review_only: Some(true),
+        scheduled_at: None,
+    };
+
+    let ids = add_download(state.clone(), req).await.unwrap();
+    let id = ids[0].clone();
+
+    // Verify snapshot reflects needs_review
+    let snap = snapshot(state.clone()).unwrap();
+    let d = snap.downloads.into_iter().find(|item| item.id == id).unwrap();
+    assert!(d.needs_review);
+
+    // Call review_download command
+    let rev_req = ReviewDownloadRequest {
+        id: id.clone(),
+        filename: Some("confirmed_by_command.bin".to_owned()),
+        directory: Some(dir.to_string_lossy().into_owned()),
+        category: None,
+        description: Some("Reviewed via command".to_owned()),
+        queue_only: Some(true),
+        scheduled_at: None,
+    };
+
+    let result = review_download(state.clone(), rev_req).unwrap();
+    assert_eq!(result, vec![id.clone()]);
+
+    let snap_after = snapshot(state.clone()).unwrap();
+    let d_after = snap_after.downloads.into_iter().find(|item| item.id == id).unwrap();
+    assert!(!d_after.needs_review);
+    assert_eq!(d_after.filename, "confirmed_by_command.bin");
+}
+
+#[tokio::test]
+async fn commands_integration_info_and_browser_setup_through_tauri_state() {
+    let dir = temporary_directory();
+    let shell = RecordingShellService::default();
+    let ext_dir = dir.join("extension");
+    fs::create_dir_all(&ext_dir).unwrap();
+    fs::write(ext_dir.join("manifest.json"), r#"{"name":"test"}"#).unwrap();
+
+    let app = create_test_app(&dir, shell.clone());
+    let state = app.state::<AppState>();
+
+    // 1. get_integration_info command
+    let info = get_integration_info(state.clone()).unwrap();
+    assert_eq!(info.browsers.len(), 5);
+    assert!(info.browsers.iter().any(|b| b.name == "Chrome"));
+    assert!(info.browsers.iter().any(|b| b.name == "Firefox"));
+
+    // 2. browser_setup_action command
+    let copy_result = browser_setup_action(state.clone(), "copy".to_owned(), "Chrome".to_owned()).await.unwrap();
+    assert_eq!(copy_result.browser.as_deref(), Some("Chrome"));
+    assert!(copy_result.extension_path.is_some());
+
+    // 3. folder action invokes shell
+    let _ = browser_setup_action(state.clone(), "folder".to_owned(), "Chrome".to_owned()).await.unwrap();
+    assert_eq!(shell.opened_paths().len(), 1);
+
+    // 4. register_browser command
+    let reg_result = register_browser(
+        state.clone(),
+        "Chrome".to_owned(),
+        "abcdefghijklmnopabcdefghijklmnop".to_owned(),
+    ).await;
+    assert!(reg_result.is_ok());
 }

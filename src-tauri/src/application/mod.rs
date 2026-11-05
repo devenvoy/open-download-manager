@@ -11,5 +11,6 @@ pub mod download_result;
 mod download_transfer_policy;
 pub mod download_transfer_service;
 pub mod error;
+pub mod integration_service;
 pub mod settings_service;
 pub mod shell_service;

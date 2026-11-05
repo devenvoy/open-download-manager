@@ -7,7 +7,7 @@ mod policy;
 pub use browser_status::BrowserStatus;
 pub use download_summary::DownloadSummary;
 pub use file_icon::FileIcon;
-pub use integration_status::IntegrationStatus;
+pub use integration_status::{ConnectedBrowser, IntegrationStatus};
 
 use serde::Serialize;
 
@@ -32,6 +32,19 @@ impl Snapshot {
             integration: IntegrationStatus::unavailable(
                 BROWSER_HANDOFF_UNAVAILABLE_MESSAGE.to_owned(),
             ),
+            file_icons: Vec::new(),
+        }
+    }
+
+    pub fn with_integration(
+        settings: Settings,
+        downloads: Vec<DownloadRecord>,
+        integration: IntegrationStatus,
+    ) -> Self {
+        Self {
+            downloads: downloads.into_iter().map(DownloadSummary::from).collect(),
+            settings,
+            integration,
             file_icons: Vec::new(),
         }
     }

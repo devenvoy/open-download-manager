@@ -175,3 +175,76 @@ test('folder picker uses the restricted native directory dialog', async () => {
     JSON.stringify({ directory: true, multiple: false })
   );
 });
+
+test('review invokes review_download Rust command with request', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return ['download-123'];
+      }
+    }
+  });
+
+  const request = { id: 'download-123', filename: 'confirmed.iso', queueOnly: false };
+  const result = await api.review(request);
+
+  assert.deepEqual(result, ['download-123']);
+  assert.equal(calls[0][0], 'review_download');
+  assert.deepEqual(calls[0][1], { request });
+});
+
+test('integration invokes get_integration_info Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { port: 12345, browsers: [] };
+      }
+    }
+  });
+
+  const result = await api.integration();
+  assert.deepEqual(result, { port: 12345, browsers: [] });
+  assert.equal(calls[0][0], 'get_integration_info');
+});
+
+test('browserSetup invokes browser_setup_action Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { browser: 'Chrome' };
+      }
+    }
+  });
+
+  const result = await api.browserSetup({ action: 'copy', browser: 'Chrome' });
+  assert.deepEqual(result, { browser: 'Chrome' });
+  assert.equal(calls[0][0], 'browser_setup_action');
+  assert.deepEqual(calls[0][1], { action: 'copy', browser: 'Chrome' });
+});
+
+test('registerBrowser invokes register_browser Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.registerBrowser({ browser: 'Chrome', extensionId: 'abcdefghijklmnopabcdefghijklmnop' });
+  assert.equal(calls[0][0], 'register_browser');
+  assert.deepEqual(calls[0][1], { browser: 'Chrome', extensionId: 'abcdefghijklmnopabcdefghijklmnop' });
+});
+
+test('openIntegration resolves cleanly', async () => {
+  const api = loadApi();
+  await assert.doesNotReject(api.openIntegration());
+});

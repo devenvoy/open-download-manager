@@ -9,7 +9,10 @@ use infrastructure::{
 };
 use presentation::{
     app_state::AppState,
-    commands::{add_download, download_action, remove_completed, snapshot, update_settings},
+    commands::{
+        add_download, browser_setup_action, download_action, get_integration_info,
+        register_browser, remove_completed, review_download, snapshot, update_settings,
+    },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
 };
@@ -68,17 +71,25 @@ pub fn run() {
             download_transfer.start_scheduler();
 
             let bridge_data_dir = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let integration_service =
+                application::integration_service::IntegrationService::new(bridge_data_dir.clone());
             let bridge_transfer = download_transfer.clone();
             let bridge_settings = settings.settings().clone();
+            let integration_for_bridge = integration_service.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = crate::infrastructure::bridge::LoopbackBridge::start(
+                match crate::infrastructure::bridge::LoopbackBridge::start(
                     bridge_data_dir,
                     bridge_transfer,
                     bridge_settings,
                 )
                 .await
                 {
-                    eprintln!("Could not start loopback bridge: {}", e.message);
+                    Ok(bridge) => {
+                        integration_for_bridge.set_bridge_port(bridge.config.port);
+                    }
+                    Err(e) => {
+                        eprintln!("Could not start loopback bridge: {}", e.message);
+                    }
                 }
             });
 
@@ -107,7 +118,12 @@ pub fn run() {
                 });
             }
 
-            app.manage(AppState::new(settings, download_history, download_transfer));
+            app.manage(AppState::new(
+                settings,
+                download_history,
+                download_transfer,
+                integration_service,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -118,7 +134,11 @@ pub fn run() {
             update_settings,
             open_progress_window,
             close_auxiliary_window,
-            resize_progress_window
+            resize_progress_window,
+            get_integration_info,
+            register_browser,
+            browser_setup_action,
+            review_download
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Awesome Downloader");

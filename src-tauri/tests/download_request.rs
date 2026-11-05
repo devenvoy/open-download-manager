@@ -12,6 +12,7 @@ fn request(url: &str) -> DownloadRequest {
         category: None,
         description: None,
         queue_only: false,
+        review_only: None,
         scheduled_at: None,
     }
 }

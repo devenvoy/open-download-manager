@@ -48,6 +48,7 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         category: None,
         description: Some("fixture download".to_owned()),
         queue_only,
+        review_only: None,
         scheduled_at: None,
     }
 }

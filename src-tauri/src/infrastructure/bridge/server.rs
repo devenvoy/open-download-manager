@@ -310,6 +310,7 @@ async fn handle_bridge_connection(
             }
         };
 
+        let review_only = !valid_browser.start_now && settings.confirm_browser_downloads;
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
             filename: valid_browser.filename,
@@ -317,6 +318,7 @@ async fn handle_bridge_connection(
             category: None,
             description: Some("Added via browser extension".to_owned()),
             queue_only: !valid_browser.start_now,
+            review_only: Some(review_only),
             scheduled_at: None,
         };
 
