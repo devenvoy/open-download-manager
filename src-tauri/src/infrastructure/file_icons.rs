@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -18,8 +18,12 @@ pub fn is_safe_extension(ext: &str) -> bool {
 }
 
 pub fn extension_key(download_source: &str) -> String {
-    let normalized = download_source.replace('\\', "/");
-    let path = Path::new(&normalized);
+    let normalized = if download_source.contains('\\') {
+        std::borrow::Cow::Owned(download_source.replace('\\', "/"))
+    } else {
+        std::borrow::Cow::Borrowed(download_source)
+    };
+    let path = Path::new(normalized.as_ref());
     if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
         let candidate = format!(".{}", ext.to_ascii_lowercase());
         if is_safe_extension(&candidate) {
@@ -48,14 +52,14 @@ pub fn extension_key_from_download(download: &DownloadRecord) -> String {
 #[derive(Clone)]
 pub struct FileIconProvider {
     cache_directory: PathBuf,
-    icons: Arc<Mutex<HashMap<String, String>>>,
+    icons: Arc<Mutex<BTreeMap<String, String>>>,
 }
 
 impl FileIconProvider {
     pub fn new(cache_directory: PathBuf) -> Self {
         Self {
             cache_directory,
-            icons: Arc::new(Mutex::new(HashMap::new())),
+            icons: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -89,11 +93,11 @@ impl FileIconProvider {
     }
 
     pub fn load(&self, downloads: &[DownloadRecord]) -> bool {
-        let mut extensions = Vec::new();
+        let mut extensions = std::collections::HashSet::new();
         for download in downloads {
             let key = extension_key_from_download(download);
-            if !key.is_empty() && !extensions.contains(&key) {
-                extensions.push(key);
+            if !key.is_empty() {
+                extensions.insert(key);
             }
         }
 
@@ -107,11 +111,7 @@ impl FileIconProvider {
     }
 
     pub fn snapshot(&self) -> BTreeMap<String, String> {
-        let icons = self.icons.lock().unwrap();
-        icons
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        self.icons.lock().unwrap().clone()
     }
 }
 
