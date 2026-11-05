@@ -11,7 +11,7 @@ use crate::{
     domain::download::DownloadRecord,
     infrastructure::{
         http_download_executor::HttpDownloadExecutor,
-        media::hls_executor::HlsDownloadExecutor,
+        media::{hls_executor::HlsDownloadExecutor, paired_executor::PairedDownloadExecutor},
     },
 };
 
@@ -19,13 +19,15 @@ use crate::{
 pub struct CompositeDownloadExecutor {
     http_executor: HttpDownloadExecutor,
     hls_executor: Arc<HlsDownloadExecutor>,
+    paired_executor: Arc<PairedDownloadExecutor>,
 }
 
 impl CompositeDownloadExecutor {
     pub fn new(http_executor: HttpDownloadExecutor, client: reqwest::Client) -> Self {
         Self {
             http_executor,
-            hls_executor: Arc::new(HlsDownloadExecutor::new(client)),
+            hls_executor: Arc::new(HlsDownloadExecutor::new(client.clone())),
+            paired_executor: Arc::new(PairedDownloadExecutor::new(client)),
         }
     }
 }
@@ -38,11 +40,20 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         control: DownloadControl,
         rate_limiter: Arc<DownloadRateLimiter>,
     ) -> DownloadExecution {
+        let is_paired = download.kind.as_deref() == Some("paired")
+            || download.audio_url.is_some();
         let is_hls = download.kind.as_deref() == Some("hls")
             || download.url.ends_with(".m3u8")
             || download.url.contains(".m3u8?");
 
-        if is_hls {
+        if is_paired {
+            let paired = self.paired_executor.clone();
+            Box::pin(async move {
+                paired
+                    .transfer(download, progress_handler, control, rate_limiter)
+                    .await
+            })
+        } else if is_hls {
             let hls = self.hls_executor.clone();
             Box::pin(async move {
                 hls.transfer(download, progress_handler, control, rate_limiter)
@@ -55,6 +66,7 @@ impl DownloadExecutor for CompositeDownloadExecutor {
     }
 
     fn discard_partial(&self, download: &DownloadRecord) -> AppResult<()> {
+        let _ = self.paired_executor.discard_partial(download);
         let _ = self.hls_executor.discard_partial(download);
         self.http_executor.discard_partial(download)
     }

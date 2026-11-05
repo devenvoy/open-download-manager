@@ -14,6 +14,8 @@ fn request(url: &str) -> DownloadRequest {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        audio_url: None,
+        kind: None,
     }
 }
 

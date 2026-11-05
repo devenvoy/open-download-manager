@@ -32,6 +32,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if argv.iter().any(|arg| arg == "--browser-setup") {
                 let _ = presentation::window_manager::open_integration_window(app.clone());
@@ -136,11 +137,16 @@ pub fn run() {
                 let _ = presentation::window_manager::open_integration_window(app.handle().clone());
             }
 
+            let file_icons = crate::infrastructure::file_icons::FileIconProvider::new(
+                home_directory.join(USER_DATA_DIRECTORY_NAME).join("FileTypeIcons"),
+            );
+
             app.manage(AppState::new(
                 settings,
                 download_history,
                 download_transfer,
                 integration_service,
+                file_icons,
             ));
             Ok(())
         })

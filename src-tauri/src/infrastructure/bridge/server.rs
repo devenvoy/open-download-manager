@@ -311,6 +311,7 @@ async fn handle_bridge_connection(
         };
 
         let review_only = !valid_browser.start_now && settings.confirm_browser_downloads;
+        let is_paired = valid_browser.audio_url.is_some();
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
             filename: valid_browser.filename,
@@ -320,6 +321,8 @@ async fn handle_bridge_connection(
             queue_only: !valid_browser.start_now,
             review_only: Some(review_only),
             scheduled_at: None,
+            audio_url: valid_browser.audio_url,
+            kind: if is_paired { Some("paired".to_owned()) } else { None },
         };
 
         match transfer_service.add(download_req, &settings) {

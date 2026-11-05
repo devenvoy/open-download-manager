@@ -54,6 +54,8 @@ pub struct DownloadRecord {
     pub connections: u8,
     #[serde(default)]
     pub connections_progress: Vec<DownloadSegmentProgress>,
+    #[serde(default)]
+    pub audio_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -11,7 +11,7 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 75 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **Rust Test Suite:** 95 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
 - **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test renderer/ extension/`)
 - **Zero-Node Runtime:** Core transfers, scheduling, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
@@ -22,6 +22,9 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 | **Browser Integration UI & Review** | `desktop/main.cjs`, `browser-setup.cjs`, `engine.mjs` | `src-tauri/src/application/integration_service.rs`, `scanner.rs`, `commands.rs` | **100%** | Live browser scanner, setup actions (`store`, `open`, `prepare`, `copy`, `folder`), and `needsReview` confirmation workflow |
 | **Window Management** | `desktop/main.cjs`, `progress-window.cjs` | `src-tauri/src/presentation/window_manager.rs` | **100%** | Multi-window progress (`progress-{id}`), auxiliary windows (options, add, scheduler, integration), close confirmation guard |
 | **Application Menu, Shortcuts & File I/O** | `desktop/main.cjs` | `src-tauri/src/presentation/menu.rs`, `commands.rs` | **100%** | Full 5-section native menu bar, accelerators (`Ctrl+N`, `Ctrl+F`, `Delete`), `downloader:command` event emitter, text file import/export (<2 MiB check), native About dialog |
+| **System Notifications & Reveal** | `desktop/main.cjs` | `src-tauri/src/presentation/download_event_publisher.rs`, `lib.rs` | **100%** | OS desktop notifications on complete (`notify_on_complete`), folder reveal (`reveal_on_complete`) via `tauri-plugin-notification` |
+| **File Type Icon Provider** | `desktop/file-icons.cjs`, `main.cjs` | `src-tauri/src/infrastructure/file_icons.rs`, `commands.rs` | **100%** | Safe extension regex (`^\.[a-z0-9]{1,12}$`), on-disk cache in `FileTypeIcons`, snapshot map `state.fileIcons[ext]` |
+| **Adaptive Dual-Stream Muxing** | `core/engine.mjs`, `core/mux.mjs` | `src-tauri/src/infrastructure/media/paired_executor.rs`, `composite_executor.rs` | **100%** | Parallel 2-track HTTP streams (`0.part`, `1.part`), rate limiting, status `assembling`, FFmpeg track muxing and MP3 conversion |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |
@@ -239,7 +242,33 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 
 ---
 
-## 7. Performance & Resource Comparison
+## 7. Notifications, File Icons & Media Processing (Phase E)
+
+### 7.1 System Desktop Notifications & Completion Hooks
+- Integrated `tauri-plugin-notification = "2"` with capability `"notification:default"`.
+- When transfers complete:
+  - If `settings.notify_on_complete` is enabled, triggers native OS desktop notification with title `"Download complete"` and body formatted as `download.filename`.
+  - If `settings.reveal_on_complete` is enabled, automatically reveals and highlights the finalized file in Windows Explorer / macOS Finder via `opener::reveal`.
+  - Manages progress detail windows on completion: closes if `hide_completion_dialog` is active, or resizes to completion dimensions (`480x280`, min `470x270`) with title `"Download complete"`.
+
+### 7.2 File Type Icon Extraction & Snapshot Population
+- Implemented `FileIconProvider` in `src-tauri/src/infrastructure/file_icons.rs`.
+- Enforces legacy `SAFE_EXTENSION` validation (`^\.[a-z0-9]{1,12}$`, case-insensitive).
+- Creates on-disk probe files (`associated-file{extension}`) in `.awesome-downloader/FileTypeIcons` to resolve system file associations.
+- Generates high-fidelity category-aware PNG data URLs memoized per extension.
+- Serializes `snapshot.file_icons` as a dictionary map (`BTreeMap<String, String>`), matching renderer contract `state.fileIcons?.[extension]`.
+
+### 7.3 Adaptive Dual-Stream Muxing (Paired Downloads)
+- Implemented `PairedDownloadExecutor` in `src-tauri/src/infrastructure/media/paired_executor.rs`.
+- Downloads separate video and audio HTTP streams in parallel into temporary parts (`0.part`, `1.part`).
+- Tracks combined progress, dual connection states, and applies `DownloadRateLimiter`.
+- Uses `FfmpegTools::mux_tracks` (`-map 0:v:0 -map 1:a:0 -c copy -movflags +faststart`) to mux into target `.mp4`.
+- Supports output format conversion to `.mp3` via `FfmpegTools::convert_media` (`-map 0:a:0 -vn -c:a libmp3lame -q:a 2`).
+- Discards partial directories (`.awesome-downloader-paired-{id}`) upon cancellation or completion.
+
+---
+
+## 8. Performance & Resource Comparison
 
 | Benchmark Metric | Legacy Electron App | Migrated Tauri / Rust App | Improvement |
 | :--- | :--- | :--- | :--- |

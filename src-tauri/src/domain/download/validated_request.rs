@@ -12,4 +12,6 @@ pub struct ValidatedDownloadRequest {
     pub queue_only: bool,
     pub review_only: bool,
     pub scheduled_at: Option<String>,
+    pub audio_url: Option<String>,
+    pub kind: Option<String>,
 }

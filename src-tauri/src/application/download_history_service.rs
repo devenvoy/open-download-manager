@@ -419,6 +419,23 @@ impl DownloadHistoryService {
         Ok(true)
     }
 
+    pub fn notify_complete(&self, id: &str) -> AppResult<()> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        if let Some(download) = downloads.iter().find(|d| d.id == id) {
+            let record = download.clone();
+            drop(downloads);
+            if let Some(events) = &self.events {
+                if let Err(error) = events.publish_complete(&record) {
+                    eprintln!("Could not notify completion: {}", error.message);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn publish_change(&self) {
         if let Some(events) = &self.events {
             if let Err(error) = events.publish_change() {

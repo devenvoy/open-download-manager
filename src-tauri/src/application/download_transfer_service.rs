@@ -123,11 +123,26 @@ impl DownloadTransferService {
                     notice: (request.urls.len() > 1)
                         .then(|| format!("Address {} of {}.", index + 1, request.urls.len())),
                     estimated: NEW_DOWNLOAD_IS_ESTIMATED,
-                    kind: Some(HTTP_DOWNLOAD_KIND.to_owned()),
-                    resumable: Some(NEW_DOWNLOAD_IS_RESUMABLE),
+                    kind: request.kind.clone().or_else(|| {
+                        if request.audio_url.is_some() {
+                            Some("paired".to_owned())
+                        } else {
+                            Some(HTTP_DOWNLOAD_KIND.to_owned())
+                        }
+                    }),
+                    resumable: if request.audio_url.is_some() {
+                        Some(false)
+                    } else {
+                        Some(NEW_DOWNLOAD_IS_RESUMABLE)
+                    },
                     duration: None,
-                    connections: settings.connections,
+                    connections: if request.audio_url.is_some() {
+                        2
+                    } else {
+                        settings.connections
+                    },
                     connections_progress: Vec::new(),
+                    audio_url: request.audio_url.clone(),
                 }
             })
             .collect::<Vec<_>>();
@@ -431,6 +446,7 @@ impl DownloadTransferService {
             download.speed = 0;
             download.path = Some(result.path.to_string_lossy().into_owned());
         })?;
+        let _ = self.history.notify_complete(&id);
         Ok(())
     }
 

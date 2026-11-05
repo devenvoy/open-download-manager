@@ -20,10 +20,11 @@ While the core transfer engine and networking have been successfully ported to R
 | **Browser Integration UI** | Live status scanner, setup wizard, extension store deep-links, confirmation review | Live status scanner, setup actions, manifest registration, needsReview review workflow fully ported | **100%** | None (100% parity achieved in Phase C) |
 | **Window Management** | Unlimited concurrent progress windows, dedicated options/add/scheduler windows, close confirmation prompts | Dynamic `progress-{id}` windows, options/add/scheduler/integration auxiliary windows, active transfer close confirmation guard | **100%** | None (100% parity achieved in Phase D) |
 | **Application Menu & Shortcuts**| Full native menu bar with accelerators (Ctrl+N, Ctrl+F, Del), URL text import/export, about dialog | Tasks, File, Downloads, View, Help menus with accelerators, `downloader:command` events, text file import/export, native About dialog | **100%** | None (100% parity achieved in Phase D) |
-| **System Notifications** | Windows native notifications on completion and updates | No notification plugin or calls | **0%** | Downloads complete silently without OS desktop toast notifications |
-| **File Type Icons** | Native Windows file type icon extraction via shell API with disk caching | Hardcoded to empty list `Vec::new()` | **0%** | File list shows generic icons; OS-associated file icons are not extracted |
+| **System Notifications & Reveal**| Windows native notifications on completion and updates | `tauri-plugin-notification` desktop notifications on completion, folder reveal on complete | **100%** | None (100% parity achieved in Phase E) |
+| **File Type Icons** | Native Windows file type icon extraction via shell API with disk caching | Regex extension validation, disk cache in `FileTypeIcons`, snapshot dictionary map | **100%** | None (100% parity achieved in Phase E) |
+| **Adaptive Dual-Stream Muxing**| Paired video+audio track downloads, FFmpeg muxing, MP3 extraction | `PairedDownloadExecutor` dual HTTP stream downloads, status `assembling`, FFmpeg muxing & MP3 conversion | **100%** | None (100% parity achieved in Phase E) |
 | **Auto-Updater** | Background 6-hour polling, manual check, download approval, active transfer guard | No updater plugin or logic | **0%** | No update checks, signing, or updater mechanisms configured |
-| **YouTube SABR & Multi-Stream**| SABR protobuf streaming via `googlevideo/protos`, adaptive video+audio muxing, MP3 extraction | Format listing via `yt-dlp` works; SABR is unmigrated; adaptive dual-stream HTTP muxing is unhooked | **40%** | YouTube high-res adaptive streams (video+audio) are not downloaded and muxed into MP4/MP3 |
+| **YouTube SABR Stream Parser** | SABR protobuf streaming via `googlevideo/protos` | Format listing via `yt-dlp` works; standard dual-stream muxing works; SABR proto parser pending | **60%** | SABR protobuf streaming parser unmigrated |
 
 ---
 

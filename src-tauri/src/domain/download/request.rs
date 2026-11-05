@@ -25,6 +25,8 @@ pub struct DownloadRequest {
     #[serde(default)]
     pub review_only: Option<bool>,
     pub scheduled_at: Option<String>,
+    pub audio_url: Option<String>,
+    pub kind: Option<String>,
 }
 
 impl DownloadRequest {
@@ -90,6 +92,13 @@ impl DownloadRequest {
             .map(|url| DownloadAddress::parse(&url))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let audio_url = if let Some(audio_url) = self.audio_url {
+            let addr = DownloadAddress::parse(&audio_url)?;
+            Some(addr.url().as_str().to_owned())
+        } else {
+            None
+        };
+
         Ok(ValidatedDownloadRequest {
             urls,
             filename,
@@ -99,6 +108,8 @@ impl DownloadRequest {
             queue_only: self.queue_only,
             review_only: self.review_only.unwrap_or(false),
             scheduled_at,
+            audio_url,
+            kind: self.kind,
         })
     }
 }

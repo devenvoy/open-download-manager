@@ -72,4 +72,37 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
 
         Ok(())
     }
+
+    fn publish_complete(&self, download: &crate::domain::download::DownloadRecord) -> AppResult<()> {
+        if let Some(state) = self.app.try_state::<AppState>() {
+            let settings = state
+                .settings
+                .lock()
+                .ok()
+                .map(|s| s.settings().clone());
+
+            if let Some(settings) = settings {
+                if settings.notify_on_complete {
+                    use tauri_plugin_notification::NotificationExt;
+                    let _ = self
+                        .app
+                        .notification()
+                        .builder()
+                        .title("Download complete")
+                        .body(&download.filename)
+                        .show();
+                }
+
+                if settings.reveal_on_complete {
+                    if let Some(ref path_str) = download.path {
+                        let path = std::path::Path::new(path_str);
+                        if path.exists() {
+                            let _ = opener::reveal(path);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }

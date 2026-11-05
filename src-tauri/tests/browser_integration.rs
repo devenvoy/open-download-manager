@@ -246,6 +246,8 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        audio_url: None,
+        kind: None,
     };
 
     let ids = service.add(request, &settings).unwrap();
@@ -362,6 +364,8 @@ async fn browser_review_cancellation_and_download_later() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        audio_url: None,
+        kind: None,
     };
     let ids1 = service.add(req1, &settings).unwrap();
     let id1 = &ids1[0];
@@ -381,6 +385,8 @@ async fn browser_review_cancellation_and_download_later() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        audio_url: None,
+        kind: None,
     };
     let ids2 = service.add(req2, &settings).unwrap();
     let id2 = &ids2[0];
