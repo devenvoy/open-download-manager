@@ -18,6 +18,10 @@ path = "src/main.rs"
 name = "open-download-manager-native-host"
 path = "src/bin/native_host.rs"
 
+[[bin]]
+name = "perf_benchmark"
+path = "src/bin/perf_benchmark.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
