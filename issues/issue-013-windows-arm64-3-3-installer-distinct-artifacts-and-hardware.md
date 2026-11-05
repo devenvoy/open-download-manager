@@ -1,29 +1,27 @@
 ---
-number: 27
+number: 13
 title: "[Windows ARM64 3/3] installer, distinct artifacts and hardware validation"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:08:01Z
-updated_at: 2026-10-25T21:18:01Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/27
+author: devenvoy
+created_at: 2026-11-05T19:50:11Z
+updated_at: 2026-11-05T19:50:11Z
+url: https://github.com/devenvoy/open-download-manager/issues/13
 labels: ["help wanted", "status: blocked"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #27: [Windows ARM64 3/3] installer, distinct artifacts and hardware validation
+# Issue #13: [Windows ARM64 3/3] installer, distinct artifacts and hardware validation
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:08:01Z`
-- **Updated**: `2026-10-25T21:18:01Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:50:11Z`
 - **Labels**: `help wanted`, `status: blocked`
-- **Original Issue**: [#27 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/27)
+- **Issue Link**: [#13 on GitHub](https://github.com/devenvoy/open-download-manager/issues/13)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#27](https://github.com/Ahmadkhattak1/awesome-downloader/issues/27) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:01Z*
 
 ## Delivery position
 Parent goal: #8 (Windows ARM64). **Step 3 of 3.**
@@ -45,12 +43,3 @@ Approved objective. Claim this issue with an approach and test plan before start
 ## Dependencies
 Depends on #26; contributes to parent #8.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

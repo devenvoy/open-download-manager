@@ -1,528 +1,517 @@
 [
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Work order \u2014 Linux\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #22 \u2014 Linux: desktop runtime and native messaging integration. Depends on #14 being merged and validated.\n3. #23 \u2014 Linux: package media dependencies and validate install/upgrade/uninstall. Depends on #22 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #6` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Linux support. Current packaging targets Windows x64 and the native host setup uses reg.exe, native-host.exe and Windows paths.\n\n## Acceptance criteria\n- Propose the initial supported distributions, architectures and package formats in this issue before implementation.\n- Make desktop startup, data paths, native-host launch/registration and bundled media tools work on the agreed Linux targets.\n- Provide installation, extension setup, upgrade and uninstall instructions.\n- Verify download, pause/resume where supported, audio/video merging, progress/completion windows and browser handoff on a clean Linux installation.\n- Include reproducible build instructions and platform-specific tests; preserve Windows behavior.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\nTracking goal: deliver through focused PRs, not one platform rewrite.\n- [ ] Shared platform adapters: #14\n- [ ] Linux runtime/native messaging: #22 (after #14)\n- [ ] Linux packaging and clean-machine validation: #23 (after #22)\nKeep this goal open until the agreed Linux support matrix passes validation and the maintainer approves release.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:00:20Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ19Vmw",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#6](https://github.com/Ahmadkhattak1/awesome-downloader/issues/6) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:20Z*\n\n## Work order \u2014 Linux\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #22 \u2014 Linux: desktop runtime and native messaging integration. Depends on #14 being merged and validated.\n3. #23 \u2014 Linux: package media dependencies and validate install/upgrade/uninstall. Depends on #22 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #6` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Linux support. Current packaging targets Windows x64 and the native host setup uses reg.exe, native-host.exe and Windows paths.\n\n## Acceptance criteria\n- Propose the initial supported distributions, architectures and package formats in this issue before implementation.\n- Make desktop startup, data paths, native-host launch/registration and bundled media tools work on the agreed Linux targets.\n- Provide installation, extension setup, upgrade and uninstall instructions.\n- Verify download, pause/resume where supported, audio/video merging, progress/completion windows and browser handoff on a clean Linux installation.\n- Include reproducible build instructions and platform-specific tests; preserve Windows behavior.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\nTracking goal: deliver through focused PRs, not one platform rewrite.\n- [ ] Shared platform adapters: #14\n- [ ] Linux runtime/native messaging: #22 (after #14)\n- [ ] Linux packaging and clean-machine validation: #23 (after #22)\nKeep this goal open until the agreed Linux support matrix passes validation and the maintainer approves release.",
+    "createdAt": "2026-11-05T19:49:38Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANJw",
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
         "name": "enhancement",
         "description": "New feature or request",
         "color": "a2eeef"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PeurQ",
+        "id": "LA_kwDOVkZB388AAAADBVFjcA",
         "name": "type: goal",
         "description": "Tracking goal delivered through linked implementation steps",
         "color": "5319e7"
       }
     ],
-    "milestone": null,
-    "number": 6,
-    "reactionGroups": [],
+    "number": 2,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Goal] Linux support",
-    "updatedAt": "2026-10-25T21:17:35Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/6"
+    "updatedAt": "2026-11-05T19:49:38Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/2"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Work order \u2014 macOS\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #24 \u2014 macOS: desktop runtime and native messaging integration. Depends on #14 being merged and validated.\n3. #25 \u2014 macOS: package app and media tools, signing plan and clean-install validation. Depends on #24 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #7` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved macOS support. Current installer, native-host launcher, integration registration and media-tool packaging are Windows-specific.\n\n## Acceptance criteria\n- Propose minimum macOS version, Intel/Apple Silicon coverage and installer format before implementation.\n- Implement platform-specific data paths, native messaging registration, launcher and media-tool packaging.\n- Document signing/notarization requirements and any release credentials needed from the maintainer; never commit credentials.\n- Verify clean installation, browser handoff, downloads, audio/video merging, progress/completion windows, upgrade and uninstall on the agreed targets.\n- Provide reproducible builds and tests without regressing Windows.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Shared platform adapters: #14\n- [ ] macOS runtime/native messaging: #24 (after #14)\n- [ ] macOS packaging, signing plan and validation: #25 (after #24)\nUse focused PRs. Keep the parent open until the agreed macOS targets are validated and release is approved.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:00:23Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ19XYg",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#7](https://github.com/Ahmadkhattak1/awesome-downloader/issues/7) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:23Z*\n\n## Work order \u2014 macOS\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #24 \u2014 macOS: desktop runtime and native messaging integration. Depends on #14 being merged and validated.\n3. #25 \u2014 macOS: package app and media tools, signing plan and clean-install validation. Depends on #24 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #7` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved macOS support. Current installer, native-host launcher, integration registration and media-tool packaging are Windows-specific.\n\n## Acceptance criteria\n- Propose minimum macOS version, Intel/Apple Silicon coverage and installer format before implementation.\n- Implement platform-specific data paths, native messaging registration, launcher and media-tool packaging.\n- Document signing/notarization requirements and any release credentials needed from the maintainer; never commit credentials.\n- Verify clean installation, browser handoff, downloads, audio/video merging, progress/completion windows, upgrade and uninstall on the agreed targets.\n- Provide reproducible builds and tests without regressing Windows.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Shared platform adapters: #14\n- [ ] macOS runtime/native messaging: #24 (after #14)\n- [ ] macOS packaging, signing plan and validation: #25 (after #24)\nUse focused PRs. Keep the parent open until the agreed macOS targets are validated and release is approved.\n",
+    "createdAt": "2026-11-05T19:49:41Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANJw",
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
         "name": "enhancement",
         "description": "New feature or request",
         "color": "a2eeef"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PeurQ",
+        "id": "LA_kwDOVkZB388AAAADBVFjcA",
         "name": "type: goal",
         "description": "Tracking goal delivered through linked implementation steps",
         "color": "5319e7"
       }
     ],
-    "milestone": null,
-    "number": 7,
-    "reactionGroups": [],
+    "number": 3,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Goal] macOS support",
-    "updatedAt": "2026-10-29T12:44:38Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/7"
+    "updatedAt": "2026-11-05T19:58:25Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/3"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Work order \u2014 Windows ARM64\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #26 \u2014 Windows ARM64: audit and implement runtime/native dependency compatibility. Depends on #14 being merged and validated.\n3. #27 \u2014 Windows ARM64: installer, distinct artifacts and hardware validation. Depends on #26 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #8` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Windows ARM support. Current build scripts and NSIS configuration explicitly target x64.\n\n## Acceptance criteria\n- Produce a distinct ARM64 installer/artifact with the correct Electron runtime.\n- Audit the native host and bundled media binaries for ARM64 compatibility; document any dependency gaps before choosing fallbacks.\n- Verify installation, browser registration/handoff, downloads, merging, progress/completion and uninstall on Windows ARM hardware.\n- Keep x64 releases available and verify architecture-specific artifacts cannot overwrite one another.\n- Include build instructions, dependency licensing notices and a tested support matrix.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Shared architecture-aware adapters: #14\n- [ ] ARM64 runtime/dependency compatibility: #26\n- [ ] ARM64 installer and hardware validation: #27 (after #26)\nKeep this goal open until the native ARM64 support matrix is validated. Emulation is not proof of native compatibility.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:00:25Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ19Y3g",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#8](https://github.com/Ahmadkhattak1/awesome-downloader/issues/8) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:25Z*\n\n## Work order \u2014 Windows ARM64\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #14 \u2014 Extract tested OS and architecture adapters without changing Windows behavior. Start here after agreeing scope.\n2. #26 \u2014 Windows ARM64: audit and implement runtime/native dependency compatibility. Depends on #14 being merged and validated.\n3. #27 \u2014 Windows ARM64: installer, distinct artifacts and hardware validation. Depends on #26 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #8` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Windows ARM support. Current build scripts and NSIS configuration explicitly target x64.\n\n## Acceptance criteria\n- Produce a distinct ARM64 installer/artifact with the correct Electron runtime.\n- Audit the native host and bundled media binaries for ARM64 compatibility; document any dependency gaps before choosing fallbacks.\n- Verify installation, browser registration/handoff, downloads, merging, progress/completion and uninstall on Windows ARM hardware.\n- Keep x64 releases available and verify architecture-specific artifacts cannot overwrite one another.\n- Include build instructions, dependency licensing notices and a tested support matrix.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Shared architecture-aware adapters: #14\n- [ ] ARM64 runtime/dependency compatibility: #26\n- [ ] ARM64 installer and hardware validation: #27 (after #26)\nKeep this goal open until the native ARM64 support matrix is validated. Emulation is not proof of native compatibility.",
+    "createdAt": "2026-11-05T19:49:44Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANJw",
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
         "name": "enhancement",
         "description": "New feature or request",
         "color": "a2eeef"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PeurQ",
+        "id": "LA_kwDOVkZB388AAAADBVFjcA",
         "name": "type: goal",
         "description": "Tracking goal delivered through linked implementation steps",
         "color": "5319e7"
       }
     ],
-    "milestone": null,
-    "number": 8,
-    "reactionGroups": [],
+    "number": 4,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Goal] Windows ARM64 support",
-    "updatedAt": "2026-10-25T21:17:53Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/8"
+    "updatedAt": "2026-11-05T19:49:44Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/4"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Work order \u2014 Firefox\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #28 \u2014 Firefox: media capture and native messaging compatibility. Start here after agreeing scope.\n2. #29 \u2014 Firefox: persistent extension distribution and guided setup. Depends on #28 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #10` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Firefox. A Firefox manifest and manual registration path already exist, but automatic setup and YouTube capture do not have Chrome/Edge parity.\n\n## Acceptance criteria\n- Audit Firefox API/manifest compatibility and implement missing media capture and native messaging behavior.\n- Provide a persistent extension installation/distribution plan; clearly distinguish temporary developer loading from normal-user installation.\n- Add accurate setup instructions and desktop integration status.\n- Verify supported YouTube/direct media selection, separate audio/video merging and desktop handoff.\n- Test browser restart, multiple profiles, duplicate requests and connector failure on supported platforms.\n- Document actual limitations and add regression tests; do not claim parity based solely on a manifest.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Capture and native messaging compatibility: #28\n- [ ] Persistent extension installation and guided setup: #29 (after #28)\nCoordinate new OS registration with #6/#7. Keep this parent open until both user-visible support and installation work.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:00:31Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ19cog",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#10](https://github.com/Ahmadkhattak1/awesome-downloader/issues/10) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:31Z*\n\n## Work order \u2014 Firefox\nThis is the tracking goal. Pick a step below rather than opening a PR for the entire goal.\n\n1. #28 \u2014 Firefox: media capture and native messaging compatibility. Start here after agreeing scope.\n2. #29 \u2014 Firefox: persistent extension distribution and guided setup. Depends on #28 being merged and validated.\n\nEach PR should use `Closes #<implementation-issue>` only when it completes that issue, and `Refs #10` for this goal. Do not auto-close this parent from an individual step. Mark steps complete after merge and validation; close the goal only after its acceptance criteria and maintainer release review are satisfied. When a prerequisite completes, the maintainer changes the next issue from `status: blocked` to `status: ready`. Draft work may be discussed early but must not be merged ahead of its dependency.\n\n## Objective\nThe maintainer has approved Firefox. A Firefox manifest and manual registration path already exist, but automatic setup and YouTube capture do not have Chrome/Edge parity.\n\n## Acceptance criteria\n- Audit Firefox API/manifest compatibility and implement missing media capture and native messaging behavior.\n- Provide a persistent extension installation/distribution plan; clearly distinguish temporary developer loading from normal-user installation.\n- Add accurate setup instructions and desktop integration status.\n- Verify supported YouTube/direct media selection, separate audio/video merging and desktop handoff.\n- Test browser restart, multiple profiles, duplicate requests and connector failure on supported platforms.\n- Document actual limitations and add regression tests; do not claim parity based solely on a manifest.\n\n## Contribution workflow\nThis objective is approved by the maintainer. Comment with your proposed approach and test plan before starting, so scope and ownership can be agreed. Keep each PR focused and link this issue. Additional features and broader IDM-parity work require maintainer approval first. Do not include cookies, signed media URLs or browser profiles in public evidence.\n\n## Delivery plan\n- [ ] Capture and native messaging compatibility: #28\n- [ ] Persistent extension installation and guided setup: #29 (after #28)\nCoordinate new OS registration with #6/#7. Keep this parent open until both user-visible support and installation work.",
+    "createdAt": "2026-11-05T19:49:47Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANJw",
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
         "name": "enhancement",
         "description": "New feature or request",
         "color": "a2eeef"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PeurQ",
+        "id": "LA_kwDOVkZB388AAAADBVFjcA",
         "name": "type: goal",
         "description": "Tracking goal delivered through linked implementation steps",
         "color": "5319e7"
       }
     ],
-    "milestone": null,
-    "number": 10,
-    "reactionGroups": [],
+    "number": 5,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Goal] Firefox support",
-    "updatedAt": "2026-10-25T21:18:04Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/10"
+    "updatedAt": "2026-11-05T19:49:47Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/5"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Scope and acceptance\nReview existing test/release workflows and add missing renderer syntax/startup, native-bridge trust-boundary and transfer-integrity checks. Run untrusted fork PR tests with read-only permissions and no release credentials; do not execute contributor code with pull_request_target secrets. Document required checks and maintainer review before merge. Release publishing remains a separate maintainer-controlled step. Verify checks actually fail on a renderer syntax error and unsafe handoff regression.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:19Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2Bjog",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#13](https://github.com/Ahmadkhattak1/awesome-downloader/issues/13) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:19Z*\n\n## Scope and acceptance\nReview existing test/release workflows and add missing renderer syntax/startup, native-bridge trust-boundary and transfer-integrity checks. Run untrusted fork PR tests with read-only permissions and no release credentials; do not execute contributor code with pull_request_target secrets. Document required checks and maintainer review before merge. Release publishing remains a separate maintainer-controlled step. Verify checks actually fail on a renderer syntax error and unsafe handoff regression.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n",
+    "createdAt": "2026-11-05T19:49:50Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       }
     ],
-    "milestone": null,
-    "number": 13,
-    "reactionGroups": [],
+    "number": 6,
     "state": "OPEN",
-    "stateReason": "",
     "title": "Require safe contributor CI and platform regression checks",
-    "updatedAt": "2026-10-31T04:49:32Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/13"
+    "updatedAt": "2026-11-05T19:58:27Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/6"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Scope and acceptance\nDefine recovery behavior for disconnects and expired browser-captured URLs. Preserve verified partial bytes only when resource identity and range support permit; otherwise explain restart. Obtain fresh session data through the existing browser integration, bound retries, honor server retry instructions and allow immediate cancellation. Keep credentials out of persisted history/logs. Add fixtures for expiry, changed resource, partial transfer and cancellation. Coordinate existing retry PR #3 rather than duplicating it.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:24Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2BnFQ",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#15](https://github.com/Ahmadkhattak1/awesome-downloader/issues/15) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:24Z*\n\n## Scope and acceptance\nDefine recovery behavior for disconnects and expired browser-captured URLs. Preserve verified partial bytes only when resource identity and range support permit; otherwise explain restart. Obtain fresh session data through the existing browser integration, bound retries, honor server retry instructions and allow immediate cancellation. Keep credentials out of persisted history/logs. Add fixtures for expiry, changed resource, partial transfer and cancellation. Coordinate existing retry PR #3 rather than duplicating it.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n",
+    "createdAt": "2026-11-05T19:49:53Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       }
     ],
-    "milestone": null,
-    "number": 15,
-    "reactionGroups": [],
+    "number": 7,
     "state": "OPEN",
-    "stateReason": "",
     "title": "Recover interrupted transfers and refresh expired media links",
-    "updatedAt": "2026-10-28T04:49:22Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/15"
+    "updatedAt": "2026-11-05T19:58:29Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/7"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Scope and acceptance\nDismiss the quality menu on outside click and scrolling; hide/reposition the button when its video leaves view. Support dismissing the button, keyboard navigation and SPA video changes. Avoid raw signed-URL tooltips. Verify multi-video pages, nested scrolling and extension reload/context invalidation. Preserve user-selected quality and working handoff.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:30Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2BqrQ",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#17](https://github.com/Ahmadkhattak1/awesome-downloader/issues/17) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:30Z*\n\n## Scope and acceptance\nDismiss the quality menu on outside click and scrolling; hide/reposition the button when its video leaves view. Support dismissing the button, keyboard navigation and SPA video changes. Avoid raw signed-URL tooltips. Verify multi-video pages, nested scrolling and extension reload/context invalidation. Preserve user-selected quality and working handoff.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.",
+    "createdAt": "2026-11-05T19:49:56Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       }
     ],
-    "milestone": null,
-    "number": 17,
-    "reactionGroups": [],
+    "number": 8,
     "state": "OPEN",
-    "stateReason": "",
     "title": "Polish extension dropdown dismissal and video-button positioning",
-    "updatedAt": "2026-10-25T21:07:30Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/17"
+    "updatedAt": "2026-11-05T19:49:56Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/8"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Scope and acceptance\nPropose a small data model and UX before implementation. Support named queues, ordering and explicit recurring start/stop rules. Specify timezone, daylight-saving, missed-run and app-closed behavior without implying background execution exists. Preserve current one-off schedules/history. Use separate PRs for queue persistence/operations and recurring scheduling/UI, with migration and deterministic clock tests.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:35Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2BuGQ",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#19](https://github.com/Ahmadkhattak1/awesome-downloader/issues/19) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:35Z*\n\n## Scope and acceptance\nPropose a small data model and UX before implementation. Support named queues, ordering and explicit recurring start/stop rules. Specify timezone, daylight-saving, missed-run and app-closed behavior without implying background execution exists. Preserve current one-off schedules/history. Use separate PRs for queue persistence/operations and recurring scheduling/UI, with migration and deterministic clock tests.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.",
+    "createdAt": "2026-11-05T19:49:59Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       }
     ],
-    "milestone": null,
-    "number": 19,
-    "reactionGroups": [],
+    "number": 9,
     "state": "OPEN",
-    "stateReason": "",
     "title": "Add named download queues and recurring schedules",
-    "updatedAt": "2026-10-25T21:07:35Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/19"
+    "updatedAt": "2026-11-05T19:49:59Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/9"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Scope and acceptance\nReplace the current placeholder with a preview-and-select flow for downloadable links. Propose limits and supported page types first. Bound pages, depth, concurrency and duplicate collection; prevent unintended cross-site crawling and automatic downloads before confirmation. Support cancellation and clear partial failures; never collect browser profiles or expose session credentials. Separate discovery/fixtures from desktop review/queue integration.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:38Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2Bv0w",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#20](https://github.com/Ahmadkhattak1/awesome-downloader/issues/20) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:38Z*\n\n## Scope and acceptance\nReplace the current placeholder with a preview-and-select flow for downloadable links. Propose limits and supported page types first. Bound pages, depth, concurrency and duplicate collection; prevent unintended cross-site crawling and automatic downloads before confirmation. Support cancellation and clear partial failures; never collect browser profiles or expose session credentials. Separate discovery/fixtures from desktop review/queue integration.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.",
+    "createdAt": "2026-11-05T19:50:01Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       }
     ],
-    "milestone": null,
-    "number": 20,
-    "reactionGroups": [],
+    "number": 10,
     "state": "OPEN",
-    "stateReason": "",
     "title": "Implement bounded website/link grabbing",
-    "updatedAt": "2026-10-25T21:07:38Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/20"
+    "updatedAt": "2026-11-05T19:50:01Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/10"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Delivery position\nParent goal: #6 (Linux). **Step 3 of 3.**\n\nBlocked by #22. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #6`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on Linux runtime integration. Choose initial distribution/package formats in #6, bundle compatible media tools and license notices, and produce uniquely named artifacts. Verify clean-machine install, browser handoff, direct/media downloads with audio, resume/cancel, upgrade and uninstall. Add reproducible build/release instructions and CI where available. Release only the tested matrix; maintainer controls publication.\n\nParent goal: #6. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #22; contributes to parent #6.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:50Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2B3eg",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#23](https://github.com/Ahmadkhattak1/awesome-downloader/issues/23) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:50Z*\n\n## Delivery position\nParent goal: #6 (Linux). **Step 3 of 3.**\n\nBlocked by #22. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #6`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on Linux runtime integration. Choose initial distribution/package formats in #6, bundle compatible media tools and license notices, and produce uniquely named artifacts. Verify clean-machine install, browser handoff, direct/media downloads with audio, resume/cancel, upgrade and uninstall. Add reproducible build/release instructions and CI where available. Release only the tested matrix; maintainer controls publication.\n\nParent goal: #6. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #22; contributes to parent #6.",
+    "createdAt": "2026-11-05T19:50:04Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PewLw",
+        "id": "LA_kwDOVkZB388AAAADBVFkcg",
         "name": "status: blocked",
         "description": "Waiting for linked prerequisite to merge and pass validation",
         "color": "b60205"
       }
     ],
-    "milestone": null,
-    "number": 23,
-    "reactionGroups": [],
+    "number": 11,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Linux 3/3] package media dependencies and validate install/upgrade/uninstall",
-    "updatedAt": "2026-10-25T21:17:41Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/23"
+    "updatedAt": "2026-11-05T19:50:04Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/11"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Delivery position\nParent goal: #7 (macOS). **Step 3 of 3.**\n\nBlocked by #24. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #7`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on macOS runtime. Bundle architecture-compatible media tools and notices and define distinct distribution artifacts. Document signing/notarization setup and maintainer credential requirements; never expose secrets to fork builds. Test agreed Intel/Apple Silicon targets for download/merge, native handoff, upgrade and uninstall. Build success alone is not release readiness; maintainer approves publication.\n\nParent goal: #7. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #24; contributes to parent #7.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:07:55Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2B7XA",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#25](https://github.com/Ahmadkhattak1/awesome-downloader/issues/25) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:55Z*\n\n## Delivery position\nParent goal: #7 (macOS). **Step 3 of 3.**\n\nBlocked by #24. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #7`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on macOS runtime. Bundle architecture-compatible media tools and notices and define distinct distribution artifacts. Document signing/notarization setup and maintainer credential requirements; never expose secrets to fork builds. Test agreed Intel/Apple Silicon targets for download/merge, native handoff, upgrade and uninstall. Build success alone is not release readiness; maintainer approves publication.\n\nParent goal: #7. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #24; contributes to parent #7.",
+    "createdAt": "2026-11-05T19:50:08Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PewLw",
+        "id": "LA_kwDOVkZB388AAAADBVFkcg",
         "name": "status: blocked",
         "description": "Waiting for linked prerequisite to merge and pass validation",
         "color": "b60205"
       }
     ],
-    "milestone": null,
-    "number": 25,
-    "reactionGroups": [],
+    "number": 12,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[macOS 3/3] package app and media tools, signing plan and clean-install validation",
-    "updatedAt": "2026-10-25T21:17:50Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/25"
+    "updatedAt": "2026-11-05T19:50:08Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/12"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Delivery position\nParent goal: #8 (Windows ARM64). **Step 3 of 3.**\n\nBlocked by #26. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #8`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on ARM64 runtime/dependency work. Build a distinct ARM64 installer and retain x64 artifacts without name collisions. Test on Windows ARM hardware: clean install, browser handoff, direct/media downloads and merging, cancel/resume, upgrade and uninstall. Provide reproducible build instructions and explicit architecture/support limitations before release.\n\nParent goal: #8. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #26; contributes to parent #8.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:08:01Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2B-nw",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#27](https://github.com/Ahmadkhattak1/awesome-downloader/issues/27) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:01Z*\n\n## Delivery position\nParent goal: #8 (Windows ARM64). **Step 3 of 3.**\n\nBlocked by #26. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #8`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on ARM64 runtime/dependency work. Build a distinct ARM64 installer and retain x64 artifacts without name collisions. Test on Windows ARM hardware: clean install, browser handoff, direct/media downloads and merging, cancel/resume, upgrade and uninstall. Provide reproducible build instructions and explicit architecture/support limitations before release.\n\nParent goal: #8. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #26; contributes to parent #8.",
+    "createdAt": "2026-11-05T19:50:11Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PewLw",
+        "id": "LA_kwDOVkZB388AAAADBVFkcg",
         "name": "status: blocked",
         "description": "Waiting for linked prerequisite to merge and pass validation",
         "color": "b60205"
       }
     ],
-    "milestone": null,
-    "number": 27,
-    "reactionGroups": [],
+    "number": 13,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Windows ARM64 3/3] installer, distinct artifacts and hardware validation",
-    "updatedAt": "2026-10-25T21:18:01Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/27"
+    "updatedAt": "2026-11-05T19:50:11Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/13"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Delivery position\nParent goal: #10 (Firefox). **Step 1 of 2.**\n\nReady for a scope/ownership proposal; no implementation prerequisite.\nNext: #29.\n\nPRs: link this implementation issue and use `Refs #10`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nAudit existing Firefox manifest and API differences; implement browser capture, format selection, audio pairing and handoff parity for supported media. Keep native messaging trust boundaries and scoped credentials. Test Firefox on currently supported Windows first and coordinate platform registration with #6/#7. Include reload, navigation, multiple profiles and unavailable-host tests.\n\nParent goal: #10. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nContributes to #10; installation follows in #29. Windows implementation can proceed before Linux/macOS ports.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:08:03Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2CA0g",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#28](https://github.com/Ahmadkhattak1/awesome-downloader/issues/28) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:03Z*\n\n## Delivery position\nParent goal: #10 (Firefox). **Step 1 of 2.**\n\nReady for a scope/ownership proposal; no implementation prerequisite.\nNext: #29.\n\nPRs: link this implementation issue and use `Refs #10`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nAudit existing Firefox manifest and API differences; implement browser capture, format selection, audio pairing and handoff parity for supported media. Keep native messaging trust boundaries and scoped credentials. Test Firefox on currently supported Windows first and coordinate platform registration with #6/#7. Include reload, navigation, multiple profiles and unavailable-host tests.\n\nParent goal: #10. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nContributes to #10; installation follows in #29. Windows implementation can proceed before Linux/macOS ports.",
+    "createdAt": "2026-11-05T19:50:14Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PevWA",
+        "id": "LA_kwDOVkZB388AAAADBVFj3A",
         "name": "status: ready",
         "description": "No implementation prerequisite; agree scope and ownership first",
         "color": "0e8a16"
       }
     ],
-    "milestone": null,
-    "number": 28,
-    "reactionGroups": [],
+    "number": 14,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Firefox 1/2] media capture and native messaging compatibility",
-    "updatedAt": "2026-10-25T21:18:07Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/28"
+    "updatedAt": "2026-11-05T19:50:14Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/14"
   },
   {
-    "assignees": [],
     "author": {
-      "id": "MDQ6VXNlcjQ2MDY4NDI0",
+      "id": "U_kgDOBh3pdQ",
       "is_bot": false,
-      "login": "Ahmadkhattak1",
-      "name": "Ahmad Khattak"
+      "login": "devenvoy",
+      "name": "Arc Envoy"
     },
-    "body": "## Delivery position\nParent goal: #10 (Firefox). **Step 2 of 2.**\n\nBlocked by #28. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #10`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on verified Firefox capture/handoff. Define signed persistent installation and store/distribution requirements, accurate setup UI and browser integration status. Clearly label temporary developer loading. Verify installation survives restart and upgrades; publishing/signing requires maintainer credentials and release approval, not contributor access.\n\nParent goal: #10. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #28; contributes to #10.\n\n\n",
-    "closed": false,
-    "closedAt": null,
-    "comments": [],
-    "createdAt": "2026-10-25T21:08:06Z",
-    "id": "I_kwDOVWF8Hs8AAAABZ2CCcg",
-    "isPinned": false,
+    "body": "> *Mirrored from upstream issue [#29](https://github.com/Ahmadkhattak1/awesome-downloader/issues/29) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:06Z*\n\n## Delivery position\nParent goal: #10 (Firefox). **Step 2 of 2.**\n\nBlocked by #28. Begin implementation after that prerequisite is merged and validated; early planning is welcome.\nFinal step: supply the parent goal with end-to-end validation evidence.\n\nPRs: link this implementation issue and use `Refs #10`; close only this step when fully completed. Update the parent checklist and readiness label after validation. Status labels are maintained manually, not automatically enforced merge gates.\n\n## Scope and acceptance\nDepends on verified Firefox capture/handoff. Define signed persistent installation and store/distribution requirements, accurate setup UI and browser integration status. Clearly label temporary developer loading. Verify installation survives restart and upgrades; publishing/signing requires maintainer credentials and release approval, not contributor access.\n\nParent goal: #10. This issue is one deliverable toward that goal; merging it does not close the parent.\n\n\n## Working agreement\nApproved objective. Claim this issue with an approach and test plan before starting to avoid duplicate work. One focused PR per independently testable change; use draft PRs for dependencies. Each PR must link its issue, include regression evidence and receive maintainer review. Keep main usable on Windows. No unrelated dependency upgrades, credentials, proprietary code or automatic release publishing. New scope beyond this issue goes through the maintainer. Passing unit tests alone does not establish platform/browser support.\n\n## Dependencies\nDepends on #28; contributes to #10.",
+    "createdAt": "2026-11-05T19:50:17Z",
     "labels": [
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_EANLg",
+        "id": "LA_kwDOVkZB388AAAADBVE0zw",
         "name": "help wanted",
         "description": "Extra attention is needed",
         "color": "008672"
       },
       {
-        "id": "LA_kwDOVWF8Hs8AAAAC_PewLw",
+        "id": "LA_kwDOVkZB388AAAADBVFkcg",
         "name": "status: blocked",
         "description": "Waiting for linked prerequisite to merge and pass validation",
         "color": "b60205"
       }
     ],
-    "milestone": null,
-    "number": 29,
-    "reactionGroups": [],
+    "number": 15,
     "state": "OPEN",
-    "stateReason": "",
     "title": "[Firefox 2/2] persistent extension distribution and guided setup",
-    "updatedAt": "2026-10-25T21:18:10Z",
-    "url": "https://github.com/Ahmadkhattak1/awesome-downloader/issues/29"
+    "updatedAt": "2026-11-05T19:50:17Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/15"
+  },
+  {
+    "author": {
+      "id": "U_kgDOBh3pdQ",
+      "is_bot": false,
+      "login": "devenvoy",
+      "name": "Arc Envoy"
+    },
+    "body": "## Problem\nThe desktop application currently uses a fixed visual theme. Users cannot select a light or dark appearance or have the application follow the OS theme automatically.\n\n## Proposed Change\nAdd an application theme setting with three options:\n- **System**: automatically follow the operating system light/dark preference\n- **Light**: fixed light mode\n- **Dark**: fixed dark mode\n\n## Acceptance Criteria\n- `System` should be the default option.\n- The selected preference should persist across application restarts.\n- When `System` is selected, the interface responds to OS theme changes dynamically.\n- Text, controls, borders, focus indicators, disabled states, and progress elements remain readable with high contrast in both themes.\n- Existing compact layout and keyboard accessibility are preserved.",
+    "createdAt": "2026-11-05T20:04:13Z",
+    "labels": [
+      {
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 21,
+    "state": "OPEN",
+    "title": "Add light, dark, and system theme options to the desktop app",
+    "updatedAt": "2026-11-05T20:04:13Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/21"
+  },
+  {
+    "author": {
+      "id": "U_kgDOBh3pdQ",
+      "is_bot": false,
+      "login": "devenvoy",
+      "name": "Arc Envoy"
+    },
+    "body": "## Problem\nThe browser video format picker currently displays formats as a plain text list. Long video titles can make each option difficult to scan, and important details like resolution, format, audio availability, and bitrate need clearer visual hierarchy.\n\n## Proposed Change\nRedesign the on-page format picker while preserving existing download behavior:\n- Use a compact, modern floating panel with clear spacing and rounded borders.\n- Display resolution badges prominently (e.g., 1080p, 4K, 720p).\n- Group audio and video tracks cleanly with clear indicators.\n- Preserve keyboard navigation, responsive positioning, and lightweight bundle size.",
+    "createdAt": "2026-11-05T20:04:30Z",
+    "labels": [
+      {
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 22,
+    "state": "OPEN",
+    "title": "Improve the browser video format picker UI",
+    "updatedAt": "2026-11-05T20:04:30Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/22"
+  },
+  {
+    "author": {
+      "id": "U_kgDOBh3pdQ",
+      "is_bot": false,
+      "login": "devenvoy",
+      "name": "Arc Envoy"
+    },
+    "body": "## Objective\nEnhance the repository README and user documentation with clear visual screenshots of the application.\n\n## Proposed Screenshots\n- Main desktop transfer window with active and completed transfers.\n- Browser video detection floating badge and format selection menu.\n- Download File Info / review dialog.\n- Settings and browser integration status panels.",
+    "createdAt": "2026-11-05T20:04:37Z",
+    "labels": [
+      {
+        "id": "LA_kwDOVkZB388AAAADBVE0mA",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 23,
+    "state": "OPEN",
+    "title": "[Docs] Add interface screenshots to the README and Documentation",
+    "updatedAt": "2026-11-05T20:04:37Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/23"
+  },
+  {
+    "author": {
+      "id": "U_kgDOBh3pdQ",
+      "is_bot": false,
+      "login": "devenvoy",
+      "name": "Arc Envoy"
+    },
+    "body": "## Objective\nAllow configuring HTTP and HTTPS proxy servers for network requests and downloads.\n\n## Acceptance Criteria\n- Add proxy configuration fields to application settings (Host, Port, Protocol, and optional authentication).\n- Configure the native HTTP transfer engine (`reqwest`) to route connections through the configured proxy.\n- Provide a connection test button in settings to verify proxy reachability.",
+    "createdAt": "2026-11-05T20:04:45Z",
+    "labels": [
+      {
+        "id": "LA_kwDOVkZB388AAAADBVE0vA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 24,
+    "state": "OPEN",
+    "title": "HTTP and HTTPS proxy support",
+    "updatedAt": "2026-11-05T20:04:45Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/24"
+  },
+  {
+    "author": {
+      "id": "U_kgDOBh3pdQ",
+      "is_bot": false,
+      "login": "devenvoy",
+      "name": "Arc Envoy"
+    },
+    "body": "## Problem\nWhen clicking the download action on a YouTube video before the video starts playing, the browser extension cannot capture the active streaming session, prompting the user to play the video first.\n\n## Objective\nImprove the session capture workflow on YouTube:\n- Clarify in-page prompts when streaming media manifests have not yet been initialized by the player.\n- Streamline automatic session capture upon playback start so format selection is available immediately.",
+    "createdAt": "2026-11-05T20:04:52Z",
+    "labels": [
+      {
+        "id": "LA_kwDOVkZB388AAAADBVE0eQ",
+        "name": "bug",
+        "description": "Something isn't working",
+        "color": "d73a4a"
+      }
+    ],
+    "number": 25,
+    "state": "OPEN",
+    "title": "Enhance YouTube video session capture before playback",
+    "updatedAt": "2026-11-05T20:04:52Z",
+    "url": "https://github.com/devenvoy/open-download-manager/issues/25"
   }
 ]

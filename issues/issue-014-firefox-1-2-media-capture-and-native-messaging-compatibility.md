@@ -1,29 +1,27 @@
 ---
-number: 28
+number: 14
 title: "[Firefox 1/2] media capture and native messaging compatibility"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:08:03Z
-updated_at: 2026-10-25T21:18:07Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/28
+author: devenvoy
+created_at: 2026-11-05T19:50:14Z
+updated_at: 2026-11-05T19:50:14Z
+url: https://github.com/devenvoy/open-download-manager/issues/14
 labels: ["help wanted", "status: ready"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #28: [Firefox 1/2] media capture and native messaging compatibility
+# Issue #14: [Firefox 1/2] media capture and native messaging compatibility
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:08:03Z`
-- **Updated**: `2026-10-25T21:18:07Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:50:14Z`
 - **Labels**: `help wanted`, `status: ready`
-- **Original Issue**: [#28 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/28)
+- **Issue Link**: [#14 on GitHub](https://github.com/devenvoy/open-download-manager/issues/14)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#28](https://github.com/Ahmadkhattak1/awesome-downloader/issues/28) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:03Z*
 
 ## Delivery position
 Parent goal: #10 (Firefox). **Step 1 of 2.**
@@ -45,12 +43,3 @@ Approved objective. Claim this issue with an approach and test plan before start
 ## Dependencies
 Contributes to #10; installation follows in #29. Windows implementation can proceed before Linux/macOS ports.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

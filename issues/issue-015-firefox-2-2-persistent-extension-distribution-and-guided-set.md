@@ -1,29 +1,27 @@
 ---
-number: 29
+number: 15
 title: "[Firefox 2/2] persistent extension distribution and guided setup"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:08:06Z
-updated_at: 2026-10-25T21:18:10Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/29
+author: devenvoy
+created_at: 2026-11-05T19:50:17Z
+updated_at: 2026-11-05T19:50:17Z
+url: https://github.com/devenvoy/open-download-manager/issues/15
 labels: ["help wanted", "status: blocked"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #29: [Firefox 2/2] persistent extension distribution and guided setup
+# Issue #15: [Firefox 2/2] persistent extension distribution and guided setup
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:08:06Z`
-- **Updated**: `2026-10-25T21:18:10Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:50:17Z`
 - **Labels**: `help wanted`, `status: blocked`
-- **Original Issue**: [#29 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/29)
+- **Issue Link**: [#15 on GitHub](https://github.com/devenvoy/open-download-manager/issues/15)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#29](https://github.com/Ahmadkhattak1/awesome-downloader/issues/29) originally opened by @Ahmadkhattak1 on 2026-10-25T21:08:06Z*
 
 ## Delivery position
 Parent goal: #10 (Firefox). **Step 2 of 2.**
@@ -45,12 +43,3 @@ Approved objective. Claim this issue with an approach and test plan before start
 ## Dependencies
 Depends on #28; contributes to #10.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

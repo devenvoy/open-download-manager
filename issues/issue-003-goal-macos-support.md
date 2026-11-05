@@ -1,29 +1,27 @@
 ---
-number: 7
+number: 3
 title: "[Goal] macOS support"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:00:23Z
-updated_at: 2026-10-29T12:44:38Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/7
+author: devenvoy
+created_at: 2026-11-05T19:49:41Z
+updated_at: 2026-11-05T19:58:25Z
+url: https://github.com/devenvoy/open-download-manager/issues/3
 labels: ["enhancement", "help wanted", "type: goal"]
-assignees: []
-comments_count: 2
 ---
 
-# Issue #7: [Goal] macOS support
+# Issue #3: [Goal] macOS support
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:00:23Z`
-- **Updated**: `2026-10-29T12:44:38Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:49:41Z`
 - **Labels**: `enhancement`, `help wanted`, `type: goal`
-- **Original Issue**: [#7 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/7)
+- **Issue Link**: [#3 on GitHub](https://github.com/devenvoy/open-download-manager/issues/3)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#7](https://github.com/Ahmadkhattak1/awesome-downloader/issues/7) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:23Z*
 
 ## Work order — macOS
 This is the tracking goal. Pick a step below rather than opening a PR for the entire goal.
@@ -53,12 +51,3 @@ This objective is approved by the maintainer. Comment with your proposed approac
 - [ ] macOS packaging, signing plan and validation: #25 (after #24)
 Use focused PRs. Keep the parent open until the agreed macOS targets are validated and release is approved.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

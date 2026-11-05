@@ -1,29 +1,27 @@
 ---
-number: 10
+number: 5
 title: "[Goal] Firefox support"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:00:31Z
-updated_at: 2026-10-25T21:18:04Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/10
+author: devenvoy
+created_at: 2026-11-05T19:49:47Z
+updated_at: 2026-11-05T19:49:47Z
+url: https://github.com/devenvoy/open-download-manager/issues/5
 labels: ["enhancement", "help wanted", "type: goal"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #10: [Goal] Firefox support
+# Issue #5: [Goal] Firefox support
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:00:31Z`
-- **Updated**: `2026-10-25T21:18:04Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:49:47Z`
 - **Labels**: `enhancement`, `help wanted`, `type: goal`
-- **Original Issue**: [#10 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/10)
+- **Issue Link**: [#5 on GitHub](https://github.com/devenvoy/open-download-manager/issues/5)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#10](https://github.com/Ahmadkhattak1/awesome-downloader/issues/10) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:31Z*
 
 ## Work order — Firefox
 This is the tracking goal. Pick a step below rather than opening a PR for the entire goal.
@@ -52,12 +50,3 @@ This objective is approved by the maintainer. Comment with your proposed approac
 - [ ] Persistent extension installation and guided setup: #29 (after #28)
 Coordinate new OS registration with #6/#7. Keep this parent open until both user-visible support and installation work.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

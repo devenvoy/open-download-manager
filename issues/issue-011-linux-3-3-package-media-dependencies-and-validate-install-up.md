@@ -1,29 +1,27 @@
 ---
-number: 23
+number: 11
 title: "[Linux 3/3] package media dependencies and validate install/upgrade/uninstall"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:07:50Z
-updated_at: 2026-10-25T21:17:41Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/23
+author: devenvoy
+created_at: 2026-11-05T19:50:04Z
+updated_at: 2026-11-05T19:50:04Z
+url: https://github.com/devenvoy/open-download-manager/issues/11
 labels: ["help wanted", "status: blocked"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #23: [Linux 3/3] package media dependencies and validate install/upgrade/uninstall
+# Issue #11: [Linux 3/3] package media dependencies and validate install/upgrade/uninstall
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:07:50Z`
-- **Updated**: `2026-10-25T21:17:41Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:50:04Z`
 - **Labels**: `help wanted`, `status: blocked`
-- **Original Issue**: [#23 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/23)
+- **Issue Link**: [#11 on GitHub](https://github.com/devenvoy/open-download-manager/issues/11)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#23](https://github.com/Ahmadkhattak1/awesome-downloader/issues/23) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:50Z*
 
 ## Delivery position
 Parent goal: #6 (Linux). **Step 3 of 3.**
@@ -45,12 +43,3 @@ Approved objective. Claim this issue with an approach and test plan before start
 ## Dependencies
 Depends on #22; contributes to parent #6.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

@@ -1,29 +1,27 @@
 ---
-number: 6
+number: 2
 title: "[Goal] Linux support"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:00:20Z
-updated_at: 2026-10-25T21:17:35Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/6
+author: devenvoy
+created_at: 2026-11-05T19:49:38Z
+updated_at: 2026-11-05T19:49:38Z
+url: https://github.com/devenvoy/open-download-manager/issues/2
 labels: ["enhancement", "help wanted", "type: goal"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #6: [Goal] Linux support
+# Issue #2: [Goal] Linux support
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:00:20Z`
-- **Updated**: `2026-10-25T21:17:35Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:49:38Z`
 - **Labels**: `enhancement`, `help wanted`, `type: goal`
-- **Original Issue**: [#6 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/6)
+- **Issue Link**: [#2 on GitHub](https://github.com/devenvoy/open-download-manager/issues/2)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#6](https://github.com/Ahmadkhattak1/awesome-downloader/issues/6) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:20Z*
 
 ## Work order — Linux
 This is the tracking goal. Pick a step below rather than opening a PR for the entire goal.
@@ -54,12 +52,3 @@ Tracking goal: deliver through focused PRs, not one platform rewrite.
 - [ ] Linux packaging and clean-machine validation: #23 (after #22)
 Keep this goal open until the agreed Linux support matrix passes validation and the maintainer approves release.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

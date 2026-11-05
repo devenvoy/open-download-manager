@@ -1,29 +1,27 @@
 ---
-number: 8
+number: 4
 title: "[Goal] Windows ARM64 support"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:00:25Z
-updated_at: 2026-10-25T21:17:53Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/8
+author: devenvoy
+created_at: 2026-11-05T19:49:44Z
+updated_at: 2026-11-05T19:49:44Z
+url: https://github.com/devenvoy/open-download-manager/issues/4
 labels: ["enhancement", "help wanted", "type: goal"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #8: [Goal] Windows ARM64 support
+# Issue #4: [Goal] Windows ARM64 support
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:00:25Z`
-- **Updated**: `2026-10-25T21:17:53Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:49:44Z`
 - **Labels**: `enhancement`, `help wanted`, `type: goal`
-- **Original Issue**: [#8 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/8)
+- **Issue Link**: [#4 on GitHub](https://github.com/devenvoy/open-download-manager/issues/4)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#8](https://github.com/Ahmadkhattak1/awesome-downloader/issues/8) originally opened by @Ahmadkhattak1 on 2026-10-25T21:00:25Z*
 
 ## Work order — Windows ARM64
 This is the tracking goal. Pick a step below rather than opening a PR for the entire goal.
@@ -53,12 +51,3 @@ This objective is approved by the maintainer. Comment with your proposed approac
 - [ ] ARM64 installer and hardware validation: #27 (after #26)
 Keep this goal open until the native ARM64 support matrix is validated. Emulation is not proof of native compatibility.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*

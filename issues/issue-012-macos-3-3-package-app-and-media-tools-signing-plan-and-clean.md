@@ -1,29 +1,27 @@
 ---
-number: 25
+number: 12
 title: "[macOS 3/3] package app and media tools, signing plan and clean-install validation"
 state: OPEN
-author: Ahmadkhattak1
-created_at: 2026-10-25T21:07:55Z
-updated_at: 2026-10-25T21:17:50Z
-closed_at: null
-url: https://github.com/Ahmadkhattak1/awesome-downloader/issues/25
+author: devenvoy
+created_at: 2026-11-05T19:50:08Z
+updated_at: 2026-11-05T19:50:08Z
+url: https://github.com/devenvoy/open-download-manager/issues/12
 labels: ["help wanted", "status: blocked"]
-assignees: []
-comments_count: 0
 ---
 
-# Issue #25: [macOS 3/3] package app and media tools, signing plan and clean-install validation
+# Issue #12: [macOS 3/3] package app and media tools, signing plan and clean-install validation
 
 - **Status**: `OPEN`
-- **Author**: [@Ahmadkhattak1](https://github.com/Ahmadkhattak1)
-- **Created**: `2026-10-25T21:07:55Z`
-- **Updated**: `2026-10-25T21:17:50Z`
+- **Author**: [@devenvoy](https://github.com/devenvoy)
+- **Created**: `2026-11-05T19:50:08Z`
 - **Labels**: `help wanted`, `status: blocked`
-- **Original Issue**: [#25 on GitHub](https://github.com/Ahmadkhattak1/awesome-downloader/issues/25)
+- **Issue Link**: [#12 on GitHub](https://github.com/devenvoy/open-download-manager/issues/12)
 
 ---
 
 ## Description
+
+> *Mirrored from upstream issue [#25](https://github.com/Ahmadkhattak1/awesome-downloader/issues/25) originally opened by @Ahmadkhattak1 on 2026-10-25T21:07:55Z*
 
 ## Delivery position
 Parent goal: #7 (macOS). **Step 3 of 3.**
@@ -45,12 +43,3 @@ Approved objective. Claim this issue with an approach and test plan before start
 ## Dependencies
 Depends on #24; contributes to parent #7.
 
-
-
----
-
----
-
-## Comments (0)
-
-*No comments on this issue yet.*
