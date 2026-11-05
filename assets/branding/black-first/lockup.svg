@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="120" viewBox="0 0 440 120" fill="none">
+  <rect width="440" height="120" rx="22" fill="#FFFFFF"/>
+  <g transform="translate(18, 12) scale(0.96)">
+    <defs>
+          <linearGradient id="gl_lk808" x1="23" y1="23" x2="77" y2="77" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#0F172A"/>
+            <stop offset="100%" stop-color="#0F172A"/>
+          </linearGradient>
+          <linearGradient id="up_lk808" x1="-46" y1="-12" x2="47" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#0F172A"/>
+            <stop offset="100%" stop-color="#0F172A"/>
+          </linearGradient>
+          <linearGradient id="dn_lk808" x1="-46" y1="-14" x2="47" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#0F172A"/>
+            <stop offset="100%" stop-color="#0F172A"/>
+          </linearGradient>
+        </defs>
+
+        <!-- LAYER 1 (BACK): First Arrow passing COMPLETELY BEHIND the Earth globe -->
+        <!-- Sleeker, curvier C-arc with 100% hidden middle and 100% visible emerging neck + sharp arrowhead -->
+        <g transform="translate(50,50) rotate(-27)">
+          <path d="M-46 -3 C-41 -24 14 -25 35 -10 L40 -16 L47 -2 L29 0 L31 -5.5 C12 -18 -34 -17 -46 -3 Z" fill="url(#up_lk808)"/>
+        </g>
+
+        <!-- LAYER 2 (MIDDLE): Solid Opaque Earth Globe Occlusion Disc + Sleeker Meridian Grid -->
+        <circle cx="50" cy="50" r="30" fill="#FFFFFF"/>
+        
+        <circle cx="50" cy="50" r="27" stroke="url(#gl_lk808)" stroke-width="3.8" fill="none"/>
+        <ellipse cx="50" cy="50" rx="12.42" ry="27" stroke="url(#gl_lk808)" stroke-width="3.0" fill="none"/>
+        <line x1="23" y1="50" x2="77" y2="50" stroke="url(#gl_lk808)" stroke-width="3.0"/>
+        <path d="M 26.78 35.69 C 42 40.28 58 40.28 73.22 35.69" stroke="url(#gl_lk808)" stroke-width="3.0" fill="none"/>
+        <path d="M 26.78 64.31 C 42 59.72 58 59.72 73.22 64.31" stroke="url(#gl_lk808)" stroke-width="3.0" fill="none"/>
+
+        <!-- LAYER 3 (FRONT): Second (Emerald Download) Arrow sweeping IN FRONT OF the Earth globe -->
+        <g transform="translate(50,50) rotate(153)">
+          <path d="M-46 -3 C-38 -21 14 -22 35 -9 L40 -15.5 L47 -2 L29 0 L31 -4.5 C12 -14 -32 -13 -46 -3 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round"/>
+          <path d="M-46 -3 C-38 -21 14 -22 35 -9 L40 -15.5 L47 -2 L29 0 L31 -4.5 C12 -14 -32 -13 -46 -3 Z" fill="url(#dn_lk808)"/>
+        </g>
+  </g>
+  <text x="128" y="76" fill="#0F172A" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="46" font-weight="800" letter-spacing="-1.2">OpenIDM</text>
+</svg>

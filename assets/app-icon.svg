@@ -1,13 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#72d7c7"/>
-      <stop offset="1" stop-color="#237a9f"/>
-    </linearGradient>
-  </defs>
-  <circle cx="128" cy="128" r="116" fill="#f7fbfc" stroke="#25566d" stroke-width="10"/>
-  <circle cx="128" cy="128" r="93" fill="url(#sky)"/>
-  <path d="M38 128h180M128 35c-30 27-48 59-48 93s18 66 48 93m0-186c30 27 48 59 48 93s-18 66-48 93M53 79h150M53 177h150" fill="none" stroke="#dff7f4" stroke-width="9" stroke-linecap="round" opacity=".9"/>
-  <path d="M128 65v91m-37-28 37 38 37-38" fill="none" stroke="#123f57" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M128 65v91m-37-28 37 38 37-38" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100" fill="none">
+  <rect width="100" height="100" rx="22" fill="#0C1222"/>
+  <g transform="translate(6,6) scale(0.88)">
+    <defs>
+          <linearGradient id="gl_u769" x1="23" y1="23" x2="77" y2="77" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#38BDF8"/>
+            <stop offset="100%" stop-color="#1D4ED8"/>
+          </linearGradient>
+          <linearGradient id="up_u769" x1="-46" y1="-12" x2="47" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#FBBF24"/>
+            <stop offset="100%" stop-color="#EA580C"/>
+          </linearGradient>
+          <linearGradient id="dn_u769" x1="-46" y1="-14" x2="47" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#34D399"/>
+            <stop offset="100%" stop-color="#059669"/>
+          </linearGradient>
+        </defs>
+
+        <!-- LAYER 1 (BACK): First Arrow passing COMPLETELY BEHIND the Earth globe -->
+        <!-- Sleeker, curvier C-arc with 100% hidden middle and 100% visible emerging neck + sharp arrowhead -->
+        <g transform="translate(50,50) rotate(-27)">
+          <path d="M-46 -3 C-41 -24 14 -25 35 -10 L40 -16 L47 -2 L29 0 L31 -5.5 C12 -18 -34 -17 -46 -3 Z" fill="url(#up_u769)"/>
+        </g>
+
+        <!-- LAYER 2 (MIDDLE): Solid Opaque Earth Globe Occlusion Disc + Sleeker Meridian Grid -->
+        <circle cx="50" cy="50" r="30" fill="#0C1222"/>
+        <circle cx="50" cy="50" r="27" fill="url(#gl_u769)" fill-opacity="0.22"/>
+        <circle cx="50" cy="50" r="27" stroke="url(#gl_u769)" stroke-width="3.8" fill="none"/>
+        <ellipse cx="50" cy="50" rx="12.42" ry="27" stroke="url(#gl_u769)" stroke-width="3.0" fill="none"/>
+        <line x1="23" y1="50" x2="77" y2="50" stroke="url(#gl_u769)" stroke-width="3.0"/>
+        <path d="M 26.78 35.69 C 42 40.28 58 40.28 73.22 35.69" stroke="url(#gl_u769)" stroke-width="3.0" fill="none"/>
+        <path d="M 26.78 64.31 C 42 59.72 58 59.72 73.22 64.31" stroke="url(#gl_u769)" stroke-width="3.0" fill="none"/>
+
+        <!-- LAYER 3 (FRONT): Second (Emerald Download) Arrow sweeping IN FRONT OF the Earth globe -->
+        <g transform="translate(50,50) rotate(153)">
+          <path d="M-46 -3 C-38 -21 14 -22 35 -9 L40 -15.5 L47 -2 L29 0 L31 -4.5 C12 -14 -32 -13 -46 -3 Z" fill="#0C1222" stroke="#0C1222" stroke-width="4.5" stroke-linejoin="round"/>
+          <path d="M-46 -3 C-38 -21 14 -22 35 -9 L40 -15.5 L47 -2 L29 0 L31 -4.5 C12 -14 -32 -13 -46 -3 Z" fill="url(#dn_u769)"/>
+        </g>
+  </g>
 </svg>
