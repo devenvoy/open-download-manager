@@ -35,7 +35,7 @@ installer, install directory, executable, and a CSV path outside the install
 directory:
 
 ```powershell
-.\tools\capture-windows-baseline.ps1 `
+.\reference\tools\capture-windows-baseline.ps1 `
   -InstallerPath .\release\Awesome-Downloader-Setup.exe `
   -InstallDirectory "$env:LOCALAPPDATA\Programs\Awesome Downloader" `
   -ExecutablePath "$env:LOCALAPPDATA\Programs\Awesome Downloader\Awesome Downloader.exe" `
