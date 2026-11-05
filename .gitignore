@@ -16,6 +16,8 @@ integration/native-host.cmd
 *.pem
 *.pfx
 *.key
+*.crx
+*.xpi
 *.dmp
 coverage/
 .local-evidence/
