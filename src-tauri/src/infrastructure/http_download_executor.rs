@@ -190,9 +190,14 @@ impl HttpDownloadExecutor {
                 AppError::download(format!("Could not restart the partial download: {error}"))
             })?;
             downloaded = 0;
-            response = self.send_request(url, 0, &mut control).await?;
+            response = self.send_request(url.clone(), 0, &mut control).await?;
         }
         let mut total = response.content_length();
+        let mut supports_range = response.status() == reqwest::StatusCode::PARTIAL_CONTENT
+            || response
+                .headers()
+                .get(reqwest::header::ACCEPT_RANGES)
+                .is_some_and(|value| value.as_bytes() == b"bytes");
         if response.status() == reqwest::StatusCode::PARTIAL_CONTENT {
             if downloaded == 0 {
                 return Err(AppError::download(
@@ -210,6 +215,7 @@ impl HttpDownloadExecutor {
                     .content_length()
                     .and_then(|length| downloaded.checked_add(length))
             });
+            supports_range = true;
         } else if response.status().is_success() {
             downloaded = 0;
         } else {
@@ -239,7 +245,8 @@ impl HttpDownloadExecutor {
         });
         let mut bytes_since_tick = 0_u64;
         let mut last_tick = Instant::now();
-        loop {
+        let mut midstream_retries = 0_u8;
+        'stream: loop {
             let chunk = tokio::select! {
                 reason = control.stopped() => {
                     file.flush().await.map_err(|error| {
@@ -250,12 +257,134 @@ impl HttpDownloadExecutor {
                     })?;
                     return Err(stopped_error(reason));
                 }
-                result = response.chunk() => result.map_err(|_| {
-                    AppError::download("The server response could not be read.")
-                })?,
+                result = response.chunk() => result,
             };
-            let Some(chunk) = chunk else {
-                break;
+            let chunk = match chunk {
+                Ok(Some(chunk)) => chunk,
+                Ok(None) => {
+                    if total.is_some_and(|expected| expected != downloaded) {
+                        if midstream_retries < MAX_TRANSIENT_RETRIES
+                            && control.current_stop_reason().is_none()
+                        {
+                            midstream_retries += 1;
+                            file.flush().await.map_err(|error| {
+                                AppError::download(format!("Could not save the partial download: {error}"))
+                            })?;
+                            file.sync_all().await.map_err(|error| {
+                                AppError::download(format!("Could not save the partial download: {error}"))
+                            })?;
+                            wait_before_retry(&mut control, retry_delay(midstream_retries, None)).await?;
+                            let next_request = if supports_range && downloaded > 0 {
+                                self.send_request(url.clone(), downloaded, &mut control).await
+                            } else {
+                                self.send_request(url.clone(), 0, &mut control).await
+                            };
+                            match next_request {
+                                Ok(new_response) => {
+                                    if supports_range
+                                        && downloaded > 0
+                                        && new_response.status() == reqwest::StatusCode::PARTIAL_CONTENT
+                                    {
+                                        if let Ok((start, _, _)) = content_range(&new_response) {
+                                            if start == downloaded {
+                                                response = new_response;
+                                                continue 'stream;
+                                            }
+                                        }
+                                    }
+                                    drop(file);
+                                    let new_file = OpenOptions::new()
+                                        .write(true)
+                                        .create(true)
+                                        .truncate(true)
+                                        .open(&temporary)
+                                        .await
+                                        .map_err(|error| {
+                                            AppError::download(format!(
+                                                "Could not create a temporary download file: {error}"
+                                            ))
+                                        })?;
+                                    file = new_file;
+                                    downloaded = 0;
+                                    total = new_response.content_length();
+                                    supports_range = new_response
+                                        .headers()
+                                        .get(reqwest::header::ACCEPT_RANGES)
+                                        .is_some_and(|value| value.as_bytes() == b"bytes");
+                                    response = new_response;
+                                    continue 'stream;
+                                }
+                                Err(error) => return Err(error),
+                            }
+                        } else {
+                            return Err(AppError::download(
+                                "The downloaded byte count did not match the server's declared size.",
+                            ));
+                        }
+                    } else {
+                        break 'stream;
+                    }
+                }
+                Err(read_error) => {
+                    if midstream_retries < MAX_TRANSIENT_RETRIES
+                        && control.current_stop_reason().is_none()
+                    {
+                        midstream_retries += 1;
+                        file.flush().await.map_err(|error| {
+                            AppError::download(format!("Could not save the partial download: {error}"))
+                        })?;
+                        file.sync_all().await.map_err(|error| {
+                            AppError::download(format!("Could not save the partial download: {error}"))
+                        })?;
+                        wait_before_retry(&mut control, retry_delay(midstream_retries, None)).await?;
+                        let next_request = if supports_range && downloaded > 0 {
+                            self.send_request(url.clone(), downloaded, &mut control).await
+                        } else {
+                            self.send_request(url.clone(), 0, &mut control).await
+                        };
+                        match next_request {
+                            Ok(new_response) => {
+                                if supports_range
+                                    && downloaded > 0
+                                    && new_response.status() == reqwest::StatusCode::PARTIAL_CONTENT
+                                {
+                                    if let Ok((start, _, _)) = content_range(&new_response) {
+                                        if start == downloaded {
+                                            response = new_response;
+                                            continue 'stream;
+                                        }
+                                    }
+                                }
+                                drop(file);
+                                let new_file = OpenOptions::new()
+                                    .write(true)
+                                    .create(true)
+                                    .truncate(true)
+                                    .open(&temporary)
+                                    .await
+                                    .map_err(|error| {
+                                        AppError::download(format!(
+                                            "Could not create a temporary download file: {error}"
+                                        ))
+                                    })?;
+                                file = new_file;
+                                downloaded = 0;
+                                total = new_response.content_length();
+                                supports_range = new_response
+                                    .headers()
+                                    .get(reqwest::header::ACCEPT_RANGES)
+                                    .is_some_and(|value| value.as_bytes() == b"bytes");
+                                response = new_response;
+                                continue 'stream;
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    } else {
+                        return Err(AppError::download(format!(
+                            "The server response could not be read: {read_error}"
+                        )));
+                    }
+                }
             };
             let chunk_size = u64::try_from(chunk.len())
                 .map_err(|_| AppError::download("The downloaded chunk size is invalid."))?;
@@ -887,7 +1016,8 @@ async fn download_segment(
         &progress_handler,
     )?;
     let mut downloaded = segment.downloaded;
-    loop {
+    let mut midstream_retries = 0_u8;
+    'segment_stream: loop {
         let chunk = tokio::select! {
             reason = control.stopped() => {
                 file.sync_all().await.map_err(|error| {
@@ -903,12 +1033,106 @@ async fn download_segment(
                 )?;
                 return Err(stopped_error(reason));
             }
-            chunk = response.chunk() => chunk.map_err(|_| {
-                AppError::download("The server response could not be read.")
-            })?,
+            result = response.chunk() => result,
         };
-        let Some(chunk) = chunk else {
-            break;
+        let chunk = match chunk {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => {
+                if downloaded < segment.total {
+                    if midstream_retries < MAX_TRANSIENT_RETRIES
+                        && control.current_stop_reason().is_none()
+                    {
+                        midstream_retries += 1;
+                        file.flush().await.map_err(|error| {
+                            AppError::download(format!("Could not save a partial segment: {error}"))
+                        })?;
+                        file.sync_all().await.map_err(|error| {
+                            AppError::download(format!("Could not save a partial segment: {error}"))
+                        })?;
+                        wait_before_retry(&mut control, retry_delay(midstream_retries, None)).await?;
+                        let start = segment.start + downloaded;
+                        let next_resp = send_with_retry(&mut control, || {
+                            client
+                                .get(url.clone())
+                                .header(
+                                    reqwest::header::RANGE,
+                                    format!("bytes={start}-{}", segment.end),
+                                )
+                                .header(reqwest::header::ACCEPT_ENCODING, "identity")
+                                .header(validator.header.clone(), &validator.value)
+                        })
+                        .await;
+                        match next_resp {
+                            Ok(new_resp) => {
+                                if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+                                    if let Ok((actual_start, actual_end, _)) = content_range(&new_resp) {
+                                        if actual_start == start && actual_end == segment.end {
+                                            response = new_resp;
+                                            continue 'segment_stream;
+                                        }
+                                    }
+                                }
+                                return Err(AppError::download(
+                                    "The server returned an inconsistent byte range for a segment.",
+                                ));
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    } else {
+                        return Err(AppError::download(
+                            "The server response ended before the requested segment was complete.",
+                        ));
+                    }
+                } else {
+                    break 'segment_stream;
+                }
+            }
+            Err(read_error) => {
+                if midstream_retries < MAX_TRANSIENT_RETRIES
+                    && control.current_stop_reason().is_none()
+                {
+                    midstream_retries += 1;
+                    file.flush().await.map_err(|error| {
+                        AppError::download(format!("Could not save a partial segment: {error}"))
+                    })?;
+                    file.sync_all().await.map_err(|error| {
+                        AppError::download(format!("Could not save a partial segment: {error}"))
+                    })?;
+                    wait_before_retry(&mut control, retry_delay(midstream_retries, None)).await?;
+                    let start = segment.start + downloaded;
+                    let next_resp = send_with_retry(&mut control, || {
+                        client
+                            .get(url.clone())
+                            .header(
+                                reqwest::header::RANGE,
+                                format!("bytes={start}-{}", segment.end),
+                            )
+                            .header(reqwest::header::ACCEPT_ENCODING, "identity")
+                            .header(validator.header.clone(), &validator.value)
+                    })
+                    .await;
+                    match next_resp {
+                        Ok(new_resp) => {
+                            if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+                                if let Ok((actual_start, actual_end, _)) = content_range(&new_resp) {
+                                    if actual_start == start && actual_end == segment.end {
+                                        response = new_resp;
+                                        continue 'segment_stream;
+                                    }
+                                }
+                            }
+                            return Err(AppError::download(
+                                "The server returned an inconsistent byte range for a segment.",
+                            ));
+                        }
+                        Err(error) => return Err(error),
+                    }
+                } else {
+                    return Err(AppError::download(format!(
+                        "The server response could not be read: {read_error}"
+                    )));
+                }
+            }
         };
         let chunk_size = u64::try_from(chunk.len())
             .map_err(|_| AppError::download("The downloaded chunk size is invalid."))?;

@@ -811,3 +811,195 @@ async fn server_without_byte_ranges_falls_back_to_single_stream() {
     assert_eq!(fs::read(directory.join("fallback.bin")).unwrap(), body);
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
+
+fn serve_drop_midstream(body: Vec<u8>, drop_at: usize) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener
+        .local_addr()
+        .expect("local fixture should expose its address");
+    thread::spawn(move || {
+        // First connection: send headers and only drop_at bytes, then drop stream
+        {
+            let (mut stream, _) = listener.accept().expect("first request should connect");
+            let mut request = [0; 1_024];
+            let _ = stream.read(&mut request);
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .expect("headers should be written");
+            let _ = stream.write_all(&body[..drop_at]);
+            // drop stream abruptly
+        }
+        // Second connection: should request Range: bytes=drop_at-
+        {
+            let (mut stream, _) = listener.accept().expect("resume request should connect");
+            let mut request = Vec::new();
+            let mut chunk = [0; 1_024];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut chunk).expect("request should be readable");
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&chunk[..count]);
+            }
+            let request_str = String::from_utf8_lossy(&request);
+            assert!(
+                request_str.contains(&format!("Range: bytes={drop_at}-"))
+                    || request_str.contains(&format!("range: bytes={drop_at}-"))
+            );
+            let remaining = &body[drop_at..];
+            write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
+                remaining.len(),
+                drop_at,
+                body.len() - 1,
+                body.len()
+            )
+            .expect("resume headers should be written");
+            stream.write_all(remaining).expect("remaining body should be written");
+        }
+    });
+    format!("http://{address}/drop.bin")
+}
+
+#[tokio::test]
+async fn single_stream_recovers_from_midstream_connection_drop() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = (0..256 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let drop_at = 64 * 1024;
+    let url = serve_drop_midstream(body.clone(), drop_at);
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let ids = service
+        .add(download_request(url, "recovered.bin"), &settings)
+        .expect("download should start");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("recovered.bin")).unwrap(),
+        body,
+        "recovered download should match full file bytes"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+fn serve_segmented_with_midstream_drop(
+    body: Vec<u8>,
+    expected_requests: usize,
+    drop_offset_in_first_segment: usize,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener
+        .local_addr()
+        .expect("local fixture should expose its address");
+    thread::spawn(move || {
+        let mut dropped = false;
+        for _ in 0..expected_requests {
+            let (mut stream, _) = listener.accept().expect("request should connect");
+            let mut request = Vec::new();
+            let mut chunk = [0; 1_024];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut chunk).expect("readable");
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&chunk[..count]);
+            }
+            let request = String::from_utf8_lossy(&request);
+            let range = request
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("range")
+                        .then(|| value.trim().strip_prefix("bytes="))
+                        .flatten()
+                })
+                .expect("range header required");
+            let (start, end) = range.split_once('-').expect("range end required");
+            let start: usize = start.parse().expect("valid start");
+            let end: usize = end.parse().expect("valid end");
+
+            // If this is the initial probe (bytes=0-0)
+            if start == 0 && end == 0 {
+                write!(
+                    stream,
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: 1\r\nContent-Range: bytes 0-0/{}\r\nETag: \"fixture-v1\"\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .expect("probe write");
+                let _ = stream.write_all(&body[0..1]);
+                continue;
+            }
+
+            // If this is a segment starting at 0 and we haven't dropped yet, drop midway!
+            if start == 0 && !dropped && drop_offset_in_first_segment < end {
+                dropped = true;
+                let response_body = &body[start..=end];
+                write!(
+                    stream,
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{}\r\nETag: \"fixture-v1\"\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                    response_body.len(),
+                    body.len()
+                )
+                .expect("headers");
+                let _ = stream.write_all(&response_body[..drop_offset_in_first_segment]);
+                // drop connection abruptly
+                continue;
+            }
+
+            // Normal or recovered range
+            let response_body = &body[start..=end];
+            write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{}\r\nETag: \"fixture-v1\"\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                response_body.len(),
+                body.len()
+            )
+            .expect("headers");
+            let _ = stream.write_all(response_body);
+        }
+    });
+    format!("http://{address}/segmented_drop.bin")
+}
+
+#[tokio::test]
+async fn segmented_download_recovers_from_midstream_segment_drop() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = (0..512 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    // Probe (1) + 2 segments + 1 retry for the dropped segment = 4 requests
+    let url = serve_segmented_with_midstream_drop(body.clone(), 4, 32 * 1024);
+    let settings = settings(directory.clone(), 2);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let ids = service
+        .add(download_request(url, "segmented_recovered.bin"), &settings)
+        .expect("download should start");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("segmented_recovered.bin")).unwrap(),
+        body,
+        "assembled segmented download should match full file after midstream recovery"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
