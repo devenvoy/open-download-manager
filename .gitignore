@@ -23,6 +23,7 @@ coverage/
 test-results/
 output/
 build/browser-setup-helper.exe
+graphify-out/
 reference/
 target/
 src-tauri/target/
