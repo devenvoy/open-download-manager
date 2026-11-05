@@ -36,17 +36,8 @@ Approved objective. Claim this issue with an approach and test plan before start
 
 ---
 
-## Comments (1)
-
-### Comment #1 by [@Trust-Coder](https://github.com/Trust-Coder) • `2026-10-28T04:49:22Z`
-[Original Comment Link](https://github.com/Ahmadkhattak1/awesome-downloader/issues/15#issuecomment-6460936286)
-
-I've opened #45 for a narrow slice of this issue: **bounded retries and honoring server retry instructions** for direct HTTP transfers.
-
-- Permanent failures (403/404/410/416, server ignoring ranges or a changed resource, inconsistent `Content-Range`, non-identity encoding) now fail on the first attempt instead of retrying 4 times.
-- `429`/`503` responses honor `Retry-After` (seconds or HTTP date, capped at 60 s). Network errors, `408` and `5xx` still retry as before. Cancel/pause still interrupt any wait immediately.
-- Fixture tests cover permanent failure, `Retry-After` timing, cancellation during the wait, and header parsing.
-
-Not included, and still open under this issue: refreshing expired browser-captured links, recovering changed resources, and the HLS segment retry loop. It also doesn't overlap closed PR #3 (no new settings or UI). Happy to adjust the scope if you'd prefer it split differently.
-
 ---
+
+## Comments (0)
+
+*No comments on this issue yet.*

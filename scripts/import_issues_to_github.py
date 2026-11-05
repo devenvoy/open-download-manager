@@ -57,6 +57,9 @@ def main():
         with open(labels_file, "r", encoding="utf-8") as f:
             labels = json.load(f)
 
+    # Filter issues by author: only Ahmad Khattak
+    issues = [i for i in issues if i.get("author", {}).get("login") == "Ahmadkhattak1"]
+
     # Filter issues by state
     if args.state == "open":
         issues = [i for i in issues if i.get("state") == "OPEN"]
