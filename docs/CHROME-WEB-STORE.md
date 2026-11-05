@@ -29,10 +29,10 @@ to start. Availability depends on the site and media format. DRM-protected,
 live, private, and sign-in-restricted media may not work. Download only content
 you own or are permitted to save.
 
-**Homepage:** https://github.com/Ahmadkhattak1/awesome-downloader
+**Homepage:** https://github.com/devenvoy/awesome-downloader
 
 **Privacy policy:**
-https://github.com/Ahmadkhattak1/awesome-downloader/blob/main/PRIVACY.md
+https://github.com/devenvoy/awesome-downloader/blob/main/PRIVACY.md
 
 ## Single purpose
 

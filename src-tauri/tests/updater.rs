@@ -101,7 +101,7 @@ async fn automatic_current_version_checks_stay_silent() {
 #[tokio::test]
 async fn automatic_missing_release_checks_stay_silent() {
     let error = AppError::network(
-        "Unable to find latest version on GitHub (https://github.com/Ahmadkhattak1/awesome-downloader/releases/latest): HTTPError: 406",
+        "Unable to find latest version on GitHub (https://github.com/devenvoy/awesome-downloader/releases/latest): HTTPError: 406",
     );
     let mock = Arc::new(MockUpdateClient::new(Err(error)));
 
@@ -148,7 +148,7 @@ async fn a_background_update_uses_notification_instead_of_dialog() {
 #[tokio::test]
 async fn missing_github_production_release_is_treated_as_up_to_date_without_raw_response_data() {
     let error = AppError::network(
-        "Unable to find latest version on GitHub (https://github.com/Ahmadkhattak1/awesome-downloader/releases/latest), please ensure a production release exists: HTTPError: 406\nHeaders: secret-noisy-response",
+        "Unable to find latest version on GitHub (https://github.com/devenvoy/awesome-downloader/releases/latest), please ensure a production release exists: HTTPError: 406\nHeaders: secret-noisy-response",
     );
     let mock = Arc::new(MockUpdateClient::new(Err(error)));
 

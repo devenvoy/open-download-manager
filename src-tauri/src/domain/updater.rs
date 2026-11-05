@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub const CHECK_INTERVAL_HOURS: u64 = 6;
 pub const CHECK_INTERVAL_SECONDS: u64 = CHECK_INTERVAL_HOURS * 3600;
-pub const DEFAULT_REPO_OWNER: &str = "Ahmadkhattak1";
+pub const DEFAULT_REPO_OWNER: &str = "devenvoy";
 pub const DEFAULT_REPO_NAME: &str = "awesome-downloader";
 pub const USER_AGENT: &str = "Awesome-Downloader";
 

@@ -56,7 +56,7 @@ browser session data is cleared by closing the relevant tab or browser session.
 ## Contact
 
 Questions or privacy reports can be filed in the public project issue tracker:
-https://github.com/Ahmadkhattak1/awesome-downloader/issues
+https://github.com/devenvoy/awesome-downloader/issues
 
 Do not include private URLs, cookies, authorization headers, or other secrets in
 a public issue.

@@ -1,7 +1,7 @@
 # Security-sensitive changes require the repository owner's review.
-/.github/ @Ahmadkhattak1
-/package.json @Ahmadkhattak1
-/package-lock.json @Ahmadkhattak1
-/src-tauri/ @Ahmadkhattak1
-/renderer/ @Ahmadkhattak1
-/extension/ @Ahmadkhattak1
+/.github/ @devenvoy
+/package.json @devenvoy
+/package-lock.json @devenvoy
+/src-tauri/ @devenvoy
+/renderer/ @devenvoy
+/extension/ @devenvoy
