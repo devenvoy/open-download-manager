@@ -103,6 +103,37 @@ impl DownloadTransferService {
             )
         })?;
 
+        if request.reuse_active {
+            let active_states = [
+                DownloadStatus::Connecting,
+                DownloadStatus::Downloading,
+                DownloadStatus::Assembling,
+                DownloadStatus::Queued,
+                DownloadStatus::Paused,
+                DownloadStatus::Scheduled,
+            ];
+            let existing_records = self.history.downloads()?;
+            if let Some(existing) = existing_records.iter().find(|d| {
+                if !active_states.contains(&d.status) {
+                    return false;
+                }
+                if let Some(ref req_sabr) = request.sabr {
+                    d.sabr.as_ref().map_or(false, |s| {
+                        s.video_id == req_sabr.video_id
+                            && s.video_itag == req_sabr.video_itag
+                            && s.audio_itag == req_sabr.audio_itag
+                    })
+                } else {
+                    let first_req_url = request.urls.first().map(|u| u.url().as_str()).unwrap_or("");
+                    d.sabr.is_none()
+                        && d.url == first_req_url
+                        && d.audio_url == request.audio_url
+                }
+            }) {
+                return Ok(vec![existing.id.clone()]);
+            }
+        }
+
         let is_scheduled = request.scheduled_at.is_some();
         let records = request
             .urls
@@ -143,13 +174,15 @@ impl DownloadTransferService {
                         .then(|| format!("Address {} of {}.", index + 1, request.urls.len())),
                     estimated: NEW_DOWNLOAD_IS_ESTIMATED,
                     kind: request.kind.clone().or_else(|| {
-                        if request.audio_url.is_some() {
+                        if request.sabr.is_some() {
+                            Some("sabr".to_owned())
+                        } else if request.audio_url.is_some() {
                             Some("paired".to_owned())
                         } else {
                             Some(HTTP_DOWNLOAD_KIND.to_owned())
                         }
                     }),
-                    resumable: if request.audio_url.is_some() {
+                    resumable: if request.sabr.is_some() || request.audio_url.is_some() {
                         Some(false)
                     } else {
                         Some(NEW_DOWNLOAD_IS_RESUMABLE)
@@ -162,6 +195,7 @@ impl DownloadTransferService {
                     },
                     connections_progress: Vec::new(),
                     audio_url: request.audio_url.clone(),
+                    sabr: request.sabr.clone(),
                 }
             })
             .collect::<Vec<_>>();

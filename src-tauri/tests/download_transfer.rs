@@ -253,6 +253,7 @@ fn download_request(url: String, filename: &str) -> DownloadRequest {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     }
 }
 

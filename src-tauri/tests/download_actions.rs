@@ -45,6 +45,8 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        sabr: None,
+        reuse_active: None,
     }
 }
 

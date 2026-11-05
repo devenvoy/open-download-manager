@@ -16,6 +16,8 @@ fn request(url: &str) -> DownloadRequest {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        sabr: None,
+        reuse_active: None,
     }
 }
 

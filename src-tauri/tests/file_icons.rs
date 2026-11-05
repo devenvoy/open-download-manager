@@ -58,6 +58,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             connections: 1,
             connections_progress: Vec::new(),
             audio_url: None,
+            sabr: None,
         },
         DownloadRecord {
             id: "2".to_string(),
@@ -84,6 +85,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             connections: 1,
             connections_progress: Vec::new(),
             audio_url: None,
+            sabr: None,
         },
         DownloadRecord {
             id: "3".to_string(),
@@ -110,6 +112,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             connections: 1,
             connections_progress: Vec::new(),
             audio_url: None,
+            sabr: None,
         },
     ];
 
@@ -152,6 +155,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
         connections: 1,
         connections_progress: Vec::new(),
         audio_url: None,
+        sabr: None,
     }];
     let loaded_again = provider.load(&extra);
     assert!(!loaded_again, "already loaded extension should not reload");

@@ -136,6 +136,7 @@ async fn commands_add_and_snapshot_lifecycle() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = add_download(state.clone(), req).await.expect("add_download command must succeed");
@@ -165,6 +166,7 @@ async fn commands_remove_action_removes_from_snapshot() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = add_download(state.clone(), req).await.unwrap();
@@ -205,6 +207,7 @@ async fn commands_open_and_open_with_through_tauri_state() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = add_download(state.clone(), req).await.unwrap();
@@ -258,6 +261,7 @@ async fn commands_reveal_through_tauri_state() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = add_download(state.clone(), req).await.unwrap();
@@ -305,6 +309,7 @@ async fn commands_remove_completed_through_tauri_state() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
     let req2 = DownloadRequest {
         urls: vec!["http://127.0.0.1/2".to_owned()],
@@ -317,6 +322,7 @@ async fn commands_remove_completed_through_tauri_state() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let id1 = add_download(state.clone(), req1).await.unwrap()[0].clone();
@@ -360,6 +366,7 @@ async fn commands_review_download_through_tauri_state() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = add_download(state.clone(), req).await.unwrap();

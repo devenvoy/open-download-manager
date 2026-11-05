@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::domain::category::DownloadCategory;
+use crate::domain::{
+    category::DownloadCategory,
+    media::sabr::{normalize_sabr_session, SabrSession},
+};
 
 use super::{
     download_policy::{
@@ -27,6 +30,9 @@ pub struct DownloadRequest {
     pub scheduled_at: Option<String>,
     pub audio_url: Option<String>,
     pub kind: Option<String>,
+    pub sabr: Option<SabrSession>,
+    #[serde(default)]
+    pub reuse_active: Option<bool>,
 }
 
 impl DownloadRequest {
@@ -35,6 +41,9 @@ impl DownloadRequest {
             return Err(format!(
                 "Add between 1 and {MAX_DOWNLOAD_URLS} download URLs."
             ));
+        }
+        if self.sabr.is_some() && self.urls.len() != 1 {
+            return Err("A SABR session requires exactly one YouTube stream.".to_owned());
         }
         if self.filename.is_some() && self.urls.len() != 1 {
             return Err("A custom file name can only be used for a single address.".to_owned());
@@ -99,6 +108,12 @@ impl DownloadRequest {
             None
         };
 
+        let sabr = if let Some(ref sabr_session) = self.sabr {
+            Some(normalize_sabr_session(sabr_session)?)
+        } else {
+            None
+        };
+
         Ok(ValidatedDownloadRequest {
             urls,
             filename,
@@ -110,6 +125,8 @@ impl DownloadRequest {
             scheduled_at,
             audio_url,
             kind: self.kind,
+            sabr,
+            reuse_active: self.reuse_active.unwrap_or(false),
         })
     }
 }

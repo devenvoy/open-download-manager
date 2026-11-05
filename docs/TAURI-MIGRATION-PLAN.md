@@ -286,10 +286,13 @@ measurements are deferred and do not block Tauri implementation.
   `tauri.conf.json` bundles the main application, native host binary, browser
   extension assets, application and installer icons, and sets currentUser
   per-user installation mode with desktop/start menu shortcuts.
-- **Phase 7:** Release validation: all 49 Rust domain, application, infrastructure,
-  and integration tests pass, and all 40 browser extension and renderer tests
-  pass without regression. Clean Windows x64 deployment and final artifact audits
-  can be validated using the defined release gates.
+- **Phase 7:** Release validation: all 118 Rust domain, application, infrastructure,
+  presentation, media/sabr, and integration tests pass, and all 88 browser extension and renderer tests
+  pass without regression (206 total passing automated tests). The Auto-Updater
+  with 6-hour background polling and active transfer guard (Phase F) and YouTube SABR
+  Streaming Protocol & zero-copy Protobuf parser (Phase G) are complete,
+  achieving 100% behavioral parity with the legacy Electron application. Clean Windows x64 deployment
+  and final artifact audits can be validated using the defined release gates.
 
 ## Release gates
 

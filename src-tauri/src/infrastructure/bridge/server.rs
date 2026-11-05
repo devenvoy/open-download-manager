@@ -323,6 +323,8 @@ async fn handle_bridge_connection(
             scheduled_at: None,
             audio_url: valid_browser.audio_url,
             kind: if is_paired { Some("paired".to_owned()) } else { None },
+            sabr: valid_browser.sabr,
+            reuse_active: Some(true),
         };
 
         match transfer_service.add(download_req, &settings) {

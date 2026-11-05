@@ -48,6 +48,7 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         action: "download".to_owned(),
         url: Some("https://example.com/video.mp4".to_owned()),
         youtube_format: Some("137+140".to_owned()),
+        sabr: None,
         start_now: Some(true),
         audio_url: None,
         output_format: Some("mp4".to_owned()),
@@ -73,6 +74,7 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         action: "formats".to_owned(),
         url: Some("https://example.com/not-youtube".to_owned()),
         youtube_format: None,
+        sabr: None,
         start_now: None,
         audio_url: None,
         output_format: None,
@@ -87,6 +89,7 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         action: "formats".to_owned(),
         url: Some("https://www.youtube.com/watch?v=wLdZWyLOJCI".to_owned()),
         youtube_format: None,
+        sabr: None,
         start_now: None,
         audio_url: None,
         output_format: None,
@@ -245,6 +248,8 @@ async fn browser_download_review_lifecycle_and_validation() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        sabr: None,
+        reuse_active: None,
     };
 
     let ids = service.add(request, &settings).unwrap();
@@ -363,6 +368,8 @@ async fn browser_review_cancellation_and_download_later() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        sabr: None,
+        reuse_active: None,
     };
     let ids1 = service.add(req1, &settings).unwrap();
     let id1 = &ids1[0];
@@ -384,6 +391,8 @@ async fn browser_review_cancellation_and_download_later() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        sabr: None,
+        reuse_active: None,
     };
     let ids2 = service.add(req2, &settings).unwrap();
     let id2 = &ids2[0];

@@ -125,6 +125,7 @@ async fn hls_vod_downloads_segments_and_assembles_in_order() {
         scheduled_at: None,
         audio_url: None,
         kind: None,
+        ..Default::default()
     };
 
     let ids = service

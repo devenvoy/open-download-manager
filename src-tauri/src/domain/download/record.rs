@@ -1,7 +1,11 @@
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{category::DownloadCategory, download::DownloadStatus};
+use crate::domain::{
+    category::DownloadCategory,
+    download::DownloadStatus,
+    media::sabr::NormalizedSabrSession,
+};
 
 use super::download_policy::{
     MAX_DOWNLOAD_CONNECTIONS, MAX_DOWNLOAD_FILENAME_CHARACTERS, MAX_DOWNLOAD_ID_CHARACTERS,
@@ -56,6 +60,8 @@ pub struct DownloadRecord {
     pub connections_progress: Vec<DownloadSegmentProgress>,
     #[serde(default)]
     pub audio_url: Option<String>,
+    #[serde(skip)]
+    pub sabr: Option<NormalizedSabrSession>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

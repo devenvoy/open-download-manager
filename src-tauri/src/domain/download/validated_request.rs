@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
-use crate::domain::{category::DownloadCategory, download::DownloadAddress};
+use crate::domain::{
+    category::DownloadCategory,
+    download::DownloadAddress,
+    media::sabr::NormalizedSabrSession,
+};
 
 #[derive(Clone, Debug)]
 pub struct ValidatedDownloadRequest {
@@ -14,4 +18,6 @@ pub struct ValidatedDownloadRequest {
     pub scheduled_at: Option<String>,
     pub audio_url: Option<String>,
     pub kind: Option<String>,
+    pub sabr: Option<NormalizedSabrSession>,
+    pub reuse_active: bool,
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::domain::download::sanitize_filename;
+use crate::domain::{download::sanitize_filename, media::sabr::{sanitize_sabr, SabrSession}};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,6 +10,7 @@ pub struct BrowserIncomingMessage {
     pub action: String,
     pub url: Option<String>,
     pub youtube_format: Option<String>,
+    pub sabr: Option<serde_json::Value>,
     pub start_now: Option<bool>,
     pub audio_url: Option<String>,
     pub output_format: Option<String>,
@@ -26,6 +27,7 @@ pub struct ValidatedBrowserRequest {
     pub action: String,
     pub url: String,
     pub youtube_format: Option<String>,
+    pub sabr: Option<SabrSession>,
     pub start_now: bool,
     pub audio_url: Option<String>,
     pub output_format: Option<String>,
@@ -83,6 +85,7 @@ pub fn sanitize_browser_request(
             action: "formats".to_owned(),
             url: format!("https://www.youtube.com/watch?v={video_id}"),
             youtube_format: None,
+            sabr: None,
             start_now: false,
             audio_url: None,
             output_format: None,
@@ -92,6 +95,12 @@ pub fn sanitize_browser_request(
             headers: HashMap::new(),
         });
     }
+
+    let sabr = if let Some(raw_sabr) = msg.sabr {
+        Some(sanitize_sabr(&raw_sabr, &valid_url)?)
+    } else {
+        None
+    };
 
     if let Some(format) = &msg.output_format {
         if !matches!(format.as_str(), "mp4" | "mp3") {
@@ -149,6 +158,7 @@ pub fn sanitize_browser_request(
         action: "download".to_owned(),
         url: valid_url,
         youtube_format: msg.youtube_format,
+        sabr,
         start_now: msg.start_now.unwrap_or(false),
         audio_url,
         output_format: msg.output_format,

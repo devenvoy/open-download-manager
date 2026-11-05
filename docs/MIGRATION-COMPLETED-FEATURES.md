@@ -11,10 +11,10 @@
 The migration of Awesome Downloader from Electron to Rust (Tauri v2) has successfully ported the performance-critical core: the asynchronous transfer engine, byte-range segmentation, bandwidth throttling, retry mechanisms, HLS media handling, and atomic persistence.
 
 ### Verification Status
-- **Rust Test Suite:** 112 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
+- **Rust Test Suite:** 118 unit, integration, and instrumentation tests passing (`cargo test --manifest-path src-tauri/Cargo.toml`)
 - **WebExtension & Renderer Contract Suite:** 88 tests passing (`bun test extension renderer`)
-- **Total Tests Passing:** 200 automated tests with zero failures across Rust, Bun, and browser integration.
-- **Zero-Node Runtime:** Core transfers, scheduling, file icons, updater, and loopback communication run natively in compiled Rust with no Node.js dependency.
+- **Total Tests Passing:** 206 automated tests with zero failures across Rust, Bun, and browser integration.
+- **Zero-Node Runtime:** Core transfers, scheduling, file icons, updater, SABR protobuf parsing, and loopback communication run natively in compiled Rust with no Node.js dependency.
 
 | Subsystem | Legacy Electron Reference | Migrated Tauri / Rust Implementation | Functional Parity | Performance & Stability Gain |
 | :--- | :--- | :--- | :--- | :--- |
@@ -27,6 +27,7 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 | **File Type Icon Provider & Catalog** | `desktop/file-icons.cjs`, `main.cjs` | `src-tauri/src/domain/file_type.rs`, `infrastructure/file_icons.rs` | **100%** | 60+ `FileType` catalog with 71 bundled Material Icon Theme vector SVGs, compound extensions, instant data URLs, auto-categorization |
 | **Adaptive Dual-Stream Muxing** | `core/engine.mjs`, `core/mux.mjs` | `src-tauri/src/infrastructure/media/paired_executor.rs`, `composite_executor.rs` | **100%** | Parallel 2-track HTTP streams (`0.part`, `1.part`), rate limiting, status `assembling`, FFmpeg track muxing and MP3 conversion |
 | **Auto-Updater & Periodic Check** | `desktop/main.cjs:340-359`, `desktop/updater.cjs` | `src-tauri/src/domain/updater.rs`, `application/updater_service.rs`, `presentation/updater_controller.rs` | **100%** | 6-hour recurring background checks, manual check dialog, active download safety warning, GitHub Releases API integration |
+| **YouTube SABR Protocol & Protobuf Parser** | `core/sabr.mjs`, `integration/native-host.cjs` | `src-tauri/src/domain/media/sabr.rs`, `download_transfer_service.rs` | **100%** | Pure Rust zero-copy Protobuf wire parser, session normalization, DRC/VB filtering, active transfer deduplication |
 | **HTTP Transfer Engine** | `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Native async I/O via `tokio` and `reqwest`, zero V8 GC pauses |
 | **Segmented Transfers** | `core/http.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Concurrent chunk assembly with byte-range validation |
 | **Pause, Resume & Recovery**| `core/http.mjs`, `core/engine.mjs` | `src-tauri/src/infrastructure/http_download_executor.rs` | **100%** | Strict validator checking (`ETag`/`Last-Modified`) & mid-stream reconnect |
@@ -270,7 +271,46 @@ The migration of Awesome Downloader from Electron to Rust (Tauri v2) has success
 
 ---
 
-## 8. Performance & Resource Comparison
+## 8. YouTube SABR Streaming Protocol & Protobuf Engine (Phase G)
+
+### 8.1 Zero-Copy Pure-Rust Protobuf Wire Parser
+- Implemented `parse_sabr_protobuf_request` in `src-tauri/src/domain/media/sabr.rs`.
+- Decodes binary `VideoPlaybackAbrRequest` wire packets directly from byte buffers without generating code or pulling external heavy protobuf runtimes.
+- Traverses wire types: `Varint` (0), `Fixed64` (1), `LengthDelimited` (2), `Fixed32` (5).
+- Bounds-checked varint decoding protects against buffer overflows and truncated packets.
+- Extracts `StreamerContext` (field 10):
+  - `client_info` (field 6): extracts `client_name` (field 1) and `client_version` (field 2).
+  - `po_token` (field 19): extracts YouTube proof-of-origin tokens.
+- Re-encodes extracted browser client identity as URL-safe Base64 token for streaming queries.
+
+### 8.2 Session Normalization & Format Filtering
+- Implemented `normalize_sabr_session` in `src-tauri/src/domain/media/sabr.rs`.
+- Strict format filtering:
+  - Discards dynamic range compression (`isDrc: true`) and video-boosted tracks (`isVoiceBoost: true`).
+  - Filters out unplayable or encrypted tracks.
+- Default Audio Resolution:
+  - If multiple audio tracks exist, selects default audio variant (`audio_track.audio_is_default == true`), discarding redundant non-default language tracks.
+- Idempotent normalization: re-running normalization on an already normalized session returns an exact match (`normalize_sabr_session(&first) == first`).
+
+### 8.3 Boundary Sanitization & Loopback Bridge Integration
+- Implemented `sanitize_sabr` in `src-tauri/src/domain/media/sabr.rs` and integrated in `src-tauri/src/domain/browser/request.rs`.
+- Enforces legacy boundary invariants:
+  - Server URL must be valid HTTP/HTTPS on `.googlevideo.com` with `sabr=1` query parameter.
+  - Formats array bounded between 1 and 128 formats.
+  - Video and audio itags must exist in the formats catalog.
+  - Raw protobuf request body bounded at 256 KiB.
+  - Returns exact legacy error messages (`"The captured YouTube SABR request context is unreadable."`, `"The selected YouTube audio track is unavailable."`, etc.).
+
+### 8.4 Active Transfer Deduplication
+- Implemented in `src-tauri/src/application/download_transfer_service.rs`.
+- When `reuse_active: Some(true)` is provided by the browser extension:
+  - Matches active transfers by `(video_id, video_itag, audio_itag)` rather than signed expiring URLs (`&expire=...`).
+  - Prevents spurious duplicate download entries when the user interacts with the page or reloads the tab.
+  - Automatically classifies transfer kind as `"sabr"` with `resumable: false`.
+
+---
+
+## 9. Performance & Resource Comparison
 
 | Benchmark Metric | Legacy Electron App | Migrated Tauri / Rust App | Improvement |
 | :--- | :--- | :--- | :--- |
