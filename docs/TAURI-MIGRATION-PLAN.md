@@ -272,10 +272,21 @@ measurements are deferred and do not block Tauri implementation.
   persisted history. The application transfer use case depends on an executor
   port; its HTTP/file implementation lives in infrastructure. Policy values
   and substantial data types are kept in focused modules. Queue-only HTTP
-  downloads can be started once through a typed Tauri action. Pausing,
-  cancellation, retry and byte-range resume, scheduling, speed limiting,
-  segmented transfers, and media handling remain outstanding; unsupported
-  actions report an explicit migration error.
+  downloads can be started once through a typed Tauri action. Active downloads
+  can be paused or cancelled, failed downloads can be retried, and paused HTTP
+  transfers resume from a validated byte range when the server supports it;
+  servers that ignore ranges restart the transfer safely. Future RFC 3339
+  downloads are persisted as scheduled and start automatically when due,
+  including after an app restart. The configured speed limit is shared across
+  concurrent HTTP transfers. HTTP servers that support byte ranges and provide
+  a stable ETag or Last-Modified validator can use segmented transfers; chunks
+  are validated, progress is reported per connection, interrupted segments can
+  resume safely, and servers without range support fall back to a single
+  stream. Transient connection/timeout failures and HTTP 408/429/5xx responses
+  receive bounded retries with exponential backoff; numeric `Retry-After` values
+  are honored up to a 30-second cap. Mid-stream retry/recovery, media handling,
+  browser/native-messaging migration, packaging, and Windows release validation
+  remain outstanding; unsupported actions report an explicit migration error.
 - The Electron shell, JavaScript backend, native host, and their tests were
   moved to the ignored local `reference/electron-legacy/` archive as requested.
   That archive is not present in fresh clones. The pre-migration sources remain

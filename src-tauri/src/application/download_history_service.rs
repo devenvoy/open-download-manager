@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
+
 use crate::{
     application::{
         download_event_publisher::DownloadEventPublisher,
+        download_executor::DownloadStopReason,
         download_history_policy::MAX_ACTIVE_DOWNLOADS,
         download_history_repository::DownloadHistoryRepository,
         error::{AppError, AppResult},
@@ -57,6 +60,16 @@ impl DownloadHistoryService {
             .map_err(|_| AppError::storage("Download history is unavailable."))
     }
 
+    pub(crate) fn download(&self, id: &str) -> AppResult<DownloadRecord> {
+        self.downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?
+            .iter()
+            .find(|download| download.id == id)
+            .cloned()
+            .ok_or_else(|| AppError::download("The download no longer exists."))
+    }
+
     pub(crate) fn add_records(&self, records: Vec<DownloadRecord>) -> AppResult<()> {
         let mut downloads = self
             .downloads
@@ -68,6 +81,7 @@ impl DownloadHistoryService {
                 matches!(
                     download.status,
                     DownloadStatus::Queued
+                        | DownloadStatus::Scheduled
                         | DownloadStatus::Connecting
                         | DownloadStatus::Downloading
                         | DownloadStatus::Assembling
@@ -90,62 +104,12 @@ impl DownloadHistoryService {
         Ok(())
     }
 
-    pub(crate) fn begin_queued_downloads(
-        &self,
-        ids: &[String],
-        last_try: String,
-    ) -> AppResult<Vec<DownloadRecord>> {
-        let mut downloads = self
-            .downloads
-            .lock()
-            .map_err(|_| AppError::storage("Download history is unavailable."))?;
-        let indexes = ids
-            .iter()
-            .map(|id| {
-                downloads
-                    .iter()
-                    .position(|download| download.id == *id)
-                    .ok_or_else(|| AppError::download("The download no longer exists."))
-            })
-            .collect::<AppResult<Vec<_>>>()?;
-        if indexes
-            .iter()
-            .any(|index| !matches!(&downloads[*index].status, DownloadStatus::Queued))
-        {
-            return Err(AppError::download(
-                "Only queued downloads can be started by this action.",
-            ));
-        }
-
-        let previous = indexes
-            .iter()
-            .map(|index| downloads[*index].clone())
-            .collect::<Vec<_>>();
-        for index in &indexes {
-            downloads[*index].status = DownloadStatus::Connecting;
-            downloads[*index].last_try = Some(last_try.clone());
-            downloads[*index].error = None;
-        }
-        if let Err(error) = self.repository.save(&downloads) {
-            for (index, previous) in indexes.iter().zip(previous) {
-                downloads[*index] = previous;
-            }
-            return Err(error);
-        }
-        let started = indexes
-            .iter()
-            .map(|index| downloads[*index].clone())
-            .collect();
-        drop(downloads);
-        self.publish_change();
-        Ok(started)
-    }
-
-    pub(crate) fn update_download(
+    pub(crate) fn begin_download(
         &self,
         id: &str,
-        update: impl FnOnce(&mut DownloadRecord),
-    ) -> AppResult<()> {
+        retry: bool,
+        last_try: String,
+    ) -> AppResult<DownloadRecord> {
         let mut downloads = self
             .downloads
             .lock()
@@ -154,6 +118,168 @@ impl DownloadHistoryService {
             .iter()
             .position(|download| download.id == id)
             .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        if downloads[index].needs_review {
+            return Err(AppError::download(
+                "Review this browser download before starting it.",
+            ));
+        }
+        let status = &downloads[index].status;
+        let can_start = if retry {
+            matches!(status, DownloadStatus::Failed | DownloadStatus::Cancelled)
+        } else {
+            matches!(status, DownloadStatus::Queued | DownloadStatus::Paused)
+        };
+        if !can_start {
+            return Err(AppError::download(
+                "This download cannot be started in its current state.",
+            ));
+        }
+
+        let previous = downloads[index].clone();
+        downloads[index].status = DownloadStatus::Connecting;
+        downloads[index].last_try = Some(last_try);
+        downloads[index].error = None;
+        downloads[index].speed = 0;
+        if retry {
+            downloads[index].downloaded = 0;
+            downloads[index].total = None;
+        }
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads[index] = previous;
+            return Err(error);
+        }
+        let started = downloads[index].clone();
+        drop(downloads);
+        self.publish_change();
+        Ok(started)
+    }
+
+    pub(crate) fn begin_due_scheduled_downloads(
+        &self,
+        now: DateTime<Utc>,
+        last_try: String,
+    ) -> AppResult<Vec<DownloadRecord>> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let due_indexes = downloads
+            .iter()
+            .enumerate()
+            .filter_map(|(index, download)| {
+                if download.status != DownloadStatus::Scheduled {
+                    return None;
+                }
+                let due = download
+                    .scheduled_at
+                    .as_deref()
+                    .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+                    .is_some_and(|scheduled| scheduled.with_timezone(&Utc) <= now);
+                due.then_some(index)
+            })
+            .collect::<Vec<_>>();
+        if due_indexes.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let previous = due_indexes
+            .iter()
+            .map(|index| downloads[*index].clone())
+            .collect::<Vec<_>>();
+        for index in &due_indexes {
+            downloads[*index].status = DownloadStatus::Connecting;
+            downloads[*index].last_try = Some(last_try.clone());
+            downloads[*index].error = None;
+            downloads[*index].speed = 0;
+        }
+        if let Err(error) = self.repository.save(&downloads) {
+            for (index, previous) in due_indexes.iter().zip(previous) {
+                downloads[*index] = previous;
+            }
+            return Err(error);
+        }
+        let started = due_indexes
+            .iter()
+            .map(|index| downloads[*index].clone())
+            .collect();
+        drop(downloads);
+        self.publish_change();
+        Ok(started)
+    }
+
+    pub(crate) fn stop_download(
+        &self,
+        id: &str,
+        reason: DownloadStopReason,
+    ) -> AppResult<DownloadRecord> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        let status = &downloads[index].status;
+        let can_stop = match reason {
+            DownloadStopReason::Pause => matches!(
+                status,
+                DownloadStatus::Queued | DownloadStatus::Connecting | DownloadStatus::Downloading
+            ),
+            DownloadStopReason::Cancel => !matches!(
+                status,
+                DownloadStatus::Completed | DownloadStatus::Cancelled
+            ),
+        };
+        if !can_stop {
+            return Err(AppError::download(
+                "This download cannot be stopped in its current state.",
+            ));
+        }
+
+        let previous = downloads[index].clone();
+        match reason {
+            DownloadStopReason::Pause => {
+                downloads[index].status = DownloadStatus::Paused;
+                downloads[index].speed = 0;
+            }
+            DownloadStopReason::Cancel => {
+                downloads[index].status = DownloadStatus::Cancelled;
+                downloads[index].downloaded = 0;
+                downloads[index].total = None;
+                downloads[index].speed = 0;
+                downloads[index].error = None;
+            }
+        }
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads[index] = previous;
+            return Err(error);
+        }
+        let stopped = downloads[index].clone();
+        drop(downloads);
+        self.publish_change();
+        Ok(stopped)
+    }
+
+    pub(crate) fn update_active_download(
+        &self,
+        id: &str,
+        update: impl FnOnce(&mut DownloadRecord),
+    ) -> AppResult<bool> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        if !matches!(
+            downloads[index].status,
+            DownloadStatus::Connecting | DownloadStatus::Downloading
+        ) {
+            return Ok(false);
+        }
         let previous = downloads[index].clone();
         update(&mut downloads[index]);
         if let Err(error) = self.repository.save(&downloads) {
@@ -162,7 +288,7 @@ impl DownloadHistoryService {
         }
         drop(downloads);
         self.publish_change();
-        Ok(())
+        Ok(true)
     }
 
     fn publish_change(&self) {

@@ -49,16 +49,32 @@ fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
 }
 
 #[test]
-fn rejects_relative_download_directories_and_scheduled_requests() {
+fn rejects_relative_download_directories_and_invalid_or_past_schedules() {
     let mut invalid_directory = request("https://example.test/file.bin");
     invalid_directory.directory = Some("downloads".to_owned());
     assert!(invalid_directory
         .validate(PathBuf::from("/tmp/downloads"))
         .is_err());
 
+    for scheduled_at in [
+        "not-a-date".to_owned(),
+        (chrono::Utc::now() - chrono::Duration::minutes(1)).to_rfc3339(),
+    ] {
+        let mut scheduled = request("https://example.test/file.bin");
+        scheduled.scheduled_at = Some(scheduled_at);
+        assert!(scheduled.validate(PathBuf::from("/tmp/downloads")).is_err());
+    }
+}
+
+#[test]
+fn accepts_a_future_rfc3339_schedule() {
+    let scheduled_at = (chrono::Utc::now() + chrono::Duration::minutes(5)).to_rfc3339();
     let mut scheduled = request("https://example.test/file.bin");
-    scheduled.scheduled_at = Some("2030-01-01T00:00:00.000Z".to_owned());
-    assert!(scheduled.validate(PathBuf::from("/tmp/downloads")).is_err());
+    scheduled.scheduled_at = Some(scheduled_at.clone());
+    let validated = scheduled
+        .validate(PathBuf::from("/tmp/downloads"))
+        .expect("future RFC3339 schedule should be accepted");
+    assert_eq!(validated.scheduled_at, Some(scheduled_at));
 }
 
 #[test]

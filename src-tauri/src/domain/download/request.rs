@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::category::DownloadCategory;
@@ -43,9 +44,18 @@ impl DownloadRequest {
                 "File names must be at most {MAX_DOWNLOAD_FILENAME_CHARACTERS} characters."
             ));
         }
-        if self.scheduled_at.is_some() {
-            return Err("Scheduled downloads are not available in this migration yet.".to_owned());
-        }
+        let scheduled_at = self
+            .scheduled_at
+            .map(|scheduled_at| {
+                let scheduled_at = DateTime::parse_from_rfc3339(&scheduled_at)
+                    .map_err(|_| "Choose a valid scheduled start time.")?
+                    .with_timezone(&Utc);
+                if scheduled_at <= Utc::now() {
+                    return Err("Choose a future scheduled start time.");
+                }
+                Ok(scheduled_at.to_rfc3339())
+            })
+            .transpose()?;
 
         let filename = self.filename.map(|filename| sanitize_filename(&filename));
         if filename.as_ref().is_some_and(String::is_empty) {
@@ -85,6 +95,7 @@ impl DownloadRequest {
             category: self.category,
             description,
             queue_only: self.queue_only,
+            scheduled_at,
         })
     }
 }

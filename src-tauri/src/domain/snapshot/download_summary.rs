@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use crate::domain::{
     category::DownloadCategory,
-    download::{redact_download_url, DownloadRecord, DownloadStatus},
+    download::{redact_download_url, DownloadRecord, DownloadSegmentProgress, DownloadStatus},
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -29,6 +29,8 @@ pub struct DownloadSummary {
     pub kind: Option<String>,
     pub resumable: Option<bool>,
     pub duration: Option<f64>,
+    pub connections: u8,
+    pub connections_progress: Vec<DownloadSegmentProgress>,
 }
 
 impl From<DownloadRecord> for DownloadSummary {
@@ -55,6 +57,8 @@ impl From<DownloadRecord> for DownloadSummary {
             kind: download.kind,
             resumable: download.resumable,
             duration: download.duration,
+            connections: download.connections,
+            connections_progress: download.connections_progress,
         }
     }
 }

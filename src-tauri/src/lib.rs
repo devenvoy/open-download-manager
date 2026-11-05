@@ -53,6 +53,8 @@ pub fn run() {
                 download_executor,
                 max_concurrent,
             );
+            download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
+            download_transfer.start_scheduler();
 
             app.manage(AppState::new(settings, download_history, download_transfer));
             Ok(())

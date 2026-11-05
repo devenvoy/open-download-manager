@@ -59,5 +59,8 @@ pub fn update_settings(
     state
         .download_transfer
         .set_max_concurrent(updated.max_concurrent);
+    state
+        .download_transfer
+        .set_speed_limit(updated.speed_limit_kbps);
     Ok(updated)
 }

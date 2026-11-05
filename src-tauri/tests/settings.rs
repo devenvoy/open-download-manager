@@ -43,7 +43,7 @@ fn settings_update_is_validated_and_persisted() {
             default_directory: Some(updated_directory.to_string_lossy().into_owned()),
             max_concurrent: Some(5),
             connections: Some(12),
-            speed_limit_kbps: Some(0),
+            speed_limit_kbps: Some(64),
             category_directories: Some(category_directories),
             notify_on_complete: Some(false),
             reveal_on_complete: None,
@@ -55,6 +55,7 @@ fn settings_update_is_validated_and_persisted() {
 
     assert_eq!(updated.default_directory, updated_directory);
     assert_eq!(updated.max_concurrent, 5);
+    assert_eq!(updated.speed_limit_kbps, 64);
     assert_eq!(
         updated.category_directories.get(&DownloadCategory::Video),
         Some(&video_directory)

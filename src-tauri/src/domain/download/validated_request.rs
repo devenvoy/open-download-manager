@@ -10,4 +10,5 @@ pub struct ValidatedDownloadRequest {
     pub category: Option<DownloadCategory>,
     pub description: Option<String>,
     pub queue_only: bool,
+    pub scheduled_at: Option<String>,
 }

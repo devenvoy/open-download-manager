@@ -6,6 +6,7 @@ mod download_history_policy;
 pub mod download_history_repository;
 pub mod download_history_service;
 pub mod download_progress;
+pub mod download_rate_limiter;
 pub mod download_result;
 mod download_transfer_policy;
 pub mod download_transfer_service;

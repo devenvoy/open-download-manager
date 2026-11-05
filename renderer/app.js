@@ -538,10 +538,14 @@ function selected() {
 	return state.downloads.find((d) => d.id === selectedId);
 }
 function canResume(d) {
-	return d && !d.needsReview && statusOf(d) === "queued";
+	return (
+		d &&
+		!d.needsReview &&
+		["queued", "paused", "failed", "cancelled"].includes(statusOf(d))
+	);
 }
-function canPause() {
-	return false;
+function canPause(d) {
+	return d && ["connecting", "downloading"].includes(statusOf(d));
 }
 function matches(d) {
 	const status = statusOf(d);
@@ -1148,7 +1152,7 @@ $("#detail-stop").addEventListener("click", () =>
 	performAction(detailDownload(), "pause"),
 );
 $("#detail-cancel").addEventListener("click", () =>
-	call("closeProgress").catch((error) => notify(messageOf(error), true)),
+	performAction(detailDownload(), "cancel"),
 );
 $("#detail-resume").addEventListener("click", () => {
 	const d = detailDownload();
