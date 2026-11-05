@@ -176,16 +176,18 @@ pub fn parse_playlist_json(
             }
         });
 
+    let empty_entries = Vec::new();
     let raw_entries = info
         .get("entries")
         .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+        .map(|arr| arr.as_slice())
+        .unwrap_or(&empty_entries);
 
     const MAX_PLAYLIST_ENTRIES: usize = 500;
-    let mut entries = Vec::new();
+    let count = raw_entries.len().min(MAX_PLAYLIST_ENTRIES);
+    let mut entries = Vec::with_capacity(count);
 
-    for (idx, entry_val) in raw_entries.into_iter().take(MAX_PLAYLIST_ENTRIES).enumerate() {
+    for (idx, entry_val) in raw_entries.iter().take(MAX_PLAYLIST_ENTRIES).enumerate() {
         let entry_id = entry_val
             .get("id")
             .and_then(|v| v.as_str())

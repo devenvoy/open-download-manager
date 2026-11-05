@@ -382,16 +382,26 @@ impl DownloadHistoryService {
         if !downloads.iter().any(|d| d.status == DownloadStatus::Completed) {
             return Ok(Vec::new());
         }
-        let previous = downloads.clone();
-        let (completed, remaining): (Vec<_>, Vec<_>) = downloads
-            .drain(..)
-            .partition(|download| download.status == DownloadStatus::Completed);
+        let mut completed = Vec::new();
+        let mut remaining = Vec::with_capacity(downloads.len());
+        for (index, download) in downloads.drain(..).enumerate() {
+            if download.status == DownloadStatus::Completed {
+                completed.push((index, download));
+            } else {
+                remaining.push(download);
+            }
+        }
         if let Err(error) = self.repository.save(&remaining) {
-            *downloads = previous;
+            let mut all = remaining;
+            for (index, item) in completed {
+                let insert_at = index.min(all.len());
+                all.insert(insert_at, item);
+            }
+            *downloads = all;
             return Err(error);
         }
         *downloads = remaining;
-        let removed_ids = completed.into_iter().map(|d| d.id).collect();
+        let removed_ids = completed.into_iter().map(|(_, d)| d.id).collect();
         drop(downloads);
         self.publish_change();
         Ok(removed_ids)

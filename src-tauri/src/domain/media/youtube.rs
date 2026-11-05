@@ -140,7 +140,7 @@ pub fn choices_from_info(
     let duration = info.get("duration").and_then(|d| d.as_f64()).unwrap_or(0.0);
 
     let mut sorted_videos: Vec<_> = groups.into_iter().collect();
-    sorted_videos.sort_by(|a, b| b.0.cmp(&a.0));
+    sorted_videos.sort_unstable_by(|a, b| b.0.cmp(&a.0));
 
     let audio_id = best_audio
         .and_then(|a| a.get("format_id"))
@@ -154,7 +154,7 @@ pub fn choices_from_info(
         })
         .unwrap_or(0);
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(sorted_videos.len() + 1);
     for (height, f) in sorted_videos {
         let paired = f.get("acodec").and_then(|a| a.as_str()) == Some("none");
         let format_id = f.get("format_id").and_then(|id| id.as_str()).unwrap_or("");

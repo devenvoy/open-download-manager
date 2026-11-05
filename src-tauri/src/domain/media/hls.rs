@@ -81,21 +81,19 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
     if !text.trim_start().starts_with("#EXTM3U") {
         return Err("The server did not return an HLS playlist.".to_owned());
     }
-    let lines: Vec<&str> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-
     let mut variants = Vec::new();
     let mut segments = Vec::new();
     let mut pending_variant: Option<HashMap<String, String>> = None;
     let mut duration = 0.0_f64;
     let mut init_map: Option<String> = None;
     let mut encrypted = false;
+    let mut has_endlist = false;
     let mut audio_groups: HashMap<String, String> = HashMap::new();
 
-    for line in &lines {
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if line == "#EXT-X-ENDLIST" {
+            has_endlist = true;
+        }
         if line.starts_with("#EXT-X-MEDIA:") {
             let attrs = parse_attributes(line);
             if attrs.get("TYPE").map(|v| v.as_str()) == Some("AUDIO") {
@@ -174,11 +172,11 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
                 variant.audio_url = audio_groups.get(audio_group).cloned();
             }
         }
-        variants.sort_by(|a, b| b.bandwidth.cmp(&a.bandwidth));
+        variants.sort_unstable_by(|a, b| b.bandwidth.cmp(&a.bandwidth));
         return Ok(ParsedHls::Master(HlsMasterPlaylist { variants }));
     }
 
-    if !lines.iter().any(|line| *line == "#EXT-X-ENDLIST") {
+    if !has_endlist {
         return Err("Live HLS streams are not supported yet. Choose an on-demand video.".to_owned());
     }
 
