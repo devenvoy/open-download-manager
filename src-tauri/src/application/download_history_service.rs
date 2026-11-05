@@ -261,6 +261,48 @@ impl DownloadHistoryService {
         Ok(stopped)
     }
 
+    pub fn remove_download(&self, id: &str) -> AppResult<DownloadRecord> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        let removed = downloads.remove(index);
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads.insert(index, removed);
+            return Err(error);
+        }
+        drop(downloads);
+        self.publish_change();
+        Ok(removed)
+    }
+
+    pub fn remove_completed_downloads(&self) -> AppResult<Vec<String>> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        if !downloads.iter().any(|d| d.status == DownloadStatus::Completed) {
+            return Ok(Vec::new());
+        }
+        let previous = downloads.clone();
+        let (completed, remaining): (Vec<_>, Vec<_>) = downloads
+            .drain(..)
+            .partition(|download| download.status == DownloadStatus::Completed);
+        if let Err(error) = self.repository.save(&remaining) {
+            *downloads = previous;
+            return Err(error);
+        }
+        *downloads = remaining;
+        let removed_ids = completed.into_iter().map(|d| d.id).collect();
+        drop(downloads);
+        self.publish_change();
+        Ok(removed_ids)
+    }
+
     pub(crate) fn update_active_download(
         &self,
         id: &str,

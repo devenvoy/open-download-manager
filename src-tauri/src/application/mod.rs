@@ -12,3 +12,4 @@ mod download_transfer_policy;
 pub mod download_transfer_service;
 pub mod error;
 pub mod settings_service;
+pub mod shell_service;

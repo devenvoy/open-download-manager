@@ -127,12 +127,35 @@ test('download actions invoke the typed Rust command', async () => {
       }
     }
   });
-  const request = { id: 'download-123', action: 'resume' };
 
-  await api.action(request);
+  for (const action of ['resume', 'pause', 'retry', 'cancel', 'remove', 'open', 'reveal', 'openWith']) {
+    const request = { id: 'download-123', action };
+    await api.action(request);
+  }
 
+  assert.equal(calls.length, 8);
   assert.equal(calls[0][0], 'download_action');
-  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify(request));
+  assert.equal(calls[0][1].action, 'resume');
+  assert.equal(calls[4][1].action, 'remove');
+  assert.equal(calls[5][1].action, 'open');
+  assert.equal(calls[6][1].action, 'reveal');
+  assert.equal(calls[7][1].action, 'openWith');
+});
+
+test('removeCompleted invokes the remove_completed Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return ['completed-1', 'completed-2'];
+      }
+    }
+  });
+
+  const result = await api.removeCompleted();
+  assert.deepEqual(result, ['completed-1', 'completed-2']);
+  assert.equal(calls[0][0], 'remove_completed');
 });
 
 test('folder picker uses the restricted native directory dialog', async () => {

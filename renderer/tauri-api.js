@@ -74,6 +74,7 @@ window.downloader = Object.freeze({
   resizeProgress: ({ expanded }) => invoke('resize_progress_window', { expanded }),
   add: request => invoke('add_download', { request }),
   action: request => invoke('download_action', request),
+  removeCompleted: () => invoke('remove_completed'),
   review: () => unavailable('Browser download review'),
   integration: () => unavailable('Browser integration'),
   browserSetup: () => unavailable('Browser setup'),

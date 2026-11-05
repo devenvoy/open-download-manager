@@ -47,6 +47,11 @@ pub fn download_action(
 }
 
 #[tauri::command]
+pub fn remove_completed(state: State<'_, AppState>) -> AppResult<Vec<String>> {
+    state.download_transfer.remove_completed()
+}
+
+#[tauri::command]
 pub fn update_settings(
     state: State<'_, AppState>,
     patch: SettingsPatch,

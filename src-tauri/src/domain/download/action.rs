@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum DownloadAction {
     Pause,
     Resume,
@@ -10,6 +10,7 @@ pub enum DownloadAction {
     Remove,
     Open,
     Reveal,
+    OpenWith,
 }
 
 impl DownloadAction {
@@ -22,6 +23,7 @@ impl DownloadAction {
             Self::Remove => "remove",
             Self::Open => "open",
             Self::Reveal => "reveal",
+            Self::OpenWith => "openWith",
         }
     }
 }

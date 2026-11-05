@@ -9,7 +9,7 @@ use infrastructure::{
 };
 use presentation::{
     app_state::AppState,
-    commands::{add_download, download_action, snapshot, update_settings},
+    commands::{add_download, download_action, remove_completed, snapshot, update_settings},
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{close_auxiliary_window, open_progress_window, resize_progress_window},
 };
@@ -82,6 +82,7 @@ pub fn run() {
             snapshot,
             add_download,
             download_action,
+            remove_completed,
             update_settings,
             open_progress_window,
             close_auxiliary_window,

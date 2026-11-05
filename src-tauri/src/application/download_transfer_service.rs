@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -19,6 +20,7 @@ use crate::{
             NEW_DOWNLOAD_NEEDS_REVIEW, SCHEDULER_POLL_INTERVAL_MILLISECONDS,
         },
         error::{AppError, AppResult},
+        shell_service::ShellService,
     },
     domain::{
         download::{
@@ -26,6 +28,7 @@ use crate::{
         },
         settings::Settings,
     },
+    infrastructure::system_shell::SystemShellService,
 };
 
 #[derive(Clone)]
@@ -35,6 +38,7 @@ pub struct DownloadTransferService {
     concurrency: Arc<DownloadConcurrencyLimiter>,
     rate_limiter: Arc<DownloadRateLimiter>,
     controls: Arc<Mutex<HashMap<String, watch::Sender<Option<DownloadStopReason>>>>>,
+    shell: Arc<dyn ShellService>,
 }
 
 impl DownloadTransferService {
@@ -43,12 +47,27 @@ impl DownloadTransferService {
         executor: impl DownloadExecutor + 'static,
         max_concurrent: u8,
     ) -> Self {
+        Self::with_shell(
+            history,
+            executor,
+            max_concurrent,
+            SystemShellService::new(),
+        )
+    }
+
+    pub fn with_shell(
+        history: DownloadHistoryService,
+        executor: impl DownloadExecutor + 'static,
+        max_concurrent: u8,
+        shell: impl ShellService + 'static,
+    ) -> Self {
         Self {
             history,
             executor: Arc::new(executor),
             concurrency: DownloadConcurrencyLimiter::new(max_concurrent),
             rate_limiter: Arc::new(DownloadRateLimiter::new(0)),
             controls: Arc::new(Mutex::new(HashMap::new())),
+            shell: Arc::new(shell),
         }
     }
 
@@ -129,13 +148,89 @@ impl DownloadTransferService {
             DownloadAction::Retry => self.start_download(id, true),
             DownloadAction::Pause => self.stop_download(id, DownloadStopReason::Pause),
             DownloadAction::Cancel => self.stop_download(id, DownloadStopReason::Cancel),
-            DownloadAction::Remove | DownloadAction::Open | DownloadAction::Reveal => {
-                Err(AppError::not_migrated(format!(
-                    "The {} action is not available in the Tauri migration yet.",
-                    action.as_str()
-                )))
+            DownloadAction::Remove => self.remove_download(id),
+            DownloadAction::Open => self.open_download(id),
+            DownloadAction::Reveal => self.reveal_download(id),
+            DownloadAction::OpenWith => self.open_download_with(id),
+        }
+    }
+
+    pub fn remove_completed(&self) -> AppResult<Vec<String>> {
+        self.history.remove_completed_downloads()
+    }
+
+    fn remove_download(&self, id: &str) -> AppResult<()> {
+        let record = self.history.download(id)?;
+        let controls = self
+            .controls
+            .lock()
+            .map_err(|_| AppError::storage("Download controls are unavailable."))?;
+        if let Some(control) = controls.get(id) {
+            control.send_replace(Some(DownloadStopReason::Cancel));
+            let control = control.clone();
+            let executor = self.executor.clone();
+            let cleanup_record = record.clone();
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    control.closed().await;
+                    if let Err(error) = executor.discard_partial(&cleanup_record) {
+                        eprintln!(
+                            "Could not remove the cancelled download partial: {}",
+                            error.message
+                        );
+                    }
+                });
+            } else {
+                let _ = executor.discard_partial(&cleanup_record);
+            }
+        } else {
+            self.executor.discard_partial(&record)?;
+        }
+        drop(controls);
+
+        self.history.remove_download(id)?;
+        Ok(())
+    }
+
+    fn open_download(&self, id: &str) -> AppResult<()> {
+        let record = self.history.download(id)?;
+        if record.status != DownloadStatus::Completed || record.path.is_none() {
+            return Err(AppError::download("This download has not finished."));
+        }
+        let path = Path::new(record.path.as_deref().unwrap());
+        if !path.exists() {
+            return Err(AppError::download("The downloaded file no longer exists."));
+        }
+        self.shell.open_path(path)
+    }
+
+    fn open_download_with(&self, id: &str) -> AppResult<()> {
+        let record = self.history.download(id)?;
+        if record.status != DownloadStatus::Completed || record.path.is_none() {
+            return Err(AppError::download("This download has not finished."));
+        }
+        let path = Path::new(record.path.as_deref().unwrap());
+        if !path.exists() {
+            return Err(AppError::download("The downloaded file no longer exists."));
+        }
+        self.shell.open_with(path)
+    }
+
+    fn reveal_download(&self, id: &str) -> AppResult<()> {
+        let record = self.history.download(id)?;
+        if let Some(path_str) = &record.path {
+            let path = Path::new(path_str);
+            if path.exists() {
+                return self.shell.reveal_path(path);
             }
         }
+        if let Some(directory_str) = &record.directory {
+            let directory = Path::new(directory_str);
+            if directory.exists() {
+                return self.shell.open_path(directory);
+            }
+        }
+        Err(AppError::download("The file or folder cannot be found."))
     }
 
     pub fn set_max_concurrent(&self, value: u8) {
@@ -216,15 +311,19 @@ impl DownloadTransferService {
             if reason == DownloadStopReason::Cancel {
                 let control = control.clone();
                 let executor = self.executor.clone();
-                tokio::spawn(async move {
-                    control.closed().await;
-                    if let Err(error) = executor.discard_partial(&record) {
-                        eprintln!(
-                            "Could not remove the cancelled download partial: {}",
-                            error.message
-                        );
-                    }
-                });
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        control.closed().await;
+                        if let Err(error) = executor.discard_partial(&record) {
+                            eprintln!(
+                                "Could not remove the cancelled download partial: {}",
+                                error.message
+                            );
+                        }
+                    });
+                } else {
+                    let _ = executor.discard_partial(&record);
+                }
             }
         } else if reason == DownloadStopReason::Cancel {
             self.executor.discard_partial(&record)?;
@@ -236,7 +335,7 @@ impl DownloadTransferService {
         let id = record.id.clone();
         let cleanup_record = record.clone();
         let service = self.clone();
-        tokio::spawn(async move {
+        let download_task = async move {
             if let Err(error) = service.run_download(record, control).await {
                 match error.code {
                     "download_paused" => {}
@@ -262,7 +361,20 @@ impl DownloadTransferService {
                 }
                 Err(_) => eprintln!("Could not release download controls for {id}."),
             }
-        });
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(download_task);
+        } else {
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    rt.block_on(download_task);
+                }
+            });
+        }
     }
 
     async fn run_download(
