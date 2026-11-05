@@ -132,8 +132,7 @@ pub fn prompt_for_install(
     let active = if let Some(state) = app.try_state::<AppState>() {
         state
             .download_history
-            .downloads()
-            .map(|list| {
+            .with_downloads(|list| {
                 list.iter()
                     .filter(|d| {
                         matches!(

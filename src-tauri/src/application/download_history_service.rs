@@ -62,6 +62,14 @@ impl DownloadHistoryService {
             .map_err(|_| AppError::storage("Download history is unavailable."))
     }
 
+    pub fn with_downloads<R>(&self, f: impl FnOnce(&[DownloadRecord]) -> R) -> AppResult<R> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        Ok(f(&downloads))
+    }
+
     pub(crate) fn download(&self, id: &str) -> AppResult<DownloadRecord> {
         self.downloads
             .lock()

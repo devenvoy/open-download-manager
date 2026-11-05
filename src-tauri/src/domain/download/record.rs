@@ -107,4 +107,62 @@ impl DownloadRecord {
         }
         Ok(())
     }
+
+    pub fn to_serialized_ref<'a>(&'a self, redacted_url: String) -> SerializableDownloadRecordRef<'a> {
+        SerializableDownloadRecordRef {
+            id: &self.id,
+            url: redacted_url,
+            filename: &self.filename,
+            status: &self.status,
+            downloaded: self.downloaded,
+            total: self.total,
+            speed: self.speed,
+            created_at: &self.created_at,
+            needs_review: self.needs_review,
+            scheduled_at: self.scheduled_at.as_deref(),
+            description: self.description.as_deref(),
+            category: self.category.as_ref(),
+            directory: self.directory.as_deref(),
+            path: self.path.as_deref(),
+            last_try: self.last_try.as_deref(),
+            error: self.error.as_deref(),
+            notice: self.notice.as_deref(),
+            estimated: self.estimated,
+            kind: self.kind.as_deref(),
+            resumable: self.resumable,
+            duration: self.duration,
+            connections: self.connections,
+            connections_progress: &self.connections_progress,
+            audio_url: self.audio_url.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SerializableDownloadRecordRef<'a> {
+    pub id: &'a str,
+    pub url: String,
+    pub filename: &'a str,
+    pub status: &'a DownloadStatus,
+    pub downloaded: u64,
+    pub total: Option<u64>,
+    pub speed: u64,
+    pub created_at: &'a str,
+    pub needs_review: bool,
+    pub scheduled_at: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub category: Option<&'a DownloadCategory>,
+    pub directory: Option<&'a str>,
+    pub path: Option<&'a str>,
+    pub last_try: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub notice: Option<&'a str>,
+    pub estimated: bool,
+    pub kind: Option<&'a str>,
+    pub resumable: Option<bool>,
+    pub duration: Option<f64>,
+    pub connections: u8,
+    pub connections_progress: &'a [DownloadSegmentProgress],
+    pub audio_url: Option<&'a str>,
 }

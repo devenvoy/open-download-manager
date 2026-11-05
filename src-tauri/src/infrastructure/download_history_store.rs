@@ -19,7 +19,10 @@ use crate::{
     },
 };
 
-use self::{document::DownloadHistoryDocument, policy::HISTORY_VERSION};
+use self::{
+    document::{BorrowedDownloadHistoryDocument, DownloadHistoryDocument},
+    policy::HISTORY_VERSION,
+};
 
 pub struct DownloadHistoryStore {
     legacy_path: PathBuf,
@@ -95,16 +98,12 @@ impl DownloadHistoryStore {
             .legacy_ids
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?;
-        let history = DownloadHistoryDocument {
+        let history = BorrowedDownloadHistoryDocument {
             version: HISTORY_VERSION,
             downloads: downloads
                 .iter()
                 .filter(|download| !legacy_ids.contains(&download.id))
-                .cloned()
-                .map(|mut download| {
-                    download.url = redact_download_url(&download.url);
-                    download
-                })
+                .map(|download| download.to_serialized_ref(redact_download_url(&download.url)))
                 .collect(),
         };
         let contents = serde_json::to_vec_pretty(&history).map_err(|error| {

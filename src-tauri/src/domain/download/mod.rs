@@ -13,7 +13,7 @@ pub use action::DownloadAction;
 pub use address::DownloadAddress;
 pub use filename::{filename_from_url, redact_download_url, sanitize_filename};
 pub use protocol::DownloadProtocol;
-pub use record::{DownloadRecord, DownloadSegmentProgress};
+pub use record::{DownloadRecord, DownloadSegmentProgress, SerializableDownloadRecordRef};
 pub use request::DownloadRequest;
 pub use review_request::ReviewDownloadRequest;
 pub use status::DownloadStatus;

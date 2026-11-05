@@ -35,7 +35,7 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
                 .map(|s| s.settings().hide_completion_dialog)
                 .unwrap_or(false);
 
-            if let Ok(downloads) = state.download_history.downloads() {
+            let _ = state.download_history.with_downloads(|downloads| {
                 for (label, window) in self.app.webview_windows() {
                     if let Some(id) = label.strip_prefix(PROGRESS_WINDOW_PREFIX) {
                         if let Some(d) = downloads.iter().find(|d| d.id == id) {
@@ -67,7 +67,7 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
                         }
                     }
                 }
-            }
+            });
         }
 
         Ok(())

@@ -141,9 +141,9 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     }
 
     let download_info = app.try_state::<AppState>().and_then(|state| {
-        state.download_history.downloads().ok().and_then(|list| {
-            list.into_iter().find(|d| d.id == id)
-        })
+        state.download_history.with_downloads(|list| {
+            list.iter().find(|d| d.id == id).cloned()
+        }).ok().flatten()
     });
 
     let (title, width, height, min_w, min_h) = if let Some(d) = &download_info {
@@ -191,9 +191,9 @@ fn handle_progress_close(
     prompt_active: &Arc<AtomicBool>,
 ) {
     let download = app.try_state::<AppState>().and_then(|state| {
-        state.download_history.downloads().ok().and_then(|list| {
-            list.into_iter().find(|d| d.id == id)
-        })
+        state.download_history.with_downloads(|list| {
+            list.iter().find(|d| d.id == id).cloned()
+        }).ok().flatten()
     });
 
     let Some(d) = download else {

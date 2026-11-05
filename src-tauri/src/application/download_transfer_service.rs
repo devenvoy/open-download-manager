@@ -113,25 +113,30 @@ impl DownloadTransferService {
                 DownloadStatus::Paused,
                 DownloadStatus::Scheduled,
             ];
-            let existing_records = self.history.downloads()?;
-            if let Some(existing) = existing_records.iter().find(|d| {
-                if !active_states.contains(&d.status) {
-                    return false;
-                }
-                if let Some(ref req_sabr) = request.sabr {
-                    d.sabr.as_ref().map_or(false, |s| {
-                        s.video_id == req_sabr.video_id
-                            && s.video_itag == req_sabr.video_itag
-                            && s.audio_itag == req_sabr.audio_itag
+            let existing_id = self.history.with_downloads(|existing_records| {
+                existing_records
+                    .iter()
+                    .find(|d| {
+                        if !active_states.contains(&d.status) {
+                            return false;
+                        }
+                        if let Some(ref req_sabr) = request.sabr {
+                            d.sabr.as_ref().map_or(false, |s| {
+                                s.video_id == req_sabr.video_id
+                                    && s.video_itag == req_sabr.video_itag
+                                    && s.audio_itag == req_sabr.audio_itag
+                            })
+                        } else {
+                            let first_req_url = request.urls.first().map(|u| u.url().as_str()).unwrap_or("");
+                            d.sabr.is_none()
+                                && d.url == first_req_url
+                                && d.audio_url == request.audio_url
+                        }
                     })
-                } else {
-                    let first_req_url = request.urls.first().map(|u| u.url().as_str()).unwrap_or("");
-                    d.sabr.is_none()
-                        && d.url == first_req_url
-                        && d.audio_url == request.audio_url
-                }
-            }) {
-                return Ok(vec![existing.id.clone()]);
+                    .map(|d| d.id.clone())
+            })?;
+            if let Some(existing_id) = existing_id {
+                return Ok(vec![existing_id]);
             }
         }
 

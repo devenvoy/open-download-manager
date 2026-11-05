@@ -262,8 +262,10 @@ pub fn export_downloads_flow(app: &AppHandle) {
             };
 
             let urls = if let Some(state) = app.try_state::<AppState>() {
-                match state.download_history.downloads() {
-                    Ok(downloads) => downloads.into_iter().map(|d| d.url).collect::<Vec<_>>(),
+                match state.download_history.with_downloads(|downloads| {
+                    downloads.iter().map(|d| d.url.clone()).collect::<Vec<_>>()
+                }) {
+                    Ok(urls) => urls,
                     Err(error) => {
                         show_error_dialog(&app, "Could not export downloads", &error.message);
                         return;
