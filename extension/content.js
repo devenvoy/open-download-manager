@@ -82,6 +82,13 @@
 
   let activeChooserRecord = null;
 
+  function getContainer(record) {
+    if (record.container && record.container.isConnected) return record.container;
+    const c = typeof record.video.closest === 'function' ? record.video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+    if (c) record.container = c;
+    return c;
+  }
+
   function scheduleLinger(record, ms = 10000) {
     clearTimeout(record.lingerTimer);
     record.lingerTimer = setTimeout(() => {
@@ -89,6 +96,7 @@
       if (!record.hovered && activeChooserRecord !== record) {
         if (isFeedPreview(record.video)) {
           record.host.style.display = 'none';
+          record.formatsReady = false;
         }
       }
       position();
@@ -96,7 +104,7 @@
   }
 
   function prefetchFormats(record) {
-    if (record.prefetchedChoices || record.isPrefetching) return;
+    if (record.formatsReady || record.isPrefetching) return;
     const videoId = record.videoId || extractVideoId(record.video);
     if (!videoId) return;
     record.isPrefetching = true;
@@ -112,6 +120,10 @@
         const choices = globalThis.mediaChoices(candidates, {url, poster: record.video?.poster});
         if (choices.length) {
           record.prefetchedChoices = choices;
+          record.formatsReady = true;
+          if (record.hovered) {
+            position();
+          }
         }
       }
     }).catch(() => {
@@ -129,13 +141,21 @@
       record.videoTitle = extractVideoTitle(record.video);
     }
     prefetchFormats(record);
-    position();
+    if (!isFeedPreview(record.video)) {
+      position();
+    }
   }
 
   function onLeave(record) {
     record.hovered = false;
     if (activeChooserRecord === record) return;
-    scheduleLinger(record, 10000);
+    if (record.formatsReady) {
+      scheduleLinger(record, 10000);
+    } else {
+      if (isFeedPreview(record.video)) {
+        record.host.style.display = 'none';
+      }
+    }
   }
 
   function scan() {
@@ -163,7 +183,10 @@
         isPrefetching: false,
         lingerTimer: null,
         hovered: false,
-        frozenChooserPos: null
+        frozenChooserPos: null,
+        formatsReady: false,
+        savedPlace: null,
+        container: null
       };
       records.add(record);
       resizeObserver.observe(video);
@@ -371,20 +394,30 @@
         }
       }
 
-      const rect = record.video.getBoundingClientRect();
+      let rect = record.video.getBoundingClientRect();
+      const container = getContainer(record);
+      if ((rect.width <= 100 || rect.height <= 60) && container) {
+        const cRect = container.getBoundingClientRect();
+        if (cRect.width > 100 && cRect.height > 60) {
+          rect = cRect;
+        }
+      }
+
       const width = record.host.offsetWidth || 180, height = record.host.offsetHeight || 27;
       const place = globalThis.odmPanelPosition.placement(rect, {width: innerWidth, height: innerHeight}, {width, height}, record.dismissed || scrolling);
+      if (place) record.savedPlace = place;
 
+      const activePlace = place || record.savedPlace;
       const isPreview = isFeedPreview(record.video);
       const shouldShow = isPreview
-        ? ((record.hovered || record.lingerTimer !== null || activeChooserRecord === record) && Boolean(place) && !record.dismissed && !scrolling)
+        ? (Boolean(record.formatsReady) && (record.hovered || record.lingerTimer !== null || activeChooserRecord === record) && Boolean(activePlace) && !record.dismissed && !scrolling)
         : (Boolean(place) && !record.dismissed && !scrolling);
 
       record.host.style.display = shouldShow ? 'block' : 'none';
-      if (!place || !shouldShow) continue;
+      if (!activePlace || !shouldShow) continue;
 
-      record.host.style.top = `${place.top}px`;
-      record.host.style.left = `${place.left}px`;
+      record.host.style.top = `${activePlace.top}px`;
+      record.host.style.left = `${activePlace.left}px`;
     }
   }
   mutationObserver=new MutationObserver(() => { if (!stopped && !pending) { pending = true; scanFrame=requestAnimationFrame(scan); } });
