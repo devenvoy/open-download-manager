@@ -61,14 +61,18 @@ impl ToolDownloaderClient for HttpToolDownloaderClient {
                 )));
             }
 
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| AppError::download(format!("Failed to stream media tool binary: {e}")))?;
+            let bytes = match response.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    let _ = tokio::fs::remove_file(&temp_dest).await;
+                    return Err(AppError::download(format!("Failed to stream media tool binary: {e}")));
+                }
+            };
 
-            tokio::fs::write(&temp_dest, &bytes)
-                .await
-                .map_err(|e| AppError::download(format!("Failed to write media tool binary: {e}")))?;
+            if let Err(e) = tokio::fs::write(&temp_dest, &bytes).await {
+                let _ = tokio::fs::remove_file(&temp_dest).await;
+                return Err(AppError::download(format!("Failed to write media tool binary: {e}")));
+            }
 
             #[cfg(unix)]
             {
@@ -80,9 +84,10 @@ impl ToolDownloaderClient for HttpToolDownloaderClient {
                 }
             }
 
-            tokio::fs::rename(&temp_dest, destination)
-                .await
-                .map_err(|e| AppError::download(format!("Failed to atomically rename media tool binary: {e}")))?;
+            if let Err(e) = tokio::fs::rename(&temp_dest, destination).await {
+                let _ = tokio::fs::remove_file(&temp_dest).await;
+                return Err(AppError::download(format!("Failed to atomically rename media tool binary: {e}")));
+            }
 
             Ok(())
         })
@@ -257,6 +262,20 @@ impl MediaToolsManager {
 
     /// Obtains the verified download specification for the current OS and architecture
     pub fn download_spec(&self, tool: MediaToolType) -> AppResult<ToolDownloadSpec> {
+        let mirror_env = match tool {
+            MediaToolType::Ffmpeg => "AD_FFMPEG_MIRROR",
+            MediaToolType::YtDlp => "AD_YTDLP_MIRROR",
+        };
+        if let Ok(mirror_url) = std::env::var(mirror_env) {
+            let trimmed = mirror_url.trim();
+            if !trimmed.is_empty() {
+                return Ok(ToolDownloadSpec {
+                    url: trimmed.to_owned(),
+                    binary_name: tool.executable_name().to_owned(),
+                });
+            }
+        }
+
         match tool {
             MediaToolType::YtDlp => {
                 #[cfg(target_os = "windows")]
@@ -293,9 +312,12 @@ impl MediaToolsManager {
         }
     }
 
-    /// Downloads and installs a tool into the managed tools directory
-    pub async fn install_managed_tool(&self, tool: MediaToolType) -> AppResult<PathBuf> {
-        let spec = self.download_spec(tool)?;
+    /// Downloads and installs a tool into the managed tools directory from an explicit URL
+    pub async fn install_managed_tool_from_url(
+        &self,
+        tool: MediaToolType,
+        url: &str,
+    ) -> AppResult<PathBuf> {
         let tools_dir = self
             .resolver
             .managed_tools_dir()
@@ -305,9 +327,15 @@ impl MediaToolsManager {
             .await
             .map_err(|e| AppError::download(format!("Could not create tools directory: {e}")))?;
 
-        let dest = tools_dir.join(&spec.binary_name);
-        self.downloader.download_binary(&spec.url, &dest).await?;
+        let dest = tools_dir.join(tool.executable_name());
+        self.downloader.download_binary(url, &dest).await?;
         Ok(dest)
+    }
+
+    /// Downloads and installs a tool into the managed tools directory
+    pub async fn install_managed_tool(&self, tool: MediaToolType) -> AppResult<PathBuf> {
+        let spec = self.download_spec(tool)?;
+        self.install_managed_tool_from_url(tool, &spec.url).await
     }
 }
 

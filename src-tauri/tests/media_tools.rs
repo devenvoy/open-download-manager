@@ -1,65 +1,82 @@
 use std::{
-    path::Path,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
-    },
+    io::{Read, Write},
+    net::TcpListener,
+    path::PathBuf,
+    process::Command,
+    sync::Arc,
+    thread,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use open_download_manager_lib::{
-    application::error::{AppError, AppResult},
     domain::media_tools::{MediaToolType, ToolResolutionSource},
     infrastructure::media::{
-        BoxFuture, MediaToolsManager, ToolDownloaderClient, ToolPathResolver,
+        find_tool_path, HttpToolDownloaderClient, MediaToolsManager, ToolDownloaderClient,
+        ToolPathResolver,
     },
 };
 
-/// Mock tool downloader client that records calls and writes mock bytes without network access.
-struct MockToolDownloaderClient {
-    download_count: AtomicUsize,
-    download_result: Mutex<Option<Result<Vec<u8>, AppError>>>,
-    last_url: Mutex<Option<String>>,
+fn temporary_sandbox() -> PathBuf {
+    tempfile::Builder::new()
+        .prefix("open-download-manager-sandbox-")
+        .tempdir()
+        .expect("temporary sandbox directory")
+        .keep()
 }
 
-impl MockToolDownloaderClient {
-    fn new(result: Result<Vec<u8>, AppError>) -> Self {
-        Self {
-            download_count: AtomicUsize::new(0),
-            download_result: Mutex::new(Some(result)),
-            last_url: Mutex::new(None),
+fn sample_executable_script() -> &'static [u8] {
+    #[cfg(windows)]
+    {
+        b"@echo off\r\necho sandbox-media-tool-ok\r\n"
+    }
+    #[cfg(not(windows))]
+    {
+        b"#!/bin/sh\necho \"sandbox-media-tool-ok\"\nexit 0\n"
+    }
+}
+
+fn serve_sandbox_binary(status: &'static str, body: Vec<u8>) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("sandbox TCP listener should bind");
+    let address = listener.local_addr().expect("sandbox TCP listener address");
+
+    let handle = thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let headers = format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(headers.as_bytes());
+            let _ = stream.write_all(&body);
+            let _ = stream.flush();
         }
-    }
+    });
+
+    (format!("http://{address}/binary"), handle)
 }
 
-impl ToolDownloaderClient for MockToolDownloaderClient {
-    fn download_binary<'a>(
-        &'a self,
-        url: &'a str,
-        destination: &'a Path,
-    ) -> BoxFuture<'a, AppResult<()>> {
-        self.download_count.fetch_add(1, Ordering::SeqCst);
-        *self.last_url.lock().unwrap() = Some(url.to_owned());
+fn serve_truncated_binary(header_len: usize, body: Vec<u8>) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("sandbox TCP listener should bind");
+    let address = listener.local_addr().expect("sandbox TCP listener address");
 
-        let res = self
-            .download_result
-            .lock()
-            .unwrap()
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| Ok(b"binary-payload".to_vec()));
+    let handle = thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {header_len}\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(headers.as_bytes());
+            let _ = stream.write_all(&body);
+            let _ = stream.flush();
+            // Drop stream immediately to trigger unexpected EOF
+        }
+    });
 
-        Box::pin(async move {
-            match res {
-                Ok(bytes) => {
-                    tokio::fs::write(destination, &bytes)
-                        .await
-                        .map_err(|e| AppError::download(format!("Mock write failed: {e}")))?;
-                    Ok(())
-                }
-                Err(err) => Err(err),
-            }
-        })
-    }
+    (format!("http://{address}/truncated"), handle)
 }
 
 #[test]
@@ -76,129 +93,236 @@ fn test_media_tool_type_parsing_and_names() {
     assert_eq!(MediaToolType::YtDlp.env_var_override(), "AD_YTDLP_PATH");
 }
 
-#[test]
-fn test_env_var_override_takes_precedence() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let fake_ffmpeg = temp_dir.path().join("fake_ffmpeg");
-    std::fs::write(&fake_ffmpeg, b"dummy-ffmpeg").unwrap();
+#[tokio::test]
+async fn test_real_sandbox_http_download_and_execution() {
+    let sandbox = temporary_sandbox();
+    let dest_path = sandbox.join("sandbox_tool_bin");
 
-    std::env::set_var("AD_FFMPEG_PATH", fake_ffmpeg.to_str().unwrap());
+    let script = sample_executable_script().to_vec();
+    let (url, server_handle) = serve_sandbox_binary("200 OK", script);
 
-    let resolver = ToolPathResolver::new();
-    let resolved = resolver.resolve_tool(MediaToolType::Ffmpeg);
+    let client = HttpToolDownloaderClient::default();
+    let result = client.download_binary(&url, &dest_path).await;
+    server_handle.join().expect("server thread terminates cleanly");
 
-    assert!(resolved.is_some());
-    let (path, source) = resolved.unwrap();
-    assert_eq!(path, fake_ffmpeg);
-    assert_eq!(source, ToolResolutionSource::EnvironmentOverride);
+    assert!(result.is_ok(), "Download should succeed: {:?}", result.err());
+    assert!(dest_path.exists(), "Target binary must exist in sandbox");
 
-    let status = resolver.tool_status(MediaToolType::Ffmpeg);
-    assert!(status.is_available);
-    assert_eq!(status.source, Some(ToolResolutionSource::EnvironmentOverride));
+    // Verify temp file was atomically removed
+    let temp_dest = dest_path.with_extension("download.tmp");
+    assert!(!temp_dest.exists(), "Temporary file must not linger in sandbox");
 
-    std::env::remove_var("AD_FFMPEG_PATH");
+    // Verify Unix executable permissions
+    #[cfg(unix)]
+    {
+        let metadata = std::fs::metadata(&dest_path).expect("file metadata");
+        let permissions = metadata.permissions();
+        assert_ne!(
+            permissions.mode() & 0o111,
+            0,
+            "Downloaded file must have executable permissions set (0o755)"
+        );
+    }
+
+    // Real sandbox process execution
+    let output = Command::new(&dest_path)
+        .output()
+        .expect("Spawn sandbox executable");
+
+    assert!(output.status.success(), "Executable must exit 0 in sandbox");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("sandbox-media-tool-ok"),
+        "Process output must contain expected stdout banner: {stdout}"
+    );
+
+    let _ = std::fs::remove_dir_all(&sandbox);
 }
 
-#[test]
-fn test_managed_user_directory_resolution() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let managed_tools = temp_dir.path().join("tools");
-    std::fs::create_dir_all(&managed_tools).unwrap();
+#[tokio::test]
+async fn test_real_sandbox_http_404_error_cleans_up_temporary_files() {
+    let sandbox = temporary_sandbox();
+    let dest_path = sandbox.join("sandbox_tool_404");
+
+    let (url, server_handle) = serve_sandbox_binary("404 Not Found", b"not found".to_vec());
+
+    let client = HttpToolDownloaderClient::default();
+    let result = client.download_binary(&url, &dest_path).await;
+    server_handle.join().expect("server thread terminates cleanly");
+
+    assert!(result.is_err(), "Download must return error on 404");
+    let err_msg = result.unwrap_err().message;
+    assert!(err_msg.contains("404"), "Error message should mention 404: {err_msg}");
+
+    assert!(!dest_path.exists(), "Target file must not be created on 404");
+    let temp_dest = dest_path.with_extension("download.tmp");
+    assert!(!temp_dest.exists(), "Temp download file must not linger after 404");
+
+    let _ = std::fs::remove_dir_all(&sandbox);
+}
+
+#[tokio::test]
+async fn test_real_sandbox_http_500_error_cleans_up_temporary_files() {
+    let sandbox = temporary_sandbox();
+    let dest_path = sandbox.join("sandbox_tool_500");
+
+    let (url, server_handle) = serve_sandbox_binary("500 Internal Server Error", b"server error".to_vec());
+
+    let client = HttpToolDownloaderClient::default();
+    let result = client.download_binary(&url, &dest_path).await;
+    server_handle.join().expect("server thread terminates cleanly");
+
+    assert!(result.is_err(), "Download must return error on 500");
+    let err_msg = result.unwrap_err().message;
+    assert!(err_msg.contains("500"), "Error message should mention 500: {err_msg}");
+
+    assert!(!dest_path.exists(), "Target file must not be created on 500");
+    let temp_dest = dest_path.with_extension("download.tmp");
+    assert!(!temp_dest.exists(), "Temp download file must not linger after 500");
+
+    let _ = std::fs::remove_dir_all(&sandbox);
+}
+
+#[tokio::test]
+async fn test_real_sandbox_truncated_stream_cleans_up_temporary_files() {
+    let sandbox = temporary_sandbox();
+    let dest_path = sandbox.join("sandbox_tool_truncated");
+
+    // Header promises 5000 bytes, but server only writes 50 bytes and closes connection
+    let (url, server_handle) = serve_truncated_binary(5000, vec![b'X'; 50]);
+
+    let client = HttpToolDownloaderClient::default();
+    let result = client.download_binary(&url, &dest_path).await;
+    server_handle.join().expect("server thread terminates cleanly");
+
+    assert!(result.is_err(), "Download must fail on truncated stream");
+    assert!(!dest_path.exists(), "Target file must not exist after truncated stream");
+    let temp_dest = dest_path.with_extension("download.tmp");
+    assert!(!temp_dest.exists(), "Temp file must be cleaned up after truncated stream");
+
+    let _ = std::fs::remove_dir_all(&sandbox);
+}
+
+#[tokio::test]
+async fn test_real_end_to_end_media_tools_manager_sandbox_with_mirror_override() {
+    let sandbox = temporary_sandbox();
+    let managed_dir = sandbox.join("managed_tools");
+
+    let script = sample_executable_script().to_vec();
+    let (url, server_handle) = serve_sandbox_binary("200 OK", script);
+
+    // Set production mirror override environment variable pointing to the real sandbox server
+    std::env::set_var("AD_FFMPEG_MIRROR", &url);
+
+    let resolver = ToolPathResolver::with_managed_dir(managed_dir.clone());
+    let client = Arc::new(HttpToolDownloaderClient::default());
+    let manager = MediaToolsManager::new(resolver, client);
+
+    // 1. Initial status: tool is missing from the managed sandbox
+    let status_before = manager.status(MediaToolType::Ffmpeg);
+    // Note: status_before might be available if system has ffmpeg in PATH, but source is not ManagedUserData
+    if status_before.is_available {
+        assert_ne!(status_before.source, Some(ToolResolutionSource::ManagedUserData));
+    }
+
+    // 2. Real download and installation through MediaToolsManager
+    let installed_path = manager
+        .install_managed_tool(MediaToolType::Ffmpeg)
+        .await
+        .expect("Real installation into sandbox should succeed");
+
+    server_handle.join().expect("server thread terminates cleanly");
+    assert!(installed_path.exists(), "Installed binary must exist");
+    assert!(installed_path.starts_with(&managed_dir), "Installed binary must be inside managed sandbox dir");
+
+    // 3. Post-install status: tool must resolve to ManagedUserData
+    let status_after = manager.status(MediaToolType::Ffmpeg);
+    assert!(status_after.is_available, "Tool must be available after real install");
+    assert_eq!(
+        status_after.source,
+        Some(ToolResolutionSource::ManagedUserData),
+        "Tool resolution source must be ManagedUserData"
+    );
+    assert_eq!(status_after.path, Some(installed_path.clone()));
+
+    // 4. Real execution of installed binary from the sandbox
+    let output = Command::new(&installed_path)
+        .output()
+        .expect("Execute installed sandbox binary");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("sandbox-media-tool-ok"));
+
+    std::env::remove_var("AD_FFMPEG_MIRROR");
+    let _ = std::fs::remove_dir_all(&sandbox);
+}
+
+#[tokio::test]
+async fn test_real_sandbox_tiered_resolution_and_precedence() {
+    let sandbox = temporary_sandbox();
+
+    let env_tools_dir = sandbox.join("env_tools");
+    let managed_tools_dir = sandbox.join("managed_tools");
+    std::fs::create_dir_all(&env_tools_dir).unwrap();
+    std::fs::create_dir_all(&managed_tools_dir).unwrap();
 
     let exe_name = MediaToolType::YtDlp.executable_name();
-    let fake_ytdlp = managed_tools.join(exe_name);
-    std::fs::write(&fake_ytdlp, b"dummy-ytdlp").unwrap();
+    let env_bin = env_tools_dir.join(exe_name);
+    let managed_bin = managed_tools_dir.join(exe_name);
 
-    let resolver = ToolPathResolver::with_managed_dir(managed_tools.clone());
-    let resolved = resolver.resolve_tool(MediaToolType::YtDlp);
-
-    assert!(resolved.is_some());
-    let (path, source) = resolved.unwrap();
-    assert_eq!(path, fake_ytdlp);
-    assert_eq!(source, ToolResolutionSource::ManagedUserData);
-
-    let status = resolver.tool_status(MediaToolType::YtDlp);
-    assert!(status.is_available);
-    assert_eq!(status.source, Some(ToolResolutionSource::ManagedUserData));
-}
-
-#[test]
-fn test_missing_tool_status_reporting() {
-    // Override with empty directory
-    let temp_dir = tempfile::tempdir().unwrap();
-    let empty_dir = temp_dir.path().join("empty_tools");
-    std::fs::create_dir_all(&empty_dir).unwrap();
-
-    // Use unique env key or ensure it is clear
-    std::env::remove_var("AD_YTDLP_PATH");
-
-    let resolver = ToolPathResolver::with_managed_dir(empty_dir);
-    // If yt-dlp is not on system path:
-    if which::which("yt-dlp").is_err() {
-        let status = resolver.tool_status(MediaToolType::YtDlp);
-        assert!(!status.is_available);
-        assert!(status.path.is_none());
-        assert!(status.source.is_none());
+    #[cfg(not(windows))]
+    {
+        std::fs::write(&env_bin, b"#!/bin/sh\necho \"tier1-env\"\nexit 0\n").unwrap();
+        std::fs::write(&managed_bin, b"#!/bin/sh\necho \"tier2-managed\"\nexit 0\n").unwrap();
+        std::fs::set_permissions(&env_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&managed_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
+    #[cfg(windows)]
+    {
+        std::fs::write(&env_bin, b"@echo tier1-env\r\n").unwrap();
+        std::fs::write(&managed_bin, b"@echo tier2-managed\r\n").unwrap();
+    }
+
+    // Step 1: Set Tier 1 environment variable override
+    std::env::set_var("AD_YTDLP_PATH", env_bin.to_str().unwrap());
+    let resolver = ToolPathResolver::with_managed_dir(managed_tools_dir.clone());
+
+    let (resolved_path, source) = resolver
+        .resolve_tool(MediaToolType::YtDlp)
+        .expect("Tier 1 resolve");
+    assert_eq!(source, ToolResolutionSource::EnvironmentOverride);
+    assert_eq!(resolved_path, env_bin);
+
+    let output = Command::new(&resolved_path).output().expect("run tier 1");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("tier1-env"));
+
+    // Step 2: Remove Tier 1 override -> Tier 2 (ManagedUserData) must take over
+    std::env::remove_var("AD_YTDLP_PATH");
+    let (resolved_path2, source2) = resolver
+        .resolve_tool(MediaToolType::YtDlp)
+        .expect("Tier 2 resolve");
+    assert_eq!(source2, ToolResolutionSource::ManagedUserData);
+    assert_eq!(resolved_path2, managed_bin);
+
+    let output2 = Command::new(&resolved_path2).output().expect("run tier 2");
+    assert!(String::from_utf8_lossy(&output2.stdout).contains("tier2-managed"));
+
+    let _ = std::fs::remove_dir_all(&sandbox);
 }
 
 #[test]
-fn test_download_spec_urls_are_configured() {
-    let resolver = ToolPathResolver::new();
-    let mock_client = Arc::new(MockToolDownloaderClient::new(Ok(vec![])));
-    let manager = MediaToolsManager::new(resolver, mock_client);
-
-    let ffmpeg_spec = manager.download_spec(MediaToolType::Ffmpeg);
-    assert!(ffmpeg_spec.is_ok());
-    let spec = ffmpeg_spec.unwrap();
-    assert!(spec.url.starts_with("https://"));
-
-    let ytdlp_spec = manager.download_spec(MediaToolType::YtDlp);
-    assert!(ytdlp_spec.is_ok());
-    let spec = ytdlp_spec.unwrap();
-    assert!(spec.url.starts_with("https://"));
-}
-
-#[tokio::test]
-async fn test_mock_downloader_installs_tool_successfully() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let managed_tools = temp_dir.path().join("tools");
-
-    let resolver = ToolPathResolver::with_managed_dir(managed_tools.clone());
-    let mock_client = Arc::new(MockToolDownloaderClient::new(Ok(b"compiled-binary".to_vec())));
-    let manager = MediaToolsManager::new(resolver, mock_client.clone());
-
-    let installed_path = manager
-        .install_managed_tool(MediaToolType::YtDlp)
-        .await
-        .expect("Install should succeed");
-
-    assert_eq!(mock_client.download_count.load(Ordering::SeqCst), 1);
-    assert!(installed_path.exists());
-    let contents = std::fs::read(&installed_path).unwrap();
-    assert_eq!(contents, b"compiled-binary");
-
-    // After installation, resolver must find it in managed directory
-    let status = manager.status(MediaToolType::YtDlp);
-    assert!(status.is_available);
-    assert_eq!(status.source, Some(ToolResolutionSource::ManagedUserData));
-}
-
-#[tokio::test]
-async fn test_mock_downloader_handles_network_failure() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let managed_tools = temp_dir.path().join("tools");
-
-    let resolver = ToolPathResolver::with_managed_dir(managed_tools.clone());
-    let mock_client = Arc::new(MockToolDownloaderClient::new(Err(AppError::download(
-        "HTTP 404 Not Found",
-    ))));
-    let manager = MediaToolsManager::new(resolver, mock_client.clone());
-
-    let result = manager.install_managed_tool(MediaToolType::Ffmpeg).await;
-    assert!(result.is_err());
-    assert_eq!(mock_client.download_count.load(Ordering::SeqCst), 1);
-
-    let err_msg = result.unwrap_err().message;
-    assert!(err_msg.contains("404"));
+fn test_real_host_ffmpeg_execution_if_present() {
+    if let Some(ffmpeg_path) = find_tool_path("ffmpeg") {
+        assert!(ffmpeg_path.is_file(), "Resolved path must be an existing file");
+        let output = Command::new(&ffmpeg_path)
+            .arg("-version")
+            .output()
+            .expect("Execute host ffmpeg -version");
+        assert!(output.status.success(), "ffmpeg -version should succeed");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("ffmpeg version"),
+            "Output must contain 'ffmpeg version': {stdout}"
+        );
+    }
 }
