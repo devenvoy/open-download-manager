@@ -55,6 +55,55 @@
     } catch {}
     return null;
   }
+  function extractVideoTitle(video) {
+    try {
+      const container = typeof video.closest === 'function' ? video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+      if (container && typeof container.querySelector === 'function') {
+        const titleEl = container.querySelector('#video-title, #title, h3, [title]');
+        const text = titleEl?.getAttribute?.('title') || titleEl?.textContent?.trim?.();
+        if (text && text.length > 1) return text;
+      }
+    } catch {}
+    return document.title || 'Video';
+  }
+  function scheduleLinger(record, ms) {
+    clearTimeout(record.lingerTimer);
+    record.lingerTimer = setTimeout(() => {
+      if (!record.mouseInside) {
+        if (record.chooser) {
+          record.chooser.remove();
+          record.chooser = null;
+          if (record.menuHost) { record.menuHost.remove(); record.menuHost = null; }
+        }
+        if (record.host) record.host.style.display = 'none';
+        record.lingerTimer = null;
+        position();
+      }
+    }, ms);
+  }
+  function prefetchFormats(record) {
+    if (record.prefetchedChoices || record.isPrefetching) return;
+    const videoId = record.videoId || extractVideoId(record.video);
+    if (!videoId) return;
+    record.isPrefetching = true;
+    send({action:'listForFrame', videoId}).then(result => {
+      record.isPrefetching = false;
+      if (result?.ok && Array.isArray(result.items) && result.items.length) {
+        const candidates = result.items;
+        const youtube = /(^|\.)youtube\.com$/.test(location.hostname);
+        const url = direct(record.video?.currentSrc || record.video?.src);
+        if (!youtube && url && !candidates.some(item => item.url === url)) {
+          candidates.unshift({url, title: record.videoTitle || document.title});
+        }
+        const choices = globalThis.mediaChoices(candidates, {url, poster: record.video?.poster});
+        if (choices.length) {
+          record.prefetchedChoices = choices;
+        }
+      }
+    }).catch(() => {
+      record.isPrefetching = false;
+    });
+  }
   function scan() {
     pending = false;
     if(!connected())return;
@@ -67,11 +116,57 @@
       shadow.innerHTML = `<style>${PANEL_CSS}</style><div class="bar"><button class="download" type="button">↓ Download this video ▾</button><button class="dismiss" type="button" title="Hide this download panel" aria-label="Hide this download panel">×</button></div>`;
       const button = shadow.querySelector('.download');
       const dismiss = shadow.querySelector('.dismiss');
-      const record = {video, host, shadow, dismissed:false, chooser:null, menuHost:null}; records.add(record);
+      const record = {
+        video,
+        host,
+        shadow,
+        dismissed: false,
+        chooser: null,
+        menuHost: null,
+        videoId: extractVideoId(video),
+        videoTitle: extractVideoTitle(video),
+        prefetchedChoices: null,
+        isPrefetching: false,
+        lingerTimer: null,
+        mouseInside: false,
+        frozenChooserPos: null
+      };
+      records.add(record);
       resizeObserver.observe(video);
       record.intersectionObserver = new IntersectionObserver(() => position(), {threshold: [0, 0.25, 0.5, 0.75, 1]});
       record.intersectionObserver.observe(video);
       document.documentElement.appendChild(host);
+
+      if (typeof host.addEventListener === 'function') {
+        host.addEventListener('mouseenter', () => {
+          record.mouseInside = true;
+          clearTimeout(record.lingerTimer);
+          prefetchFormats(record);
+        });
+        host.addEventListener('mouseleave', () => {
+          record.mouseInside = false;
+          scheduleLinger(record, record.chooser ? 20000 : 5000);
+        });
+      }
+
+      const container = typeof video.closest === 'function' ? video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+      if (container && typeof container.addEventListener === 'function') {
+        container.addEventListener('mouseenter', () => {
+          record.mouseInside = true;
+          clearTimeout(record.lingerTimer);
+          if (!record.videoId) {
+            record.videoId = extractVideoId(video);
+            record.videoTitle = extractVideoTitle(video);
+          }
+          prefetchFormats(record);
+          position();
+        }, {signal: listeners.signal});
+        container.addEventListener('mouseleave', () => {
+          record.mouseInside = false;
+          scheduleLinger(record, record.chooser ? 20000 : 5000);
+        }, {signal: listeners.signal});
+      }
+
       const report = () => {
         const urls = [video.currentSrc, video.src, ...Array.from(video.querySelectorAll('source'), source => source.src)].map(direct).filter(Boolean);
         if (urls.length) send({action:'remember', items: urls.map(url => ({url, title:document.title}))}).catch(() => {});
@@ -90,6 +185,8 @@
       });
       button.addEventListener('click', async event => {
         event.preventDefault(); event.stopPropagation();
+        clearTimeout(record.lingerTimer);
+        record.mouseInside = true;
         const url = direct(video.currentSrc || video.src || video.querySelector('source')?.src);
         {
           const existingChooser = record.chooser || shadow.querySelector('.chooser');
@@ -101,9 +198,27 @@
             return;
           }
           closeChoosers(record);
+          const initialRect = button.getBoundingClientRect();
+          record.frozenChooserPos = {
+            top: initialRect.top,
+            bottom: initialRect.bottom,
+            right: initialRect.right,
+            left: initialRect.left,
+            width: initialRect.width || 120,
+            height: initialRect.height || 27,
+          };
           const chooser = document.createElement('div');
           chooser.className = 'chooser';
           record.chooser = chooser;
+
+          chooser.addEventListener('mouseenter', () => {
+            record.mouseInside = true;
+            clearTimeout(record.lingerTimer);
+          });
+          chooser.addEventListener('mouseleave', () => {
+            record.mouseInside = false;
+            scheduleLinger(record, 20000);
+          });
 
           const isContained = resolveParent(video) !== document.documentElement;
           let activeShadow = shadow;
@@ -133,30 +248,27 @@
             });
           });
           const hint = document.createElement('p');
-          hint.textContent = 'Checking available video formats…';
-          chooser.append(hint);
-          position();
-          try {
-            const videoId = extractVideoId(video);
-            console.log('[ODM Content] Requesting listForFrame with videoId:', videoId, 'url:', url);
-            const result=await send({action:'listForFrame', videoId});
-            console.log('[ODM Content] listForFrame result:', result);
-            if(!result?.ok)throw new Error(result?.error||'Could not list video formats.');
-            hint.textContent='Choose a format to download';
-            const candidates=result?.items||[];
-            const youtube=/(^|\.)youtube\.com$/.test(location.hostname);
-            if(!youtube&&url&&!candidates.some(item=>item.url===url)) candidates.unshift({url,title:document.title});
-            if (!candidates.length) { hint.textContent=result.notice || (youtube?'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.':'No direct media links detected. Play the video and try again.'); return; }
-            const choices=globalThis.mediaChoices(candidates,{url,poster:video.poster});
-            if(!choices.length){hint.textContent='No complete formats detected for this video yet. Play it briefly, then try again.';return;}
+          const renderChoices = (choices) => {
+            hint.textContent = 'Choose a format to download';
             globalThis.odmFormatPresentation.populateChooser(chooser, choices, document, {
-              fallbackTitle: document.title || 'Video',
+              fallbackTitle: record.videoTitle || document.title || 'Video',
               getTooltip: globalThis.odmSafeTooltip,
               onSelect: async (item, row) => {
                 row.disabled = true;
                 hint.textContent = 'Opening download options…';
                 try {
-                  const response = await send({action:'download', item:{...item, startNow:false}});
+                  const videoId = record.videoId || item.videoId;
+                  const canonicalUrl = item.canonicalUrl || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : item.url);
+                  const title = record.videoTitle || item.title || document.title;
+                  const downloadPayload = {
+                    ...item,
+                    videoId,
+                    canonicalUrl,
+                    referer: canonicalUrl,
+                    title,
+                    startNow: false
+                  };
+                  const response = await send({action:'download', item: downloadPayload});
                   globalThis.odmMenuResult(response, {
                     accepted: () => {
                       chooser.remove();
@@ -172,6 +284,31 @@
             });
             globalThis.odmChooserKeys.focusFirst(chooser);
             position();
+          };
+
+          if (record.prefetchedChoices && record.prefetchedChoices.length) {
+            chooser.append(hint);
+            renderChoices(record.prefetchedChoices);
+            return;
+          }
+
+          hint.textContent = 'Checking available video formats…';
+          chooser.append(hint);
+          position();
+          try {
+            const videoId = record.videoId || extractVideoId(video);
+            console.log('[ODM Content] Requesting listForFrame with videoId:', videoId, 'url:', url);
+            const result=await send({action:'listForFrame', videoId});
+            console.log('[ODM Content] listForFrame result:', result);
+            if(!result?.ok)throw new Error(result?.error||'Could not list video formats.');
+            const candidates=result?.items||[];
+            const youtube=/(^|\.)youtube\.com$/.test(location.hostname);
+            if(!youtube&&url&&!candidates.some(item=>item.url===url)) candidates.unshift({url,title:record.videoTitle||document.title});
+            if (!candidates.length) { hint.textContent=result.notice || (youtube?'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.':'No direct media links detected. Play the video and try again.'); return; }
+            const choices=globalThis.mediaChoices(candidates,{url,poster:video.poster});
+            if(!choices.length){hint.textContent='No complete formats detected for this video yet. Play it briefly, then try again.';return;}
+            record.prefetchedChoices = choices;
+            renderChoices(choices);
           } catch(error) {hint.textContent=error.message;}
           return;
         }
@@ -218,8 +355,9 @@
     if(!connected())return;
     for (const record of records) {
       if (!record.video.isConnected) {
-        if (record.chooser || record.shadow.querySelector('.chooser')) continue;
+        if (record.chooser || record.shadow.querySelector('.chooser') || record.lingerTimer || record.mouseInside) continue;
         resizeObserver.unobserve(record.video); record.sourceObserver.disconnect(); record.intersectionObserver?.disconnect();
+        clearTimeout(record.lingerTimer);
         record.host.remove();
         if (record.menuHost) { record.menuHost.remove(); record.menuHost = null; }
         records.delete(record);
@@ -234,11 +372,17 @@
         record.host.style.right = '8px';
         record.host.style.left = 'auto';
         record.host.style.zIndex = '2147483647';
-        record.host.style.display = record.dismissed || scrolling ? 'none' : 'block';
+        record.host.style.display = (record.dismissed && !record.chooser) || scrolling ? 'none' : 'block';
         const chooser = record.chooser || record.shadow.querySelector('.chooser');
         if (chooser) {
           const btn = record.shadow.querySelector('.download');
-          const bRect = (btn && typeof btn.getBoundingClientRect === 'function') ? btn.getBoundingClientRect() : { top: 0, bottom: 27, right: innerWidth - 8 };
+          let bRect = (btn && typeof btn.getBoundingClientRect === 'function') ? btn.getBoundingClientRect() : null;
+          if (!bRect || (bRect.width === 0 && bRect.height === 0)) {
+            bRect = record.frozenChooserPos;
+          } else if (bRect.width > 0) {
+            record.frozenChooserPos = bRect;
+          }
+          if (!bRect) bRect = { top: 0, bottom: 27, right: innerWidth - 8 };
           const chooserWidth = Math.min(420, innerWidth - 12);
           const chooserHeight = Math.min(chooser.scrollHeight || 360, Math.min(360, innerHeight * 0.6));
           chooser.style.position = 'fixed';
@@ -255,14 +399,22 @@
       const width = record.host.offsetWidth || 180, height = record.host.offsetHeight || 27;
       const inside = isPreview(record.video, rect);
       const place = globalThis.odmPanelPosition.placement(rect, {width: innerWidth, height: innerHeight}, {width, height}, record.dismissed || scrolling, { inside });
-      record.host.style.display = place ? 'block' : 'none';
-      if(!place)continue;
-      record.host.style.top = `${place.top}px`;
-      record.host.style.left = `${place.left}px`;
+      record.host.style.display = (record.chooser || record.lingerTimer || record.mouseInside) ? 'block' : (place ? 'block' : 'none');
+      if(!place && !record.chooser && !record.lingerTimer && !record.mouseInside)continue;
+      if (place) {
+        record.host.style.top = `${place.top}px`;
+        record.host.style.left = `${place.left}px`;
+      }
       const chooser=record.chooser || record.shadow.querySelector('.chooser');
       if(chooser){
         const chooserWidth=Math.min(420,innerWidth-10), chooserHeight=Math.min(chooser.scrollHeight||360,Math.min(360,innerHeight*.6));
-        const hostRect=record.host.getBoundingClientRect();
+        let hostRect=record.host.getBoundingClientRect();
+        if (!hostRect || (hostRect.width === 0 && hostRect.height === 0)) {
+          hostRect = record.frozenChooserPos;
+        } else if (hostRect.width > 0) {
+          record.frozenChooserPos = hostRect;
+        }
+        if (!hostRect) hostRect = { top: 0, bottom: 27, right: innerWidth - 8 };
         chooser.style.left=`${Math.max(5,Math.min(innerWidth-chooserWidth-5,hostRect.right-chooserWidth))}px`;
         const below=hostRect.bottom+4, aboveMenu=hostRect.top-chooserHeight-4;
         chooser.style.top=`${below+chooserHeight<=innerHeight-5?below:Math.max(5,aboveMenu)}px`;

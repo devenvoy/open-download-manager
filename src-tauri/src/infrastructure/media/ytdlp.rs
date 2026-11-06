@@ -181,7 +181,20 @@ impl YtDlpTools {
         }
 
         if let Some(spec) = format_spec {
-            command.arg("-f").arg(spec);
+            let clean = spec.trim().trim_start_matches("audio:");
+            let resilient_spec = if clean.contains('+') {
+                let parts: Vec<&str> = clean.splitn(2, '+').collect();
+                let v = parts[0].trim();
+                let a = parts[1].trim();
+                format!("{v}+{a}/{v}+ba/{v}+bestaudio/bv*+ba/best")
+            } else if !clean.is_empty() {
+                format!("{clean}/ba/bestaudio/best")
+            } else {
+                "bv*+ba/best".to_string()
+            };
+            command.arg("-f").arg(resilient_spec);
+        } else {
+            command.arg("-f").arg("bv*+ba/best");
         }
 
         let is_mp3 = destination

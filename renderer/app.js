@@ -1052,19 +1052,20 @@ function renderDetails() {
 		: status === "completed"
 			? "Download completed."
 			: "Connection progress appears when the transfer starts.";
-	const isError = status === "error" && Boolean(d.error);
+	const isError = (status === "error" || status === "failed");
 	const errorCard = $("#detail-error-card");
 	if (errorCard) {
 		errorCard.hidden = !isError;
 		if (isError) {
-			const isFfmpeg = /ffmpeg/i.test(d.error);
-			const isYtdlp = /yt-dlp/i.test(d.error);
+			const errText = d.error || "Download failed or was interrupted.";
+			const isFfmpeg = /ffmpeg/i.test(errText);
+			const isYtdlp = /yt-dlp/i.test(errText);
 			$("#detail-error-title").textContent = isFfmpeg
 				? "FFmpeg Assembly Required"
 				: isYtdlp
 					? "YouTube Media Tool Required"
 					: "Download Interrupted";
-			$("#detail-error-summary").textContent = d.error;
+			$("#detail-error-summary").textContent = errText;
 			$("#detail-error-view-btn").onclick = () => openErrorDialog(d.id);
 			$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");
 		}
@@ -1079,10 +1080,10 @@ function renderDetails() {
 	if (toolBanner) {
 		toolBanner.hidden = !isFfmpegError;
 	}
-	if (isFfmpegError && status === "error" && !d._mediaToolPrompted) {
+	if (isFfmpegError && (status === "error" || status === "failed") && !d._mediaToolPrompted) {
 		d._mediaToolPrompted = true;
 		openMediaToolDialog("ffmpeg", d.id);
-	} else if (d.error && status === "error" && !d._notified) {
+	} else if (d.error && (status === "error" || status === "failed") && !d._notified) {
 		d._notified = true;
 		notify(d.error, true, {
 			actionText: "View Details",

@@ -49,6 +49,15 @@ impl YoutubeDownloadExecutor {
         let canonical_url = youtube_url(&download.url)
             .or_else(|| download.referer.as_deref().and_then(youtube_url))
             .or_else(|| {
+                download.sabr.as_ref().and_then(|s| {
+                    if !s.video_id.is_empty() {
+                        Some(format!("https://www.youtube.com/watch?v={}", s.video_id))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .or_else(|| {
                 if let Ok(parsed) = url::Url::parse(&download.url) {
                     if parsed.host_str().map_or(false, |h| h.contains("googlevideo.com")) {
                         if let Some((_, docid)) = parsed.query_pairs().find(|(k, _)| k == "docid" || k == "id") {

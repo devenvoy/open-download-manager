@@ -82,6 +82,15 @@ impl PairedDownloadExecutor {
                     .and_then(youtube_url)
                     .or_else(|| youtube_url(&video_url))
                     .or_else(|| {
+                        download.sabr.as_ref().and_then(|s| {
+                            if !s.video_id.is_empty() {
+                                Some(format!("https://www.youtube.com/watch?v={}", s.video_id))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .or_else(|| {
                         if let Ok(parsed) = url::Url::parse(&video_url) {
                             if let Some((_, docid)) = parsed.query_pairs().find(|(k, _)| k == "docid" || k == "id") {
                                 let s = docid.to_string();
@@ -116,10 +125,24 @@ impl PairedDownloadExecutor {
                     let destination = directory.join(destination_filename);
                     let speed_limit = rate_limiter.limit_kbps() as u64;
 
+                    let format_spec = download.youtube_format.clone().or_else(|| {
+                        let v_itag = url::Url::parse(&video_url).ok().and_then(|u| {
+                            u.query_pairs().find(|(k, _)| k == "itag").map(|(_, v)| v.to_string())
+                        });
+                        let a_itag = url::Url::parse(&audio_url).ok().and_then(|u| {
+                            u.query_pairs().find(|(k, _)| k == "itag").map(|(_, v)| v.to_string())
+                        });
+                        match (v_itag, a_itag) {
+                            (Some(v), Some(a)) => Some(format!("{v}+{a}")),
+                            (Some(v), None) => Some(v),
+                            _ => None,
+                        }
+                    });
+
                     return ytdlp
                         .download(
                             &target_url,
-                            download.youtube_format.as_deref(),
+                            format_spec.as_deref(),
                             &destination,
                             progress_handler,
                             control,
