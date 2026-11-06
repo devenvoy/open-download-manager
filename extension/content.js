@@ -138,9 +138,18 @@
             position();
           }
         }
+      } else if (record.hovered && !record.formatsReady) {
+        setTimeout(() => {
+          if (record.hovered && !record.formatsReady) prefetchFormats(record);
+        }, 600);
       }
     }).catch(() => {
       record.isPrefetching = false;
+      if (record.hovered && !record.formatsReady) {
+        setTimeout(() => {
+          if (record.hovered && !record.formatsReady) prefetchFormats(record);
+        }, 600);
+      }
     });
   }
 

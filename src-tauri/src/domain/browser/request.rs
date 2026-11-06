@@ -28,6 +28,7 @@ pub struct BrowserIncomingMessage {
 pub struct ValidatedBrowserRequest {
     pub action: String,
     pub url: String,
+    pub canonical_url: Option<String>,
     pub youtube_format: Option<String>,
     pub sabr: Option<SabrSession>,
     pub start_now: bool,
@@ -86,6 +87,7 @@ pub fn sanitize_browser_request(
         return Ok(ValidatedBrowserRequest {
             action: "formats".to_owned(),
             url: format!("https://www.youtube.com/watch?v={video_id}"),
+            canonical_url: Some(format!("https://www.youtube.com/watch?v={video_id}")),
             youtube_format: None,
             sabr: None,
             start_now: false,
@@ -140,15 +142,17 @@ pub fn sanitize_browser_request(
         None
     };
 
+    let effective_canonical = canonical.or(derived_video_url);
+
     let referer = if let Some(ref_url) = msg.referer {
         let validated = validate_url(&ref_url)?;
         if valid_url.contains("googlevideo.com") && !validated.contains("/watch?v=") && !validated.contains("/shorts/") {
-            canonical.or(derived_video_url).or(Some(validated))
+            effective_canonical.clone().or(Some(validated))
         } else {
             Some(validated)
         }
     } else {
-        canonical.or(derived_video_url)
+        effective_canonical.clone()
     };
 
     let mut filtered_headers = HashMap::new();
@@ -175,6 +179,7 @@ pub fn sanitize_browser_request(
     Ok(ValidatedBrowserRequest {
         action: "download".to_owned(),
         url: valid_url,
+        canonical_url: effective_canonical,
         youtube_format: msg.youtube_format,
         sabr,
         start_now: msg.start_now.unwrap_or(false),

@@ -249,7 +249,9 @@ impl YtDlpTools {
                 line = reader.next_line() => {
                     match line {
                         Ok(Some(l)) => {
-                            if let Some(json_str) = l.strip_prefix("ADPROGRESS:") {
+                            let trimmed = l.trim();
+                            if let Some(pos) = trimmed.find("ADPROGRESS:") {
+                                let json_str = &trimmed[pos + "ADPROGRESS:".len()..];
                                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
                                     let downloaded = val.get("downloaded_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
                                     let total = val.get("total_bytes").and_then(|v| v.as_u64())

@@ -450,6 +450,7 @@ function timeLeft(d) {
 	return (!d.total || d.estimated ? "≈ " : "") + duration(seconds);
 }
 function sizeLabel(d) {
+	if (statusOf(d) === "connecting" || statusOf(d) === "queued") return "Connecting…";
 	return numeric(d.total)
 		? (d.estimated ? "≈ " : "") + bytes(d.total)
 		: d.streamProgress?.estimatedBytes

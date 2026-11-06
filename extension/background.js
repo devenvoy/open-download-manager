@@ -243,14 +243,21 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
           console.log('[ODM Background] sabrCapture status:', !!capture);
           const active={...player,sabrUrl:capture?.url||player.sabrUrl};
           let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
-          if(player.sabr) {
-            // When video uses SABR, only offer verified SABR formats so downloads never hang or fail with "Not supplied by server"
-            items = items.filter(item => item.sabrSelection);
-          }
           console.log('[ODM Background] Returning', items.length, 'format choices');
           if(items.length) {
             return {ok:true,items};
           }
+        }
+        try {
+          const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+          console.log('[ODM Background] Querying native bridge for formats on:', watchUrl);
+          const nativeRes = await nativeSend({action: 'formats', url: watchUrl});
+          if (nativeRes?.ok && Array.isArray(nativeRes.items) && nativeRes.items.length) {
+            console.log('[ODM Background] Native bridge returned', nativeRes.items.length, 'formats');
+            return {ok: true, items: nativeRes.items};
+          }
+        } catch (e) {
+          console.warn('[ODM Background] native formats fallback error:', e);
         }
         return {ok: true, items: []};
       }

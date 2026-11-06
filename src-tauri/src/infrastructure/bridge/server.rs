@@ -327,8 +327,13 @@ async fn handle_bridge_connection(
             || valid_browser.url.contains("youtube.com")
             || valid_browser.url.contains("youtu.be")
             || valid_browser.url.contains("googlevideo.com");
+        let primary_url = if is_youtube && valid_browser.canonical_url.is_some() {
+            valid_browser.canonical_url.clone().unwrap()
+        } else {
+            valid_browser.url.clone()
+        };
         let download_req = DownloadRequest {
-            urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
+            urls: valid_browser.urls.unwrap_or_else(|| vec![primary_url]),
             filename: valid_browser.filename,
             directory: None,
             category: None,
