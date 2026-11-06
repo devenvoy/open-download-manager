@@ -1056,6 +1056,28 @@ function setView(nextFilter, nextCategory = "") {
 	});
 	render();
 }
+function updateProxyFieldsState() {
+	const enabled = $("#proxy-enabled").checked;
+	const container = $("#proxy-fields");
+	if (container) {
+		container.classList.toggle("disabled", !enabled);
+	}
+	$("#proxy-protocol").disabled = !enabled;
+	$("#proxy-host").disabled = !enabled;
+	$("#proxy-port").disabled = !enabled;
+	$("#proxy-username").disabled = !enabled;
+	$("#proxy-password").disabled = !enabled;
+	$("#test-proxy-button").disabled = !enabled;
+}
+
+function resetProxyTestStatus() {
+	const statusEl = $("#proxy-test-status");
+	if (statusEl) {
+		statusEl.textContent = "";
+		statusEl.className = "proxy-test-status";
+	}
+}
+
 function openSettings() {
 	const settings = state.settings;
 	$("#start-with-windows").checked = settings.startWithWindows !== false;
@@ -1063,6 +1085,18 @@ function openSettings() {
 	$("#max-concurrent").value = settings.maxConcurrent || 3;
 	$("#connections").value = settings.connections || 8;
 	$("#speed-limit").value = settings.speedLimitKbps || 0;
+
+	const proxy = settings.proxy || {};
+	$("#proxy-enabled").checked = proxy.enabled === true;
+	$("#proxy-protocol").value = proxy.protocol || "http";
+	$("#proxy-host").value = proxy.host || "";
+	$("#proxy-port").value = proxy.port || 8080;
+	$("#proxy-username").value = proxy.username || "";
+	$("#proxy-password").value = proxy.password || "";
+
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+
 	$("#settings-error").hidden = true;
 	showDialog("#settings-dialog");
 }
@@ -1719,18 +1753,74 @@ $("#choose-directory").addEventListener("click", async () => {
 		$("#settings-error").hidden = false;
 	}
 });
+$("#proxy-enabled").addEventListener("change", () => {
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+});
+$("#test-proxy-button").addEventListener("click", async () => {
+	const statusEl = $("#proxy-test-status");
+	const host = $("#proxy-host").value.trim();
+	const port = Number($("#proxy-port").value) || 8080;
+	const protocol = $("#proxy-protocol").value;
+	const username = $("#proxy-username").value.trim() || null;
+	const password = $("#proxy-password").value || null;
+
+	if (!host) {
+		statusEl.textContent = "Please enter a proxy host.";
+		statusEl.className = "proxy-test-status error";
+		return;
+	}
+
+	statusEl.textContent = "Testing proxy connection…";
+	statusEl.className = "proxy-test-status testing";
+	$("#test-proxy-button").disabled = true;
+
+	try {
+		const res = await call("testProxy", {
+			proxy: {
+				enabled: true,
+				protocol,
+				host,
+				port,
+				username,
+				password,
+			},
+		});
+		if (res && res.success) {
+			statusEl.textContent = res.message || "Connection successful.";
+			statusEl.className = "proxy-test-status success";
+		} else {
+			statusEl.textContent = res?.message || "Connection failed.";
+			statusEl.className = "proxy-test-status error";
+		}
+	} catch (err) {
+		statusEl.textContent = messageOf(err);
+		statusEl.className = "proxy-test-status error";
+	} finally {
+		$("#test-proxy-button").disabled = !$("#proxy-enabled").checked;
+	}
+});
 $("#settings-form").addEventListener("submit", async (event) => {
 	event.preventDefault();
 	const button = $("button[type=submit]", event.target);
 	$("#settings-error").hidden = true;
 	button.disabled = true;
 	try {
+		const proxy = {
+			enabled: $("#proxy-enabled").checked,
+			protocol: $("#proxy-protocol").value,
+			host: $("#proxy-host").value.trim(),
+			port: Number($("#proxy-port").value) || 8080,
+			username: $("#proxy-username").value.trim() || null,
+			password: $("#proxy-password").value || null,
+		};
 		await call("settings", {
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
 			maxConcurrent: Number($("#max-concurrent").value),
 			connections: Number($("#connections").value),
 			speedLimitKbps: Number($("#speed-limit").value),
+			proxy,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");

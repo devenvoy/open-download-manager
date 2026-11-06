@@ -534,6 +534,71 @@
 								required />
 						</div>
 					</fieldset>
+					<fieldset>
+						<legend>Proxy</legend>
+						<label
+							class="checkbox-label"
+							for="proxy-enabled"
+							><input
+								type="checkbox"
+								id="proxy-enabled" />
+							Use HTTP / HTTPS proxy server for downloads</label
+						>
+						<div
+							id="proxy-fields"
+							class="proxy-fields">
+							<div class="form-line">
+								<label for="proxy-protocol">Protocol:</label>
+								<select id="proxy-protocol">
+									<option value="http">HTTP</option>
+									<option value="https">HTTPS</option>
+								</select>
+							</div>
+							<div class="form-line">
+								<label for="proxy-host">Proxy server (host):</label>
+								<input
+									type="text"
+									id="proxy-host"
+									placeholder="127.0.0.1 or proxy.example.com" />
+							</div>
+							<div class="form-line">
+								<label for="proxy-port">Port:</label>
+								<input
+									type="number"
+									id="proxy-port"
+									min="1"
+									max="65535"
+									placeholder="8080" />
+							</div>
+							<div class="form-line">
+								<label for="proxy-username">Username (optional):</label>
+								<input
+									type="text"
+									id="proxy-username"
+									autocomplete="off" />
+							</div>
+							<div class="form-line">
+								<label for="proxy-password">Password (optional):</label>
+								<input
+									type="password"
+									id="proxy-password"
+									autocomplete="off" />
+							</div>
+							<div class="form-line proxy-test-line">
+								<button
+									class="small-button"
+									id="test-proxy-button"
+									type="button">
+									Test Connection
+								</button>
+								<span
+									id="proxy-test-status"
+									class="proxy-test-status"
+									role="status"
+									aria-live="polite"></span>
+							</div>
+						</div>
+					</fieldset>
 					<p
 						class="form-error"
 						id="settings-error"

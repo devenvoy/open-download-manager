@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::{
     application::{
@@ -8,9 +8,9 @@ use crate::{
         download_rate_limiter::DownloadRateLimiter,
         error::AppResult,
     },
-    domain::download::DownloadRecord,
+    domain::{download::DownloadRecord, settings::ProxySettings},
     infrastructure::{
-        http_download_executor::HttpDownloadExecutor,
+        http_download_executor::{create_http_client, HttpDownloadExecutor},
         media::{
             hls_executor::HlsDownloadExecutor, paired_executor::PairedDownloadExecutor,
             sabr_executor::SabrDownloadExecutor,
@@ -24,15 +24,31 @@ pub struct CompositeDownloadExecutor {
     hls_executor: Arc<HlsDownloadExecutor>,
     paired_executor: Arc<PairedDownloadExecutor>,
     sabr_executor: Arc<SabrDownloadExecutor>,
+    client: Arc<RwLock<reqwest::Client>>,
 }
 
 impl CompositeDownloadExecutor {
     pub fn new(http_executor: HttpDownloadExecutor, client: reqwest::Client) -> Self {
+        let shared_client = Arc::new(RwLock::new(client));
         Self {
             http_executor,
-            hls_executor: Arc::new(HlsDownloadExecutor::new(client.clone())),
-            paired_executor: Arc::new(PairedDownloadExecutor::new(client.clone())),
-            sabr_executor: Arc::new(SabrDownloadExecutor::new(client)),
+            hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
+            paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
+            sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
+            client: shared_client,
+        }
+    }
+
+    pub fn with_shared(
+        http_executor: HttpDownloadExecutor,
+        shared_client: Arc<RwLock<reqwest::Client>>,
+    ) -> Self {
+        Self {
+            http_executor,
+            hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
+            paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
+            sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
+            client: shared_client,
         }
     }
 }
@@ -82,5 +98,12 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         let _ = self.paired_executor.discard_partial(download);
         let _ = self.hls_executor.discard_partial(download);
         self.http_executor.discard_partial(download)
+    }
+
+    fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
+        self.http_executor.set_proxy(proxy)?;
+        let new_client = create_http_client(proxy)?;
+        *self.client.write().unwrap() = new_client;
+        Ok(())
     }
 }

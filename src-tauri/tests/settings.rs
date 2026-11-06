@@ -48,6 +48,7 @@ fn settings_update_is_validated_and_persisted() {
             confirm_browser_downloads: None,
             start_with_windows: Some(false),
             hide_completion_dialog: None,
+            proxy: None,
         })
         .expect("valid settings should save");
 
@@ -86,6 +87,7 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
         confirm_browser_downloads: None,
         start_with_windows: None,
         hide_completion_dialog: None,
+        proxy: None,
     };
 
     let error = service
@@ -118,6 +120,7 @@ fn relative_category_directory_is_rejected() {
             confirm_browser_downloads: None,
             start_with_windows: None,
             hide_completion_dialog: None,
+            proxy: None,
         })
         .expect_err("category directories must be absolute");
 

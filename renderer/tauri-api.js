@@ -89,5 +89,6 @@ window.downloader = Object.freeze({
   getPlaylistInfo: url => invoke('get_playlist_info', { url }),
   addPlaylistDownloads: request => invoke('add_playlist_downloads', { request }),
   getMediaToolsStatus: () => invoke('get_media_tools_status'),
-  installMediaTool: tool => invoke('install_media_tool', { tool })
+  installMediaTool: tool => invoke('install_media_tool', { tool }),
+  testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null })
 });

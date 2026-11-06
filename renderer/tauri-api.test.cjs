@@ -62,6 +62,33 @@ test('settings passes a typed patch to the Rust command', async () => {
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ patch }));
 });
 
+test('testProxy invokes test_proxy_connection with proxy configuration', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { success: true, message: 'Proxy connection successful (HTTP 204)' };
+      }
+    }
+  });
+  const proxy = {
+    enabled: true,
+    protocol: 'http',
+    host: '127.0.0.1',
+    port: 8080,
+    username: 'user',
+    password: 'password'
+  };
+
+  const result = await api.testProxy({ proxy, testUrl: 'http://127.0.0.1:9090' });
+
+  assert.equal(calls[0][0], 'test_proxy_connection');
+  assert.deepEqual(calls[0][1], { proxy, testUrl: 'http://127.0.0.1:9090' });
+  assert.equal(result.success, true);
+  assert.equal(result.message, 'Proxy connection successful (HTTP 204)');
+});
+
 test('download details use the native progress window commands', async () => {
   const calls = [];
   const api = loadApi({

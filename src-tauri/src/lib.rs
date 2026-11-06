@@ -13,7 +13,7 @@ use presentation::{
         add_download, add_playlist_downloads, browser_setup_action, check_for_updates, download_action,
         export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
         import_downloads_from_file, install_media_tool, register_browser, remove_completed,
-        review_download, show_about_dialog, snapshot, update_settings,
+        review_download, show_about_dialog, snapshot, test_proxy_connection, update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -62,11 +62,15 @@ pub fn run() {
                 std::sync::Arc::new(TauriDownloadEventPublisher::new(app.handle().clone())),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            let http_executor = HttpDownloadExecutor::new()
-                .map_err(|error| std::io::Error::other(error.message))?;
-            let download_executor = crate::infrastructure::media::CompositeDownloadExecutor::new(
+            let initial_client = crate::infrastructure::http_download_executor::create_http_client(
+                Some(&settings.settings().proxy),
+            )
+            .map_err(|error| std::io::Error::other(error.message))?;
+            let shared_client = std::sync::Arc::new(std::sync::RwLock::new(initial_client));
+            let http_executor = HttpDownloadExecutor::with_shared_client(shared_client.clone());
+            let download_executor = crate::infrastructure::media::CompositeDownloadExecutor::with_shared(
                 http_executor,
-                reqwest::Client::new(),
+                shared_client,
             );
             let download_transfer = DownloadTransferService::new(
                 download_history.clone(),
@@ -205,7 +209,8 @@ pub fn run() {
             get_playlist_info,
             add_playlist_downloads,
             get_media_tools_status,
-            install_media_tool
+            install_media_tool,
+            test_proxy_connection
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

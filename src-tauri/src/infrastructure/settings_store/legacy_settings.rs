@@ -30,6 +30,7 @@ impl LegacySettings {
             confirm_browser_downloads: self.confirm_browser_downloads,
             start_with_windows: self.start_with_windows,
             hide_completion_dialog: self.hide_completion_dialog,
+            proxy: None,
         }
     }
 }

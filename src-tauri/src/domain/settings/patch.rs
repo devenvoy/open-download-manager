@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::domain::category::DownloadCategory;
+use crate::domain::{category::DownloadCategory, settings::proxy::ProxySettings};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -17,4 +17,5 @@ pub struct SettingsPatch {
     pub confirm_browser_downloads: Option<bool>,
     pub start_with_windows: Option<bool>,
     pub hide_completion_dialog: Option<bool>,
+    pub proxy: Option<ProxySettings>,
 }

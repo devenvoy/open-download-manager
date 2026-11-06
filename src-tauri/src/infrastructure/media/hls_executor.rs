@@ -24,7 +24,7 @@ use crate::{
 };
 
 pub struct HlsDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
 }
 
@@ -39,9 +39,20 @@ pub struct ResolvedHlsPlan {
 impl HlsDownloadExecutor {
     pub fn new(client: reqwest::Client) -> Self {
         Self {
+            client: Arc::new(std::sync::RwLock::new(client)),
+            ffmpeg: FfmpegTools::new(),
+        }
+    }
+
+    pub fn new_shared(client: Arc<std::sync::RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             ffmpeg: FfmpegTools::new(),
         }
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
     }
 
     pub async fn resolve_plan(
@@ -55,7 +66,7 @@ impl HlsDownloadExecutor {
         }
 
         let resp = self
-            .client
+            .client()
             .get(url)
             .send()
             .await
@@ -125,7 +136,7 @@ impl HlsDownloadExecutor {
         _headers: &HashMap<String, String>,
     ) -> AppResult<HlsMediaPlaylist> {
         let resp = self
-            .client
+            .client()
             .get(url)
             .send()
             .await
@@ -197,7 +208,7 @@ impl HlsDownloadExecutor {
 
         let mut workers = tokio::task::JoinSet::new();
         for _ in 0..worker_count {
-            let client = self.client.clone();
+            let client = self.client();
             let urls = plan.urls.clone();
             let segments = segments.clone();
             let next_index = next_index.clone();

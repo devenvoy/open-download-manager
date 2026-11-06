@@ -1,8 +1,10 @@
 mod patch;
 mod policy;
+pub mod proxy;
 mod validation_error;
 
 pub use patch::SettingsPatch;
+pub use proxy::{ProxyProtocol, ProxySettings, ProxyTestResult, DEFAULT_PROXY_PORT};
 pub use validation_error::SettingsValidationError;
 
 use std::{collections::BTreeMap, path::PathBuf};
@@ -31,6 +33,8 @@ pub struct Settings {
     pub confirm_browser_downloads: bool,
     pub start_with_windows: bool,
     pub hide_completion_dialog: bool,
+    #[serde(default)]
+    pub proxy: ProxySettings,
 }
 
 impl Settings {
@@ -46,6 +50,7 @@ impl Settings {
             confirm_browser_downloads: DEFAULT_CONFIRM_BROWSER_DOWNLOADS,
             start_with_windows: DEFAULT_START_WITH_WINDOWS,
             hide_completion_dialog: DEFAULT_HIDE_COMPLETION_DIALOG,
+            proxy: ProxySettings::default(),
         }
     }
 
@@ -82,6 +87,7 @@ impl Settings {
             &mut next.hide_completion_dialog,
             patch.hide_completion_dialog,
         );
+        apply_if_some(&mut next.proxy, patch.proxy);
 
         next.validate()?;
         Ok(next)
@@ -117,6 +123,7 @@ impl Settings {
                 "Stored category directories must be absolute paths.",
             ));
         }
+        self.proxy.validate()?;
         Ok(())
     }
 }

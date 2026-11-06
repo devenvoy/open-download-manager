@@ -21,7 +21,7 @@ use crate::{
 };
 
 pub struct SabrDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
 }
 
@@ -44,9 +44,20 @@ fn read_varint_from_slice(slice: &[u8]) -> Option<(u64, usize)> {
 impl SabrDownloadExecutor {
     pub fn new(client: reqwest::Client) -> Self {
         Self {
+            client: Arc::new(std::sync::RwLock::new(client)),
+            ffmpeg: FfmpegTools::new(),
+        }
+    }
+
+    pub fn new_shared(client: Arc<std::sync::RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             ffmpeg: FfmpegTools::new(),
         }
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
     }
 
     pub async fn transfer(
@@ -122,7 +133,7 @@ impl SabrDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not create audio track file: {e}")))?;
 
-        let mut req = self.client.post(&session.server_abr_streaming_url);
+        let mut req = self.client().post(&session.server_abr_streaming_url);
 
         let body_bytes = build_sabr_request_body(&session);
         if !body_bytes.is_empty() {

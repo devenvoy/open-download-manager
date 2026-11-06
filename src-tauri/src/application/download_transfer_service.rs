@@ -398,6 +398,10 @@ impl DownloadTransferService {
         self.rate_limiter.set_limit_kbps(value_kbps);
     }
 
+    pub fn set_proxy(&self, proxy: Option<&crate::domain::settings::ProxySettings>) -> AppResult<()> {
+        self.executor.set_proxy(proxy)
+    }
+
     pub fn start_scheduler(&self) {
         let service = self.clone();
         tauri::async_runtime::spawn(async move {

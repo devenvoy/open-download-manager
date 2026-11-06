@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub struct PairedDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
 }
 
@@ -33,9 +33,20 @@ struct PairedState {
 impl PairedDownloadExecutor {
     pub fn new(client: reqwest::Client) -> Self {
         Self {
+            client: Arc::new(std::sync::RwLock::new(client)),
+            ffmpeg: FfmpegTools::new(),
+        }
+    }
+
+    pub fn new_shared(client: Arc<std::sync::RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             ffmpeg: FfmpegTools::new(),
         }
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
     }
 
     pub async fn transfer(
@@ -66,7 +77,7 @@ impl PairedDownloadExecutor {
         // Probe both URLs to discover Content-Length if available
         let mut totals: [Option<u64>; 2] = [None, None];
         for (i, url) in urls.iter().enumerate() {
-            if let Ok(resp) = self.client.head(url).send().await {
+            if let Ok(resp) = self.client().head(url).send().await {
                 if resp.status().is_success() {
                     totals[i] = resp.content_length();
                 }
@@ -84,7 +95,7 @@ impl PairedDownloadExecutor {
         let mut workers = tokio::task::JoinSet::new();
 
         for (index, url) in urls.into_iter().enumerate() {
-            let client = self.client.clone();
+            let client = self.client();
             let parts_dir = parts_dir.clone();
             let mut control = control.clone();
             let rate_limiter = rate_limiter.clone();

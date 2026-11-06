@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::{Duration, Instant},
 };
 
@@ -23,7 +23,10 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::download::{sanitize_filename, DownloadRecord, DownloadSegmentProgress},
+    domain::{
+        download::{sanitize_filename, DownloadRecord, DownloadSegmentProgress},
+        settings::ProxySettings,
+    },
 };
 
 mod policy;
@@ -34,9 +37,28 @@ use self::policy::{
     TEMPORARY_DOWNLOAD_PREFIX,
 };
 
+pub fn create_http_client(proxy: Option<&ProxySettings>) -> AppResult<reqwest::Client> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
+        .redirect(reqwest::redirect::Policy::limited(MAX_REDIRECTS));
+
+    if let Some(proxy_config) = proxy {
+        if proxy_config.enabled {
+            let req_proxy = proxy_config.to_reqwest_proxy()?;
+            builder = builder.proxy(req_proxy);
+        } else {
+            builder = builder.no_proxy();
+        }
+    }
+
+    builder.build().map_err(|error| {
+        AppError::download(format!("Could not initialize HTTP client: {error}"))
+    })
+}
+
 #[derive(Clone)]
 pub struct HttpDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<RwLock<reqwest::Client>>,
     segment_validators: Arc<Mutex<HashMap<String, SegmentValidator>>>,
 }
 
@@ -50,17 +72,32 @@ struct SegmentValidator {
 
 impl HttpDownloadExecutor {
     pub fn new() -> AppResult<Self> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
-            .redirect(reqwest::redirect::Policy::limited(MAX_REDIRECTS))
-            .build()
-            .map_err(|error| {
-                AppError::download(format!("Could not initialize HTTP client: {error}"))
-            })?;
-        Ok(Self {
+        let client = create_http_client(None)?;
+        Ok(Self::with_client(client))
+    }
+
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self {
+            client: Arc::new(RwLock::new(client)),
+            segment_validators: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn with_shared_client(client: Arc<RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
-        })
+        }
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
+    }
+
+    pub fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
+        let new_client = create_http_client(proxy)?;
+        *self.client.write().unwrap() = new_client;
+        Ok(())
     }
 
     async fn transfer(
@@ -472,8 +509,9 @@ impl HttpDownloadExecutor {
         url: Url,
         control: &mut DownloadControl,
     ) -> AppResult<Option<SegmentValidator>> {
+        let client = self.client();
         let response = send_with_retry(control, || {
-            self.client
+            client
                 .get(url.clone())
                 .header(reqwest::header::RANGE, "bytes=0-0")
                 .header(reqwest::header::ACCEPT_ENCODING, "identity")
@@ -595,7 +633,7 @@ impl HttpDownloadExecutor {
             if segment.downloaded == segment.total {
                 continue;
             }
-            let client = self.client.clone();
+            let client = self.client();
             let segment_index = u8::try_from(index)
                 .map_err(|_| AppError::download("The segment index is invalid."))?;
             let path = segment_path(directory, id, segment_index);
@@ -745,8 +783,9 @@ impl HttpDownloadExecutor {
         offset: u64,
         control: &mut DownloadControl,
     ) -> AppResult<reqwest::Response> {
+        let client = self.client();
         send_with_retry(control, || {
-            let request = self.client.get(url.clone());
+            let request = client.get(url.clone());
             if offset > 0 {
                 request.header(reqwest::header::RANGE, format!("bytes={offset}-"))
             } else {
@@ -807,6 +846,10 @@ impl DownloadExecutor for HttpDownloadExecutor {
             .map_err(|_| AppError::storage("Download resume state is unavailable."))?
             .remove(&download.id);
         Ok(())
+    }
+
+    fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
+        self.set_proxy(proxy)
     }
 }
 

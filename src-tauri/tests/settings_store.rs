@@ -143,16 +143,5 @@ fn invalid_legacy_settings_fail_without_replacing_the_history_or_creating_settin
 }
 
 fn empty_patch() -> SettingsPatch {
-    SettingsPatch {
-        default_directory: None,
-        max_concurrent: None,
-        connections: None,
-        speed_limit_kbps: None,
-        category_directories: None,
-        notify_on_complete: None,
-        reveal_on_complete: None,
-        confirm_browser_downloads: None,
-        start_with_windows: None,
-        hide_completion_dialog: None,
-    }
+    SettingsPatch::default()
 }

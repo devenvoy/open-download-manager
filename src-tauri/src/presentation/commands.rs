@@ -9,7 +9,7 @@ use crate::{
     domain::{
         download::{DownloadAction, DownloadRequest, ReviewDownloadRequest},
         media::{AddPlaylistDownloadsRequest, PlaylistMetadata},
-        settings::SettingsPatch,
+        settings::{ProxySettings, ProxyTestResult, SettingsPatch},
         snapshot::{DownloadSummary, IntegrationStatus, Snapshot},
     },
     infrastructure::media::ytdlp::YtDlpTools,
@@ -117,8 +117,92 @@ pub fn update_settings(
     state
         .download_transfer
         .set_speed_limit(updated.speed_limit_kbps);
+    let _ = state.download_transfer.set_proxy(Some(&updated.proxy));
     let _ = crate::infrastructure::autostart::sync_autostart(updated.start_with_windows);
     Ok(updated)
+}
+
+#[tauri::command]
+pub async fn test_proxy_connection(
+    proxy: ProxySettings,
+    test_url: Option<String>,
+) -> AppResult<ProxyTestResult> {
+    if proxy.clean_host().is_empty() {
+        return Ok(ProxyTestResult {
+            success: false,
+            message: "Proxy host cannot be empty.".to_string(),
+        });
+    }
+    if proxy.port == 0 {
+        return Ok(ProxyTestResult {
+            success: false,
+            message: "Proxy port must be between 1 and 65535.".to_string(),
+        });
+    }
+
+    let reqwest_proxy = match proxy.to_reqwest_proxy() {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(ProxyTestResult {
+                success: false,
+                message: format!("Invalid proxy configuration: {}", e.message),
+            })
+        }
+    };
+
+    let client = match reqwest::Client::builder()
+        .proxy(reqwest_proxy)
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return Ok(ProxyTestResult {
+                success: false,
+                message: format!("Could not initialize test client: {e}"),
+            })
+        }
+    };
+
+    let target = test_url
+        .as_deref()
+        .unwrap_or("https://www.google.com/generate_204");
+
+    match client.get(target).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() || status.as_u16() == 204 {
+                Ok(ProxyTestResult {
+                    success: true,
+                    message: format!("Proxy connection successful (HTTP {})", status.as_u16()),
+                })
+            } else if status.as_u16() == 407 {
+                Ok(ProxyTestResult {
+                    success: false,
+                    message: "Proxy authentication required (HTTP 407). Check your username and password.".to_string(),
+                })
+            } else {
+                Ok(ProxyTestResult {
+                    success: true,
+                    message: format!("Proxy reachable (HTTP {})", status.as_u16()),
+                })
+            }
+        }
+        Err(e) => {
+            let message = if e.is_connect() {
+                format!("Could not connect to proxy: {e}")
+            } else if e.is_timeout() {
+                "Connection to proxy timed out.".to_string()
+            } else {
+                format!("Proxy test failed: {e}")
+            };
+            Ok(ProxyTestResult {
+                success: false,
+                message,
+            })
+        }
+    }
 }
 
 #[tauri::command]

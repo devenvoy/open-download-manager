@@ -71,4 +71,8 @@ pub trait DownloadExecutor: Send + Sync {
     ) -> DownloadExecution;
 
     fn discard_partial(&self, download: &DownloadRecord) -> AppResult<()>;
+
+    fn set_proxy(&self, _proxy: Option<&crate::domain::settings::ProxySettings>) -> AppResult<()> {
+        Ok(())
+    }
 }
