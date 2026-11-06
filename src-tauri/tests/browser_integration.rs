@@ -21,7 +21,10 @@ use open_download_manager_lib::{
         bridge::LoopbackBridge,
         browser::{
             browser_native_messaging_dir, create_manifest,
-            scanner::{inspect_firefox_profile, inspect_profile, FIREFOX_EXTENSION_ID},
+            scanner::{
+                inspect_firefox_profile, inspect_firefox_profile_status, inspect_profile,
+                FIREFOX_EXTENSION_ID,
+            },
             BrowserType, NATIVE_HOST_NAME,
         },
         download_history_store::DownloadHistoryStore,
@@ -519,7 +522,7 @@ fn profile_scanner_accurately_classifies_extension_states() {
     assert!(!conn);
     assert_eq!(state, "missing");
 
-    // 5. Firefox profile with extensions.json
+    // 5. Firefox profile with extensions.json (connected)
     let firefox_profile = temp_root.join("FirefoxProfile");
     fs::create_dir_all(&firefox_profile).unwrap();
     let firefox_addons = serde_json::json!({
@@ -533,6 +536,26 @@ fn profile_scanner_accurately_classifies_extension_states() {
     });
     fs::write(firefox_profile.join("extensions.json"), firefox_addons.to_string()).unwrap();
     assert!(inspect_firefox_profile(&firefox_profile));
+    let (conn, state) = inspect_firefox_profile_status(&firefox_profile);
+    assert!(conn);
+    assert_eq!(state, "connected");
+
+    // 6. Firefox profile with disabled extension
+    let firefox_disabled = temp_root.join("FirefoxDisabledProfile");
+    fs::create_dir_all(&firefox_disabled).unwrap();
+    let firefox_disabled_addons = serde_json::json!({
+        "addons": [
+            {
+                "id": FIREFOX_EXTENSION_ID,
+                "active": false,
+                "appDisabled": false
+            }
+        ]
+    });
+    fs::write(firefox_disabled.join("extensions.json"), firefox_disabled_addons.to_string()).unwrap();
+    let (conn_dis, state_dis) = inspect_firefox_profile_status(&firefox_disabled);
+    assert!(!conn_dis);
+    assert_eq!(state_dis, "disabled");
 
     fs::remove_dir_all(temp_root).expect("cleanup directory");
 }
