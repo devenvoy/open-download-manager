@@ -14,7 +14,7 @@
     clearTimeout(scrollTimer);
     mutationObserver?.disconnect();resizeObserver.disconnect();
     if(scanFrame!==undefined)cancelAnimationFrame(scanFrame);
-    for(const record of records){record.sourceObserver?.disconnect();record.host.remove();}
+    for(const record of records){record.sourceObserver?.disconnect();record.intersectionObserver?.disconnect();record.host.remove();}
     records.clear();
     try{api.runtime.onMessage.removeListener(onMessage);}catch{}
   }
@@ -44,6 +44,8 @@
       const dismiss = shadow.querySelector('.dismiss');
       const record = {video, host, shadow, dismissed:false}; records.add(record);
       resizeObserver.observe(video);
+      record.intersectionObserver = new IntersectionObserver(() => position(), {threshold: [0, 0.25, 0.5, 0.75, 1]});
+      record.intersectionObserver.observe(video);
       document.documentElement.appendChild(host);
       const report = () => {
         const urls = [video.currentSrc, video.src, ...Array.from(video.querySelectorAll('source'), source => source.src)].map(direct).filter(Boolean);
@@ -116,18 +118,17 @@
   function position() {
     if(!connected())return;
     for (const record of records) {
-      if (!record.video.isConnected) { resizeObserver.unobserve(record.video); record.sourceObserver.disconnect(); record.host.remove(); records.delete(record); continue; }
+      if (!record.video.isConnected) { resizeObserver.unobserve(record.video); record.sourceObserver.disconnect(); record.intersectionObserver?.disconnect(); record.host.remove(); records.delete(record); continue; }
       const fullscreen=document.fullscreenElement;
       const parent=fullscreen && fullscreen !== record.video && fullscreen.contains(record.video) ? fullscreen : document.documentElement;
       if(record.host.parentNode !== parent) parent.appendChild(record.host);
       const rect = record.video.getBoundingClientRect();
-      const visible = !scrolling && !record.dismissed && rect.width > 100 && rect.height > 60 && rect.top >= 0 && rect.top < innerHeight-30 && rect.right > 0 && rect.left < innerWidth;
-      record.host.style.display = visible ? 'block' : 'none';
-      if(!visible)continue;
       const width = record.host.offsetWidth || 180, height = record.host.offsetHeight || 27;
-      const above = rect.top >= height + 6;
-      record.host.style.top = `${Math.max(5, Math.min(innerHeight - height - 5,above ? rect.top-height-4 : rect.top+4))}px`;
-      record.host.style.left = `${Math.max(5, Math.min(innerWidth - width - 5, rect.right - width - 8))}px`;
+      const place = globalThis.odmPanelPosition.placement(rect, {width: innerWidth, height: innerHeight}, {width, height}, record.dismissed || scrolling);
+      record.host.style.display = place ? 'block' : 'none';
+      if(!place)continue;
+      record.host.style.top = `${place.top}px`;
+      record.host.style.left = `${place.left}px`;
       const chooser=record.shadow.querySelector('.chooser');
       if(chooser){
         const chooserWidth=Math.min(410,innerWidth-10), chooserHeight=Math.min(chooser.scrollHeight||330,Math.min(330,innerHeight*.55));
