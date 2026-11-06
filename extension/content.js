@@ -66,6 +66,7 @@
           const old = shadow.querySelector('.chooser'); if(old) { old.remove(); position(); return; }
           closeChoosers(record);
           const chooser=document.createElement('div'); chooser.className='chooser';
+          chooser.addEventListener('keydown', event => { globalThis.odmChooserKeys.handleKey(event, chooser, shadow.activeElement, { close: () => { chooser.remove(); position(); button.focus(); } }); });
           const hint=document.createElement('p'); hint.textContent='Checking available video formats…';
           chooser.append(hint); shadow.append(chooser); position();
           try {
@@ -96,7 +97,7 @@
                 }catch(error){hint.textContent=friendlyError(error.message);}
                 row.disabled=!!item.unsupported;
               };chooser.append(row);
-            }); position();
+            }); globalThis.odmChooserKeys.focusFirst(chooser); position();
           } catch(error) {hint.textContent=error.message;}
           return;
         }
