@@ -70,6 +70,32 @@ impl DownloadHistoryService {
         Ok(f(&downloads))
     }
 
+    pub(crate) fn next_queued_download_ids(&self, limit: usize) -> AppResult<Vec<String>> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let ids = downloads
+            .iter()
+            .filter(|d| d.status == DownloadStatus::Queued && !d.needs_review)
+            .take(limit)
+            .map(|d| d.id.clone())
+            .collect();
+        Ok(ids)
+    }
+
+    pub(crate) fn active_download_count(&self) -> AppResult<usize> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let count = downloads
+            .iter()
+            .filter(|d| matches!(d.status, DownloadStatus::Connecting | DownloadStatus::Downloading | DownloadStatus::Assembling))
+            .count();
+        Ok(count)
+    }
+
     pub(crate) fn download(&self, id: &str) -> AppResult<DownloadRecord> {
         self.downloads
             .lock()

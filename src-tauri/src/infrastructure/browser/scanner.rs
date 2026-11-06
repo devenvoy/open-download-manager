@@ -9,7 +9,7 @@ use crate::{
     infrastructure::browser::registration::BrowserType,
 };
 
-pub const EXTENSION_ID: Option<&str> = None;
+pub const EXTENSION_ID: Option<&str> = Some("hlomaolpnkkbikjacplamegklgegpjbj");
 pub const STORE_URL: Option<&str> = None;
 pub const FIREFOX_EXTENSION_ID: &str = "open-download-manager@opendownloadmanager.local";
 

@@ -216,9 +216,7 @@ impl DownloadTransferService {
         self.history.add_records(records)?;
 
         if !request.queue_only && !request.review_only && !is_scheduled {
-            for id in &ids {
-                self.start_download(id, false)?;
-            }
+            self.pump_queue();
         }
         Ok(ids)
     }
@@ -300,7 +298,7 @@ impl DownloadTransferService {
         let id = request.id.clone();
         let record = self.history.review_download(&request)?;
         if record.status == DownloadStatus::Queued {
-            self.start_download(&id, false)?;
+            self.pump_queue();
         }
         Ok(vec![id])
     }
@@ -352,6 +350,7 @@ impl DownloadTransferService {
         drop(controls);
 
         self.history.remove_download(id)?;
+        self.pump_queue();
         Ok(())
     }
 
@@ -396,8 +395,27 @@ impl DownloadTransferService {
         Err(AppError::download("The file or folder cannot be found."))
     }
 
+    pub fn pump_queue(&self) {
+        let max = self.concurrency.max_concurrent();
+        let active = match self.history.active_download_count() {
+            Ok(count) => count,
+            Err(_) => return,
+        };
+        if active < max {
+            let available = max - active;
+            if let Ok(next_ids) = self.history.next_queued_download_ids(available) {
+                for id in next_ids {
+                    if let Err(error) = self.start_download(&id, false) {
+                        eprintln!("Failed to auto-start queued download {id}: {}", error.message);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn set_max_concurrent(&self, value: u8) {
         self.concurrency.set_max_concurrent(value);
+        self.pump_queue();
     }
 
     pub fn set_speed_limit(&self, value_kbps: u32) {
@@ -419,6 +437,7 @@ impl DownloadTransferService {
                 if let Err(error) = service.start_due_downloads() {
                     eprintln!("Could not start scheduled downloads: {}", error.message);
                 }
+                service.pump_queue();
             }
         });
     }
@@ -495,6 +514,7 @@ impl DownloadTransferService {
         } else if reason == DownloadStopReason::Cancel {
             self.executor.discard_partial(&record)?;
         }
+        self.pump_queue();
         Ok(())
     }
 
@@ -528,6 +548,7 @@ impl DownloadTransferService {
                 }
                 Err(_) => eprintln!("Could not release download controls for {id}."),
             }
+            service.pump_queue();
         };
 
         if let Ok(handle) = tokio::runtime::Handle::try_current() {

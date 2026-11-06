@@ -23,6 +23,13 @@ use crate::{
     infrastructure::media::ffmpeg::FfmpegTools,
 };
 
+struct HlsTransferState {
+    segments: Vec<StreamSegment>,
+    last_tick_time: std::time::Instant,
+    last_tick_bytes: u64,
+    speed: u64,
+}
+
 pub struct HlsDownloadExecutor {
     client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
@@ -178,9 +185,12 @@ impl HlsDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not create download folder: {e}")))?;
 
-        let empty_headers = HashMap::new();
+        let mut headers = HashMap::new();
+        if let Some(ref referer) = download.referer {
+            headers.insert("Referer".to_string(), referer.clone());
+        }
         let plan = self
-            .resolve_plan(&download.url, &empty_headers, 0)
+            .resolve_plan(&download.url, &headers, 0)
             .await?;
 
         let parts_dir = directory.join(format!(".open-download-manager-hls-{}", download.id));
@@ -202,20 +212,28 @@ impl HlsDownloadExecutor {
             state
         };
 
-        let segments = Arc::new(Mutex::new(segments_state));
+        let initial_downloaded: u64 = segments_state.iter().map(|s| s.downloaded).sum();
+        let state = Arc::new(Mutex::new(HlsTransferState {
+            segments: segments_state,
+            last_tick_time: std::time::Instant::now(),
+            last_tick_bytes: initial_downloaded,
+            speed: 0,
+        }));
         let next_index = Arc::new(Mutex::new(0_usize));
         let worker_count = (download.connections as usize).clamp(1, segment_count);
+        let referer = download.referer.clone();
 
         let mut workers = tokio::task::JoinSet::new();
         for _ in 0..worker_count {
             let client = self.client();
             let urls = plan.urls.clone();
-            let segments = segments.clone();
+            let state = state.clone();
             let next_index = next_index.clone();
             let parts_dir = parts_dir.clone();
             let mut control = control.clone();
             let rate_limiter = rate_limiter.clone();
             let progress_handler = progress_handler.clone();
+            let referer = referer.clone();
 
             workers.spawn(async move {
                 loop {
@@ -233,8 +251,8 @@ impl HlsDownloadExecutor {
                     };
 
                     let is_already_done = {
-                        let segs = segments.lock().unwrap();
-                        segs[index].done
+                        let st = state.lock().unwrap();
+                        st.segments[index].done
                     };
                     if is_already_done {
                         continue;
@@ -245,10 +263,11 @@ impl HlsDownloadExecutor {
                         &urls[index],
                         index,
                         &parts_dir,
-                        &segments,
+                        &state,
                         &mut control,
                         rate_limiter.clone(),
                         &progress_handler,
+                        referer.as_deref(),
                     )
                     .await?;
                 }
@@ -327,16 +346,20 @@ async fn download_hls_segment(
     url: &str,
     index: usize,
     parts_dir: &Path,
-    segments: &Arc<Mutex<Vec<StreamSegment>>>,
+    state: &Arc<Mutex<HlsTransferState>>,
     control: &mut DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
+    referer: Option<&str>,
 ) -> AppResult<()> {
     let temp_part = parts_dir.join(format!("{index}.receiving"));
     let final_part = parts_dir.join(format!("{index}.part"));
 
-    let mut response = client
-        .get(url)
+    let mut req = client.get(url);
+    if let Some(r) = referer {
+        req = req.header(reqwest::header::REFERER, r);
+    }
+    let mut response = req
         .send()
         .await
         .map_err(|e| AppError::download(format!("Could not download segment {index}: {e}")))?;
@@ -377,6 +400,32 @@ async fn download_hls_segment(
             .map_err(|e| AppError::download(format!("Could not write segment: {e}")))?;
 
         segment_downloaded += chunk_size;
+
+        {
+            let mut st = state.lock().unwrap();
+            st.segments[index].downloaded = segment_downloaded;
+
+            let now = std::time::Instant::now();
+            let elapsed = now.duration_since(st.last_tick_time).as_millis();
+            if elapsed >= 250 {
+                let total_now: u64 = st.segments.iter().map(|s| s.downloaded).sum();
+                let diff = total_now.saturating_sub(st.last_tick_bytes);
+                st.speed = (diff * 1000) / elapsed.max(1) as u64;
+                st.last_tick_bytes = total_now;
+                st.last_tick_time = now;
+
+                let stream_prog = calculate_stream_progress(&st.segments);
+                let speed = st.speed;
+                drop(st);
+
+                progress_handler(DownloadProgress {
+                    downloaded: total_now,
+                    total: stream_prog.estimated_bytes,
+                    bytes_per_second: speed,
+                    connections_progress: Vec::new(),
+                });
+            }
+        }
     }
 
     file.flush()
@@ -389,17 +438,19 @@ async fn download_hls_segment(
         .map_err(|e| AppError::download(format!("Could not commit segment: {e}")))?;
 
     {
-        let mut segs = segments.lock().unwrap();
-        segs[index].done = true;
-        segs[index].downloaded = segment_downloaded;
+        let mut st = state.lock().unwrap();
+        st.segments[index].done = true;
+        st.segments[index].downloaded = segment_downloaded;
 
-        let total_downloaded: u64 = segs.iter().map(|s| s.downloaded).sum();
-        let stream_prog = calculate_stream_progress(&segs);
+        let total_downloaded: u64 = st.segments.iter().map(|s| s.downloaded).sum();
+        let stream_prog = calculate_stream_progress(&st.segments);
+        let speed = st.speed;
+        drop(st);
 
         progress_handler(DownloadProgress {
             downloaded: total_downloaded,
             total: stream_prog.estimated_bytes,
-            bytes_per_second: 0,
+            bytes_per_second: speed,
             connections_progress: Vec::new(),
         });
     }

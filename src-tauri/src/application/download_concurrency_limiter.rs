@@ -24,6 +24,10 @@ impl DownloadConcurrencyLimiter {
         })
     }
 
+    pub(super) fn max_concurrent(&self) -> usize {
+        self.max_concurrent.load(Ordering::Acquire)
+    }
+
     pub(super) async fn acquire(self: &Arc<Self>) -> AppResult<DownloadConcurrencyPermit> {
         loop {
             let changed = self.changed.notified();
