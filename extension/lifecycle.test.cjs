@@ -13,8 +13,10 @@ function harness(file,mode){
   const video={currentSrc:'https://example.test/video.mp4',src:'',querySelectorAll(){return[];},addEventListener, isConnected:true,getBoundingClientRect(){return {top:50,bottom:400,left:0,right:600,width:600,height:350};}};
   const document={title:'Video',documentElement:{appendChild(host){host.parentNode=this;}},querySelectorAll(selector){return selector==='video'?[video]:[];},addEventListener,
     createElement(){const host={style:{},remove(){removed++;},attachShadow(){return {querySelector(selector){return selector==='.chooser'?host.chooser||null:{addEventListener(){}};}};}};hosts.push(host);return host;}};
-  const context={chrome:{runtime},document,location:{href:'https://www.youtube.com/watch?v=wLdZWyLOJCI',origin:'https://www.youtube.com'},window:{},URL,AbortController,ResizeObserver:Observer,MutationObserver:Observer,addEventListener,removeEventListener(name){events.delete(name);},requestAnimationFrame(){return 1;},cancelAnimationFrame(){},setTimeout,clearTimeout,dispatchEvent(){},Event,innerHeight:800,innerWidth:1200};
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
+  const context={chrome:{runtime},document,location:{href:'https://www.youtube.com/watch?v=wLdZWyLOJCI',origin:'https://www.youtube.com'},window:{},URL,AbortController,ResizeObserver:Observer,MutationObserver:Observer,IntersectionObserver:Observer,addEventListener,removeEventListener(name){events.delete(name);},requestAnimationFrame(){return 1;},cancelAnimationFrame(){},setTimeout,clearTimeout,dispatchEvent(){},Event,innerHeight:800,innerWidth:1200};
+  vm.createContext(context);
+  for(const lib of ['safe-tooltip.js','panel-position.js','chooser-keyboard.js'])if(fs.existsSync(path.join(__dirname,lib)))vm.runInContext(fs.readFileSync(path.join(__dirname,lib),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
   return {context,events,observers,callbacks,hosts,video,get calls(){return calls;},get removed(){return removed;},invalidate(){id=undefined;}};
 }
 for(const mode of ['throw','reject']){
@@ -40,13 +42,16 @@ test('missing runtime ID retires page scripts without sending again',()=>{
   assert.equal(h.calls,1);assert.equal(h.removed,1);assert.equal(h.callbacks.size,0);
 });
 
-test('page scrolling dismisses chooser and does not pin an offscreen video button',async()=>{
+test('page scrolling dismisses the chooser, then the button follows the visible part of its video',async()=>{
   const h=harness('content.js','success'),host=h.hosts[0];
   host.chooser={remove(){delete host.chooser;}};
   h.events.get('scroll')({composedPath:()=>[]});
   assert.equal(host.chooser,undefined);assert.equal(host.style.display,'none');
   h.video.getBoundingClientRect=()=>({top:-30,bottom:300,left:0,right:600,width:600,height:330});
   await new Promise(resolve=>setTimeout(resolve,180));
+  assert.equal(host.style.display,'block');assert.equal(host.style.top,'5px');
+  h.video.getBoundingClientRect=()=>({top:-330,bottom:20,left:0,right:600,width:600,height:330});
+  h.events.get('resize')();
   assert.equal(host.style.display,'none');
   h.invalidate();h.events.get('resize')();
 });
