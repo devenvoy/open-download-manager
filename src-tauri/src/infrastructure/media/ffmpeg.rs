@@ -142,32 +142,5 @@ async fn run_command_with_control(
 }
 
 fn find_ffmpeg_path() -> Option<PathBuf> {
-    if let Ok(env_path) = std::env::var("AD_FFMPEG_PATH") {
-        let path = PathBuf::from(env_path);
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(parent) = current_exe.parent() {
-            let candidate = parent.join(if cfg!(windows) { "tools/ffmpeg.exe" } else { "tools/ffmpeg" });
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-            // Tauri externalBin sidecar in Contents/MacOS/
-            let direct_sidecar = parent.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
-            if direct_sidecar.is_file() {
-                return Some(direct_sidecar);
-            }
-            #[cfg(target_os = "macos")]
-            if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources/tools/ffmpeg")) {
-                if bundle_res.is_file() {
-                    return Some(bundle_res);
-                }
-            }
-        }
-    }
-
-    which::which("ffmpeg").ok()
+    super::tools_manager::find_tool_path("ffmpeg")
 }

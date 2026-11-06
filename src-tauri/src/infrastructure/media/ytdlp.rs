@@ -149,32 +149,5 @@ impl YtDlpTools {
 }
 
 fn find_ytdlp_path() -> Option<PathBuf> {
-    if let Ok(env_path) = std::env::var("AD_YTDLP_PATH") {
-        let path = PathBuf::from(env_path);
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(parent) = current_exe.parent() {
-            let candidate = parent.join(if cfg!(windows) { "tools/yt-dlp.exe" } else { "tools/yt-dlp" });
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-            // Tauri externalBin sidecar in Contents/MacOS/
-            let direct_sidecar = parent.join(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" });
-            if direct_sidecar.is_file() {
-                return Some(direct_sidecar);
-            }
-            #[cfg(target_os = "macos")]
-            if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources/tools/yt-dlp")) {
-                if bundle_res.is_file() {
-                    return Some(bundle_res);
-                }
-            }
-        }
-    }
-
-    which::which("yt-dlp").ok()
+    super::tools_manager::find_tool_path("yt-dlp")
 }
