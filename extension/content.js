@@ -508,6 +508,15 @@
     scrollTimer=setTimeout(()=>{scrolling=false;position();},140);
   }
   addEventListener('scroll', onScroll, {capture:true,signal:listeners.signal}); addEventListener('resize', position, {signal:listeners.signal}); document.addEventListener('fullscreenchange',position,{signal:listeners.signal});
+  document.addEventListener('playing', event => {
+    if (event.target && event.target.tagName === 'VIDEO') {
+      for (const record of records) {
+        if (record.hovered && !record.formatsReady) {
+          prefetchFormats(record);
+        }
+      }
+    }
+  }, { capture: true, passive: true, signal: listeners.signal });
   function onMessage(message, sender, respond) {
     if (!connected() || sender.id !== api.runtime.id || message.action !== 'collectLinks') return;
     const items = Array.from(document.querySelectorAll('a[href]')).slice(0, 1000).map(a => ({url:direct(a.href), title:a.textContent.trim()})).filter(item => item.url);

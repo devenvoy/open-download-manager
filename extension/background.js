@@ -243,21 +243,16 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
           console.log('[ODM Background] sabrCapture status:', !!capture);
           const active={...player,sabrUrl:capture?.url||player.sabrUrl};
           let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
+          if(player.sabr) {
+            // When video uses SABR, only offer verified SABR formats so downloads never hang or fail with "Not supplied by server"
+            items = items.filter(item => item.sabrSelection);
+          }
           console.log('[ODM Background] Returning', items.length, 'format choices');
           if(items.length) {
             return {ok:true,items};
           }
         }
-        try {
-          const watchUrl = `https://www.youtube.com/watch?v=${id}`;
-          const nativeRes = await nativeSend({action: 'formats', url: watchUrl});
-          if (nativeRes?.ok && Array.isArray(nativeRes.items) && nativeRes.items.length) {
-            return {ok: true, items: nativeRes.items};
-          }
-        } catch (e) {
-          // Native bridge offline or video unavailable
-        }
-        return {ok:true,items:[]};
+        return {ok: true, items: []};
       }
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);
