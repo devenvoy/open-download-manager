@@ -162,6 +162,28 @@ fn find_ytdlp_path() -> Option<PathBuf> {
             if candidate.is_file() {
                 return Some(candidate);
             }
+            #[cfg(target_os = "macos")]
+            if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources/tools/yt-dlp")) {
+                if bundle_res.is_file() {
+                    return Some(bundle_res);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    for p in &["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", "/opt/local/bin/yt-dlp", "/usr/bin/yt-dlp"] {
+        let pb = PathBuf::from(p);
+        if pb.is_file() {
+            return Some(pb);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    for p in &["/usr/bin/yt-dlp", "/usr/local/bin/yt-dlp", "/bin/yt-dlp", "/snap/bin/yt-dlp"] {
+        let pb = PathBuf::from(p);
+        if pb.is_file() {
+            return Some(pb);
         }
     }
 
