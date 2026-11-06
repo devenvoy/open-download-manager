@@ -155,28 +155,17 @@ fn find_ffmpeg_path() -> Option<PathBuf> {
             if candidate.is_file() {
                 return Some(candidate);
             }
+            // Tauri externalBin sidecar in Contents/MacOS/
+            let direct_sidecar = parent.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+            if direct_sidecar.is_file() {
+                return Some(direct_sidecar);
+            }
             #[cfg(target_os = "macos")]
             if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources/tools/ffmpeg")) {
                 if bundle_res.is_file() {
                     return Some(bundle_res);
                 }
             }
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    for p in &["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/local/bin/ffmpeg", "/usr/bin/ffmpeg"] {
-        let pb = PathBuf::from(p);
-        if pb.is_file() {
-            return Some(pb);
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    for p in &["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/bin/ffmpeg", "/snap/bin/ffmpeg"] {
-        let pb = PathBuf::from(p);
-        if pb.is_file() {
-            return Some(pb);
         }
     }
 
