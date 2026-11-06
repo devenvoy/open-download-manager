@@ -17,19 +17,6 @@ impl MediaToolType {
         }
     }
 
-    pub fn executable_name(&self) -> &'static str {
-        #[cfg(windows)]
-        match self {
-            Self::Ffmpeg => "ffmpeg.exe",
-            Self::YtDlp => "yt-dlp.exe",
-        }
-        #[cfg(not(windows))]
-        match self {
-            Self::Ffmpeg => "ffmpeg",
-            Self::YtDlp => "yt-dlp",
-        }
-    }
-
     pub fn env_var_override(&self) -> &'static str {
         match self {
             Self::Ffmpeg => "AD_FFMPEG_PATH",

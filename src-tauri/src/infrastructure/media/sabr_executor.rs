@@ -17,12 +17,13 @@ use crate::{
         download::{DownloadRecord, DownloadSegmentProgress},
         media::sabr::{build_sabr_request_body, parse_media_header_itag, SabrFormat},
     },
-    infrastructure::media::ffmpeg::FfmpegTools,
+    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
 };
 
 pub struct SabrDownloadExecutor {
     client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
+    ytdlp: Option<YtDlpTools>,
 }
 
 fn read_varint_from_slice(slice: &[u8]) -> Option<(u64, usize)> {
@@ -46,6 +47,7 @@ impl SabrDownloadExecutor {
         Self {
             client: Arc::new(std::sync::RwLock::new(client)),
             ffmpeg: FfmpegTools::new(),
+            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -53,6 +55,7 @@ impl SabrDownloadExecutor {
         Self {
             client,
             ffmpeg: FfmpegTools::new(),
+            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -76,6 +79,50 @@ impl SabrDownloadExecutor {
             .as_ref()
             .map(PathBuf::from)
             .ok_or_else(|| AppError::download("Download directory is not set."))?;
+
+        let is_real_youtube = session.server_abr_streaming_url.contains("googlevideo.com")
+            || download.url.contains("googlevideo.com")
+            || download.url.contains("youtube.com")
+            || download.url.contains("youtu.be");
+
+        if is_real_youtube {
+            let ytdlp_tool = self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new);
+            if let Some(ytdlp) = ytdlp_tool {
+                let canonical_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
+                let destination_filename = if is_mp3 {
+                    download.filename.clone()
+                } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
+                    download.filename.clone()
+                } else {
+                    let base = Path::new(&download.filename)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&download.filename);
+                    format!("{base}.mp4")
+                };
+                let destination = directory.join(destination_filename);
+
+                let format_spec = if is_mp3 {
+                    session.audio_itag.to_string()
+                } else if let Some(v) = session.video_itag {
+                    format!("{v}+{}", session.audio_itag)
+                } else {
+                    session.audio_itag.to_string()
+                };
+
+                return ytdlp
+                    .download(
+                        &canonical_url,
+                        Some(&format_spec),
+                        &destination,
+                        progress_handler,
+                        control,
+                        0,
+                    )
+                    .await;
+            }
+        }
 
         let has_video = session.video_itag.is_some();
         let parts_dir = directory.join(format!(".open-download-manager-sabr-{}", download.id));
@@ -329,6 +376,34 @@ impl SabrDownloadExecutor {
         tokio::fs::rename(&audio_receiving, &audio_part)
             .await
             .map_err(|e| AppError::download(format!("Could not save audio track part: {e}")))?;
+
+        // Validate stream completeness before invoking FFmpeg
+        let total_downloaded = video_downloaded + audio_downloaded;
+        if let Some(expected_total) = total {
+            if total_downloaded < expected_total {
+                let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+                return Err(AppError::download(format!(
+                    "YouTube stream ended prematurely: received {total_downloaded} of {expected_total} bytes ({:.1}%). Please install yt-dlp from Settings > Media Tools to download full YouTube streams.",
+                    (total_downloaded as f64 / expected_total as f64) * 100.0
+                )));
+            }
+        }
+
+        let video_len = if has_video {
+            tokio::fs::metadata(&video_part).await.map(|m| m.len()).unwrap_or(0)
+        } else {
+            0
+        };
+        let audio_len = tokio::fs::metadata(&audio_part).await.map(|m| m.len()).unwrap_or(0);
+
+        if has_video && video_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            return Err(AppError::download("YouTube video track is empty. The media cannot be assembled."));
+        }
+        if audio_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            return Err(AppError::download("YouTube audio track is empty. The media cannot be assembled."));
+        }
 
         // Mux tracks or convert
         let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");

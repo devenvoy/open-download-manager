@@ -477,10 +477,26 @@ function percentage(d) {
 function messageOf(error) {
 	return error?.message || String(error || "The operation failed.");
 }
-function notify(message, error = false) {
+function notify(message, error = false, options = {}) {
 	clearTimeout(toastTimer);
 	$("#toast-text").textContent = message;
-	$("#toast").dataset.error = String(error);
+	$("#toast").dataset.error = String(Boolean(error));
+
+	const actionBtn = $("#toast-action");
+	if (actionBtn) {
+		if (options.actionText && typeof options.onAction === "function") {
+			actionBtn.textContent = options.actionText;
+			actionBtn.onclick = () => {
+				$("#toast").hidden = true;
+				options.onAction();
+			};
+			actionBtn.hidden = false;
+		} else {
+			actionBtn.hidden = true;
+			actionBtn.onclick = null;
+		}
+	}
+
 	$("#toast").hidden = false;
 	toastTimer = setTimeout(
 		() => {
@@ -1021,8 +1037,28 @@ function renderDetails() {
 		: status === "completed"
 			? "Download completed."
 			: "Connection progress appears when the transfer starts.";
-	$("#detail-error").textContent = d.error || "";
-	$("#detail-error").hidden = !d.error;
+	const isError = status === "error" && Boolean(d.error);
+	const errorCard = $("#detail-error-card");
+	if (errorCard) {
+		errorCard.hidden = !isError;
+		if (isError) {
+			const isFfmpeg = /ffmpeg/i.test(d.error);
+			const isYtdlp = /yt-dlp/i.test(d.error);
+			$("#detail-error-title").textContent = isFfmpeg
+				? "FFmpeg Assembly Required"
+				: isYtdlp
+					? "YouTube Media Tool Required"
+					: "Download Interrupted";
+			$("#detail-error-summary").textContent = d.error;
+			$("#detail-error-view-btn").onclick = () => openErrorDialog(d.id);
+			$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");
+		}
+	}
+	const connDetails = $("#connection-details");
+	if (connDetails) {
+		connDetails.hidden = isError;
+	}
+
 	const isFfmpegError = Boolean(d.error && /ffmpeg is required/i.test(d.error));
 	const toolBanner = $("#media-tool-fix-banner");
 	if (toolBanner) {
@@ -1033,7 +1069,10 @@ function renderDetails() {
 		openMediaToolDialog("ffmpeg", d.id);
 	} else if (d.error && status === "error" && !d._notified) {
 		d._notified = true;
-		notify(d.error, true);
+		notify(d.error, true, {
+			actionText: "View Details",
+			onAction: () => openErrorDialog(d.id),
+		});
 	}
 	$("#detail-open").disabled = status !== "completed";
 	$("#detail-resume").disabled = !canResume(d) || pending.has(d.id);
@@ -1173,6 +1212,128 @@ function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
 	$("#media-tool-dialog-error").hidden = true;
 
 	showDialog("#media-tool-dialog");
+}
+
+let activeErrorDownloadId = null;
+
+function openErrorDialog(downloadId = null) {
+	const targetId = downloadId || state.selectedId;
+	const d = state.downloads.find((item) => item.id === targetId);
+	if (!d) return;
+
+	activeErrorDownloadId = d.id;
+	const errorDialog = $("#error-dialog");
+	if (!errorDialog) return;
+
+	const errText = d.error || "The download encountered an unrecoverable error.";
+	const isFfmpeg = /ffmpeg/i.test(errText);
+	const isYtdlp = /yt-dlp/i.test(errText);
+	const isPremature = /prematurely|interrupted|truncated|stream ended/i.test(errText);
+
+	let title = "Download Error";
+	let heading = "Download could not be completed";
+	let suggestion = "";
+	let actionText = "";
+	let onAction = null;
+
+	if (isFfmpeg) {
+		title = "Media Assembly Failed";
+		heading = "FFmpeg is required to combine video and audio tracks";
+		suggestion = "Open Media Tools in Options to install or reinstall FFmpeg.";
+		actionText = "Open Media Tools";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openSettings();
+		};
+	} else if (isYtdlp) {
+		title = "YouTube Tool Required";
+		heading = "yt-dlp is required to process this media stream";
+		suggestion = "Install yt-dlp from Options > Media Tools.";
+		actionText = "Open Media Tools";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openSettings();
+		};
+	} else if (isPremature) {
+		title = "Stream Interrupted";
+		heading = "The connection was interrupted before all data was received";
+		suggestion = "Click Retry to re-connect and resume downloading the remaining data.";
+		actionText = "Retry Now";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	} else if (/proxy/i.test(errText)) {
+		title = "Proxy Connection Failed";
+		heading = "Could not reach the host through the configured proxy";
+		suggestion = "Check your proxy host, port, and credentials in Options.";
+		actionText = "Check Proxy Settings";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openSettings();
+		};
+	}
+
+	$("#error-dialog-title").textContent = title;
+	$("#error-dialog-heading").textContent = heading;
+	$("#error-dialog-description").textContent = errText;
+
+	const suggEl = $("#error-dialog-fix-suggestion");
+	const suggTextEl = $("#error-dialog-suggestion-text");
+	const suggActionBtn = $("#error-dialog-suggestion-action");
+	if (suggEl && suggestion) {
+		suggEl.hidden = false;
+		suggTextEl.textContent = suggestion;
+		if (actionText && onAction) {
+			suggActionBtn.textContent = actionText;
+			suggActionBtn.onclick = onAction;
+			suggActionBtn.hidden = false;
+		} else {
+			suggActionBtn.hidden = true;
+		}
+	} else if (suggEl) {
+		suggEl.hidden = true;
+	}
+
+	// Technical details
+	const techPre = $("#error-dialog-tech-text");
+	const diagnosticData = [
+		`File: ${d.filename || "unknown"}`,
+		`URL: ${d.url || "unknown"}`,
+		`Kind: ${d.kind || "standard"}`,
+		`Downloaded: ${d.downloaded || 0} bytes`,
+		`Total: ${d.total || "unknown"} bytes`,
+		`Status: ${d.status || "error"}`,
+		`Error: ${errText}`,
+		`Timestamp: ${new Date().toISOString()}`,
+	].join("\n");
+	if (techPre) {
+		techPre.textContent = diagnosticData;
+	}
+
+	const copyBtn = $("#error-dialog-copy-btn");
+	if (copyBtn) {
+		copyBtn.onclick = async () => {
+			try {
+				if (navigator.clipboard) {
+					await navigator.clipboard.writeText(diagnosticData);
+				}
+				notify("Diagnostic details copied to clipboard.");
+			} catch (_) {
+				notify("Could not copy to clipboard.", true);
+			}
+		};
+	}
+
+	const retryBtn = $("#error-dialog-retry-btn");
+	if (retryBtn) {
+		retryBtn.onclick = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	}
+
+	showDialog("#error-dialog");
 }
 function renderScheduler() {
 	const downloads = state.downloads
@@ -1710,7 +1871,8 @@ $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
 			$("#media-tool-dialog")?.close();
 			if (downloadIdToResume) {
 				try {
-					await action("resume", downloadIdToResume);
+					const d = state.downloads.find((item) => item.id === downloadIdToResume);
+					if (d) await performAction(d, "resume");
 				} catch (e) {
 					console.error("Resume after tool install error:", e);
 				}

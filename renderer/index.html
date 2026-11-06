@@ -285,8 +285,15 @@
 			id="toast"
 			role="status"
 			hidden>
-			<span id="toast-text"></span
-			><button
+			<span id="toast-text"></span>
+			<button
+				id="toast-action"
+				class="toast-action-btn"
+				type="button"
+				hidden>
+				View Details
+			</button>
+			<button
 				id="dismiss-toast"
 				aria-label="Dismiss notification">
 				×
@@ -735,6 +742,17 @@
 					<p
 						id="transfer-source"
 						class="transfer-source"></p>
+					<div id="detail-error-card" class="detail-error-card" hidden>
+						<div class="detail-error-header">
+							<span class="detail-error-badge">⚠️ Error</span>
+							<strong id="detail-error-title">Download Interrupted</strong>
+						</div>
+						<p id="detail-error-summary" class="detail-error-summary"></p>
+						<div class="detail-error-actions">
+							<button type="button" class="button small-button" id="detail-error-view-btn">View full details…</button>
+							<button type="button" class="button small-button primary" id="detail-error-retry-btn">Retry download</button>
+						</div>
+					</div>
 					<dl
 						id="details-content"
 						class="details-content"></dl>
@@ -860,10 +878,6 @@
 						id="segment-note"
 						class="field-help"></p>
 				</div>
-				<p
-					id="detail-error"
-					class="form-error"
-					hidden></p>
 			</div>
 			<div class="dialog-footer">
 				<button
@@ -925,6 +939,56 @@
 					data-close
 					id="media-tool-cancel-btn">
 					Cancel
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="error-dialog"
+			aria-labelledby="error-dialog-title">
+			<div class="dialog-title">
+				<strong id="error-dialog-title">Download Error</strong>
+				<button
+					class="close-button"
+					data-close
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body error-dialog-body">
+				<div class="error-dialog-alert">
+					<div class="error-dialog-icon" aria-hidden="true">⚠️</div>
+					<div class="error-dialog-message-container">
+						<h3 id="error-dialog-heading">Download could not be completed</h3>
+						<p id="error-dialog-description"></p>
+					</div>
+				</div>
+
+				<div id="error-dialog-fix-suggestion" class="error-dialog-suggestion" hidden>
+					<strong>Suggested action:</strong>
+					<span id="error-dialog-suggestion-text"></span>
+					<button type="button" class="button small-button" id="error-dialog-suggestion-action" hidden></button>
+				</div>
+
+				<details id="error-dialog-tech-container" class="error-tech-details">
+					<summary>Technical details &amp; diagnostics</summary>
+					<pre id="error-dialog-tech-text" class="error-tech-pre"></pre>
+					<button type="button" class="button small-button" id="error-dialog-copy-btn">Copy details to clipboard</button>
+				</details>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					class="button primary"
+					id="error-dialog-retry-btn">
+					Retry Download
+				</button>
+				<button
+					type="button"
+					class="button"
+					data-close
+					id="error-dialog-close-btn">
+					Dismiss
 				</button>
 			</div>
 		</dialog>

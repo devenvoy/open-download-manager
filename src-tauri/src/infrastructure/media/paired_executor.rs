@@ -223,15 +223,50 @@ impl PairedDownloadExecutor {
             }
         }
 
-        // Both video and audio parts downloaded successfully, now mux or convert
-        let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
-            AppError::download("FFmpeg is required to combine adaptive video and audio tracks.")
-        })?;
+        // Validate stream completeness before invoking FFmpeg
+        let truncation_error = {
+            let st = state.lock().unwrap();
+            let track_names = ["video", "audio"];
+            let mut err = None;
+            for (i, name) in track_names.iter().enumerate() {
+                if let Some(expected) = st.totals[i] {
+                    let actual = st.downloaded[i];
+                    if actual < expected {
+                        err = Some(format!(
+                            "The {name} stream was interrupted prematurely (received {actual} of {expected} bytes). The download cannot be assembled."
+                        ));
+                        break;
+                    }
+                }
+            }
+            err
+        };
+
+        if let Some(msg) = truncation_error {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            return Err(AppError::download(msg));
+        }
 
         let video_part = parts_dir.join("0.part");
         let audio_part = parts_dir.join("1.part");
 
         let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
+        let video_len = tokio::fs::metadata(&video_part).await.map(|m| m.len()).unwrap_or(0);
+        let audio_len = tokio::fs::metadata(&audio_part).await.map(|m| m.len()).unwrap_or(0);
+
+        if !is_mp3 && video_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            return Err(AppError::download("Downloaded video track is empty. The stream could not be assembled."));
+        }
+        if audio_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            return Err(AppError::download("Downloaded audio track is empty. The stream could not be assembled."));
+        }
+
+        // Both video and audio parts downloaded successfully, now mux or convert
+        let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
+            AppError::download("FFmpeg is required to combine adaptive video and audio tracks.")
+        })?;
         let destination_filename = if is_mp3 {
             download.filename.clone()
         } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {

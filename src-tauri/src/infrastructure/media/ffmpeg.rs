@@ -1,5 +1,5 @@
 use std::{path::{Path, PathBuf}, process::Stdio};
-use tokio::process::Command;
+use tokio::{io::AsyncReadExt, process::Command};
 
 use crate::application::{
     download_executor::{stopped_error, DownloadControl},
@@ -125,23 +125,58 @@ async fn run_command_with_control(
         .spawn()
         .map_err(|e| AppError::download(format!("Could not spawn ffmpeg: {e}")))?;
 
+    let mut stderr_handle = child.stderr.take();
+    let mut stderr_bytes = Vec::new();
+
     tokio::select! {
         reason = control.stopped() => {
             let _ = child.kill().await;
             let _ = tokio::fs::remove_file(output_file).await;
             Err(stopped_error(reason))
         }
-        status = child.wait() => {
-            let status = status.map_err(|e| AppError::download(format!("ffmpeg process error: {e}")))?;
+        res = async {
+            let stderr_fut = async {
+                if let Some(ref mut handle) = stderr_handle {
+                    let _ = handle.read_to_end(&mut stderr_bytes).await;
+                }
+            };
+            let (status, _) = tokio::join!(child.wait(), stderr_fut);
+            status
+        } => {
+            let status = res.map_err(|e| AppError::download(format!("ffmpeg process error: {e}")))?;
             if !status.success() {
                 let _ = tokio::fs::remove_file(output_file).await;
-                return Err(AppError::download(format!("Media assembly failed with exit code: {:?}", status.code())));
+                let stderr_str = String::from_utf8_lossy(&stderr_bytes);
+                return Err(AppError::download(format_ffmpeg_error(status.code(), &stderr_str)));
             }
             Ok(())
         }
     }
 }
 
+fn format_ffmpeg_error(code: Option<i32>, stderr: &str) -> String {
+    let clean = stderr.trim();
+    if clean.is_empty() {
+        return match code {
+            Some(c) => format!("Media assembly failed (FFmpeg process exited with code {c})."),
+            None => "Media assembly process terminated unexpectedly.".to_string(),
+        };
+    }
+
+    let error_line = clean
+        .lines()
+        .rev()
+        .find(|l| {
+            let lower = l.to_ascii_lowercase();
+            lower.contains("error") || lower.contains("invalid") || lower.contains("failed") || lower.contains("cannot")
+        })
+        .or_else(|| clean.lines().last())
+        .unwrap_or(clean);
+
+    let short_error = error_line.trim().chars().take(300).collect::<String>();
+    format!("Media assembly failed: {short_error}")
+}
+
 fn find_ffmpeg_path() -> Option<PathBuf> {
-    super::tools_manager::find_tool_path("ffmpeg")
+    super::tools::find_tool_path("ffmpeg")
 }

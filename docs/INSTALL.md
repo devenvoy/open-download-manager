@@ -2,11 +2,14 @@
 
 ## Download
 
-Windows 10/11, 64-bit Intel/AMD PCs are the intended target. Native ARM builds
-are not provided. YouTube speed and compatibility vary.
+Windows 10/11 on 64-bit Intel/AMD PCs are the supported release target. Windows
+11 ARM64 builds can be produced from source, but they are not yet published or
+hardware-validated. See [Windows ARM64](WINDOWS-ARM64.md) for build steps and
+current limitations. YouTube speed and compatibility vary.
 
 Open the project's [latest release](https://github.com/devenvoy/open-download-manager/releases/latest)
-and download **Open-Download-Manager-Setup.exe** from Assets. You do not need a GitHub
+and download the Windows setup executable from Assets (the filename ends in
+`-setup.exe`). You do not need a GitHub
 account, Git, Node.js, or a terminal to install the application. Do not download
 the automatically generated "Source code" archives to install it.
 

@@ -6,10 +6,12 @@ A modern, high-performance download manager built with Rust and Tauri, featuring
 
 ## Getting Started
 
-Download **Open-Download-Manager-Setup.exe** from the project's
-[latest release](https://github.com/devenvoy/open-download-manager/releases/latest),
+Download the Windows setup executable (filename ends in `-setup.exe`) from the
+project's [latest release](https://github.com/devenvoy/open-download-manager/releases/latest),
 then see the [installation and usage guide](docs/INSTALL.md). It is a standard
-Windows installer with Start-menu and desktop shortcuts.
+Windows installer with Start-menu and desktop shortcuts. Windows 11 ARM64 builds
+exist from source but are not yet published or hardware-validated; see
+[docs/WINDOWS-ARM64.md](docs/WINDOWS-ARM64.md).
 
 The browser extension integrates with Chrome, Edge, Brave, Opera, and Firefox.
 
