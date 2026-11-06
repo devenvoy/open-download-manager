@@ -28,6 +28,8 @@ pub struct BridgeConfig {
     pub token: String,
 }
 
+pub type OnDownloadCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
+
 pub struct LoopbackBridge {
     pub config: BridgeConfig,
     stop_sender: watch::Sender<bool>,
@@ -39,6 +41,7 @@ impl LoopbackBridge {
         data_directory: PathBuf,
         transfer_service: DownloadTransferService,
         settings: Settings,
+        on_download: Option<OnDownloadCallback>,
     ) -> AppResult<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -84,6 +87,7 @@ impl LoopbackBridge {
             transfer_service,
             settings,
             ytdlp,
+            on_download,
         ));
 
         Ok(Self {
@@ -108,6 +112,7 @@ async fn run_bridge_server(
     transfer_service: Arc<DownloadTransferService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
+    on_download: Option<OnDownloadCallback>,
 ) {
     loop {
         let (mut socket, _) = tokio::select! {
@@ -124,6 +129,7 @@ async fn run_bridge_server(
         let transfer_service = transfer_service.clone();
         let settings = settings.clone();
         let ytdlp = ytdlp.clone();
+        let on_download = on_download.clone();
 
         tokio::spawn(async move {
             handle_bridge_connection(
@@ -133,6 +139,7 @@ async fn run_bridge_server(
                 transfer_service,
                 settings,
                 ytdlp,
+                on_download,
             )
             .await;
         });
@@ -146,6 +153,7 @@ async fn handle_bridge_connection(
     transfer_service: Arc<DownloadTransferService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
+    on_download: Option<OnDownloadCallback>,
 ) {
     let mut header_buf = [0u8; 8192];
     let mut total_read = 0;
@@ -310,7 +318,9 @@ async fn handle_bridge_connection(
             }
         };
 
-        let review_only = !valid_browser.start_now && settings.confirm_browser_downloads;
+        let confirm = settings.confirm_browser_downloads;
+        let review_only = !valid_browser.start_now && confirm;
+        let queue_only = !valid_browser.start_now && confirm;
         let is_paired = valid_browser.audio_url.is_some();
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
@@ -318,7 +328,7 @@ async fn handle_bridge_connection(
             directory: None,
             category: None,
             description: Some("Added via browser extension".to_owned()),
-            queue_only: !valid_browser.start_now,
+            queue_only,
             review_only: Some(review_only),
             scheduled_at: None,
             audio_url: valid_browser.audio_url,
@@ -329,6 +339,11 @@ async fn handle_bridge_connection(
 
         match transfer_service.add(download_req, &settings) {
             Ok(ids) => {
+                if let Some(ref cb) = on_download {
+                    if let Some(first_id) = ids.first() {
+                        cb(first_id.clone());
+                    }
+                }
                 let _ = send_json_response(socket, 201, &serde_json::json!({"ok": true, "ids": ids})).await;
             }
             Err(e) => {

@@ -55,3 +55,11 @@ test('panel stays inside the viewport near its right edge', () => {
   const place = placement(rect(50, { left: 1100, right: 1300 }), viewport, size, false);
   assert.equal(place.left, 1200 - 180 - 5);
 });
+
+test('preview or thumbnail video with inside: true places the panel inside the video frame', () => {
+  const normal = placement(rect(100), viewport, size, false);
+  const inside = placement(rect(100), viewport, size, false, { inside: true });
+  assert.equal(normal.top, 69, 'normal placement sits above the video');
+  assert.equal(inside.top, 104, 'inside placement sits inside the top edge of the video');
+  assert.equal(inside.left, normal.left, 'horizontal alignment matches');
+});

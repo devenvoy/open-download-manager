@@ -11,11 +11,12 @@
   // Where the panel goes for a video rect, or null when it should stay hidden:
   // video too small, effectively scrolled out of view, or temporarily hidden
   // (dismissed by the user, or while a scroll is in flight).
-  function placement(rect, viewport, size, hidden) {
+  function placement(rect, viewport, size, hidden, options) {
     if (hidden) return null;
     const part = visiblePart(rect, viewport);
     if (!part || rect.width <= 100 || rect.height <= 60 || part.height < 30) return null;
-    const above = rect.top >= size.height + 6;
+    const forceInside = Boolean(options && options.inside);
+    const above = !forceInside && rect.top >= size.height + 6;
     const top = Math.max(5, Math.min(viewport.height - size.height - 5, above ? rect.top - size.height - 4 : Math.max(part.top + 4, rect.top + 4)));
     const left = Math.max(5, Math.min(viewport.width - size.width - 5, rect.right - size.width - 8));
     return { top, left };

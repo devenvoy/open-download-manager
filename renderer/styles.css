@@ -540,6 +540,77 @@ td {
 .notification > span {
 	overflow-wrap: anywhere;
 }
+.media-tool-line {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 0;
+	border-bottom: 1px solid #e0e0e0;
+}
+.media-tool-line:last-of-type {
+	border-bottom: none;
+}
+.media-tool-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.media-tool-dialog-body {
+	display: flex;
+	gap: 14px;
+	padding: 16px 14px;
+	align-items: flex-start;
+}
+.media-tool-dialog-icon {
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+.media-tool-dialog-content {
+	flex: 1;
+	min-width: 0;
+}
+.media-tool-dialog-heading {
+	margin: 0 0 6px 0;
+	font-size: 13px;
+	font-weight: 600;
+	color: #111;
+}
+.media-tool-dialog-desc {
+	margin: 0 0 8px 0;
+	font-size: 11px;
+	line-height: 1.5;
+	color: #333;
+}
+.media-tool-dialog-help {
+	margin: 0 0 10px 0;
+	font-size: 11px;
+	line-height: 1.4;
+	color: #444;
+	font-weight: 500;
+}
+.media-tool-progress-container {
+	margin: 8px 0 10px 0;
+}
+.media-tool-progress-bar {
+	height: 14px;
+	background: #e2e8f0;
+	border: 1px solid #cbd5e1;
+	border-radius: 2px;
+	overflow: hidden;
+	position: relative;
+	margin-bottom: 4px;
+}
+.media-tool-progress-fill {
+	height: 100%;
+	width: 45%;
+	background: #0284c7;
+	animation: progress-indeterminate 1.5s infinite ease-in-out;
+}
+@keyframes progress-indeterminate {
+	0% { transform: translateX(-100%); }
+	50% { transform: translateX(120%); }
+	100% { transform: translateX(250%); }
+}
 dialog {
 	padding: 0;
 	width: min(540px, calc(100vw - 30px));

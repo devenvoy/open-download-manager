@@ -23,7 +23,7 @@ async fn main() {
 
 async fn run() -> Result<(), String> {
     let msg = read_message()?;
-    let bridge_config = load_bridge_config()?;
+    let bridge_config = ensure_bridge_config().await?;
 
     let action = msg
         .get("action")
@@ -44,15 +44,7 @@ async fn run() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let payload = serde_json::to_vec(&msg).map_err(|e| e.to_string())?;
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", bridge_config.token))
-        .header("Content-Type", "application/json")
-        .header("Host", format!("127.0.0.1:{}", bridge_config.port))
-        .body(payload)
-        .send()
-        .await
-        .map_err(|e| format!("Could not connect to desktop app: {e}"))?;
+    let resp = send_with_retry(&client, &url, &bridge_config, &payload).await?;
 
     let status = resp.status();
     let resp_bytes = resp
@@ -73,6 +65,86 @@ async fn run() -> Result<(), String> {
 
     write_message(&body)?;
     Ok(())
+}
+
+async fn send_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    config: &BridgeConfig,
+    payload: &[u8],
+) -> Result<reqwest::Response, String> {
+    match client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", config.token))
+        .header("Content-Type", "application/json")
+        .header("Host", format!("127.0.0.1:{}", config.port))
+        .body(payload.to_vec())
+        .send()
+        .await
+    {
+        Ok(resp) => Ok(resp),
+        Err(first_err) => {
+            try_launch_desktop();
+            for _ in 0..20 {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                if let Ok(new_cfg) = load_bridge_config() {
+                    let new_url = format!("http://127.0.0.1:{}{}", new_cfg.port, url.split_once("127.0.0.1:").map(|(_, rest)| rest.split_once('/').map(|(_, p)| format!("/{p}")).unwrap_or_default()).unwrap_or_default());
+                    if let Ok(resp) = client
+                        .post(&new_url)
+                        .header("Authorization", format!("Bearer {}", new_cfg.token))
+                        .header("Content-Type", "application/json")
+                        .header("Host", format!("127.0.0.1:{}", new_cfg.port))
+                        .body(payload.to_vec())
+                        .send()
+                        .await
+                    {
+                        return Ok(resp);
+                    }
+                }
+            }
+            Err(format!("Could not connect to desktop app: {first_err}"))
+        }
+    }
+}
+
+fn find_desktop_executable() -> Option<PathBuf> {
+    if let Ok(current) = std::env::current_exe() {
+        if let Some(dir) = current.parent() {
+            #[cfg(windows)]
+            let candidate = dir.join("open-download-manager.exe");
+            #[cfg(not(windows))]
+            let candidate = dir.join("open-download-manager");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn try_launch_desktop() {
+    if let Some(exe) = find_desktop_executable() {
+        let _ = std::process::Command::new(exe)
+            .arg("--browser-download")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+}
+
+async fn ensure_bridge_config() -> Result<BridgeConfig, String> {
+    if let Ok(cfg) = load_bridge_config() {
+        return Ok(cfg);
+    }
+    try_launch_desktop();
+    for _ in 0..30 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        if let Ok(cfg) = load_bridge_config() {
+            return Ok(cfg);
+        }
+    }
+    Err("Open Download Manager is not running. Launch the desktop app first.".to_owned())
 }
 
 fn load_bridge_config() -> Result<BridgeConfig, String> {

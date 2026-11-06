@@ -20,6 +20,7 @@
     const data=event.data.data;
     if(!data || !/^[\w-]{11}$/.test(data.videoId||'') || !Array.isArray(data.formats) || data.formats.length>150)return;
     try{
+      console.log('[ODM Relay] Forwarding playerResponse to background for videoId:', data.videoId);
       await api.runtime.sendMessage({action:'playerResponse',data});
       for(const done of pending)done();pending.clear();
     }catch(error){if(/extension context invalidated/i.test(error?.message||''))shutdown();}

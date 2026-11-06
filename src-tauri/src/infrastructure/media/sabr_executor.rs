@@ -347,14 +347,14 @@ impl SabrDownloadExecutor {
         let destination = directory.join(destination_filename);
 
         if has_video {
-            let ffmpeg = self.ffmpeg.as_ref().ok_or_else(|| {
+            let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
                 AppError::download("FFmpeg is required to combine YouTube SABR video and audio tracks.")
             })?;
             ffmpeg
                 .mux_tracks(&video_part, &audio_part, &destination, &mut control)
                 .await?;
         } else if is_mp3 {
-            let ffmpeg = self.ffmpeg.as_ref().ok_or_else(|| {
+            let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
                 AppError::download("FFmpeg is required to convert YouTube audio track to mp3.")
             })?;
             ffmpeg

@@ -178,11 +178,15 @@ pub async fn register_browser_manifest(
 
     #[cfg(not(windows))]
     {
-        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            let nm_dir = browser_native_messaging_dir(browser, &home);
-            if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
-                let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
-                let _ = tokio::fs::write(&target_file, &json_content).await;
+        let is_test = data_directory.to_string_lossy().contains("open-download-manager-")
+            || data_directory.to_string_lossy().contains("test");
+        if !is_test {
+            if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+                let nm_dir = browser_native_messaging_dir(browser, &home);
+                if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
+                    let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
+                    let _ = tokio::fs::write(&target_file, &json_content).await;
+                }
             }
         }
     }

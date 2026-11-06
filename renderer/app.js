@@ -1023,6 +1023,18 @@ function renderDetails() {
 			: "Connection progress appears when the transfer starts.";
 	$("#detail-error").textContent = d.error || "";
 	$("#detail-error").hidden = !d.error;
+	const isFfmpegError = Boolean(d.error && /ffmpeg is required/i.test(d.error));
+	const toolBanner = $("#media-tool-fix-banner");
+	if (toolBanner) {
+		toolBanner.hidden = !isFfmpegError;
+	}
+	if (isFfmpegError && status === "error" && !d._mediaToolPrompted) {
+		d._mediaToolPrompted = true;
+		openMediaToolDialog("ffmpeg", d.id);
+	} else if (d.error && status === "error" && !d._notified) {
+		d._notified = true;
+		notify(d.error, true);
+	}
 	$("#detail-open").disabled = status !== "completed";
 	$("#detail-resume").disabled = !canResume(d) || pending.has(d.id);
 	$("#detail-stop").disabled = !canPause(d) || pending.has(d.id);
@@ -1098,7 +1110,69 @@ function openSettings() {
 	resetProxyTestStatus();
 
 	$("#settings-error").hidden = true;
+	refreshMediaToolsStatus();
 	showDialog("#settings-dialog");
+}
+async function refreshMediaToolsStatus() {
+	if (!api.getMediaToolsStatus) return;
+	try {
+		const statuses = await api.getMediaToolsStatus();
+		for (const st of statuses) {
+			const type = st.toolType || st.tool_type;
+			const isAvail = st.isAvailable || st.is_available;
+			const src = st.source || "";
+			const label = $(`#${type}-status`);
+			const btn = $(`#install-${type}-btn`);
+			if (label) {
+				if (isAvail) {
+					label.textContent = `Installed (${src || "ready"})`;
+					label.style.color = "#166534";
+				} else {
+					label.textContent = "Not installed";
+					label.style.color = "#991b1b";
+				}
+			}
+			if (btn) {
+				btn.textContent = isAvail ? "Reinstall" : "Install";
+				btn.disabled = false;
+			}
+		}
+	} catch (e) {
+		console.error("Could not refresh media tools status:", e);
+	}
+}
+async function installMediaToolAction(tool) {
+	const btn = $(`#install-${tool}-btn`);
+	const label = $(`#${tool}-status`);
+	if (btn) { btn.disabled = true; btn.textContent = "Installing…"; }
+	if (label) { label.textContent = "Downloading & installing…"; label.style.color = "#0369a1"; }
+	try {
+		await api.installMediaTool(tool);
+		notify(`${tool} installed successfully.`);
+		await refreshMediaToolsStatus();
+	} catch (err) {
+		notify(`Failed to install ${tool}: ${messageOf(err)}`, true);
+		if (btn) btn.disabled = false;
+		await refreshMediaToolsStatus();
+	}
+}
+let activeMediaToolDownloadId = null;
+
+function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
+	activeMediaToolDownloadId = downloadId || state.selectedId || null;
+	const dialog = $("#media-tool-dialog");
+	if (!dialog) return;
+
+	const upper = tool.toUpperCase();
+	$("#media-tool-title").textContent = tool === "ffmpeg" ? "FFmpeg Required" : `${upper} Required`;
+	$("#media-tool-dialog-heading").textContent = `${upper} is required to combine video and audio`;
+	$("#media-tool-confirm-btn").textContent = `Download & Install ${upper} Now`;
+	$("#media-tool-confirm-btn").disabled = false;
+	$("#media-tool-cancel-btn").disabled = false;
+	$("#media-tool-dialog-progress").hidden = true;
+	$("#media-tool-dialog-error").hidden = true;
+
+	showDialog("#media-tool-dialog");
 }
 function renderScheduler() {
 	const downloads = state.downloads
@@ -1604,6 +1678,52 @@ $("#playlist-select-all")?.addEventListener("click", () => {
 
 $("#playlist-deselect-all")?.addEventListener("click", () => {
 	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = false));
+});
+
+$("#install-ffmpeg-btn")?.addEventListener("click", () => installMediaToolAction("ffmpeg"));
+$("#install-ytdlp-btn")?.addEventListener("click", () => installMediaToolAction("yt-dlp"));
+$("#media-tool-install-btn")?.addEventListener("click", () => {
+	openMediaToolDialog("ffmpeg", state.selectedId);
+});
+
+$("#media-tool-confirm-btn")?.addEventListener("click", async () => {
+	const confirmBtn = $("#media-tool-confirm-btn");
+	const cancelBtn = $("#media-tool-cancel-btn");
+	const progressArea = $("#media-tool-dialog-progress");
+	const statusText = $("#media-tool-dialog-status-text");
+	const errorEl = $("#media-tool-dialog-error");
+
+	confirmBtn.disabled = true;
+	cancelBtn.disabled = true;
+	progressArea.hidden = false;
+	errorEl.hidden = true;
+	statusText.textContent = "Downloading & installing FFmpeg into managed tools directory… Please wait.";
+
+	try {
+		await api.installMediaTool("ffmpeg");
+		statusText.textContent = "FFmpeg installed successfully! Resuming download…";
+		notify("FFmpeg installed successfully.");
+		await refreshMediaToolsStatus();
+
+		const downloadIdToResume = activeMediaToolDownloadId;
+		setTimeout(async () => {
+			$("#media-tool-dialog")?.close();
+			if (downloadIdToResume) {
+				try {
+					await action("resume", downloadIdToResume);
+				} catch (e) {
+					console.error("Resume after tool install error:", e);
+				}
+			}
+		}, 800);
+	} catch (err) {
+		errorEl.textContent = `Installation failed: ${messageOf(err)}`;
+		errorEl.hidden = false;
+		confirmBtn.disabled = false;
+		confirmBtn.textContent = "Retry Install";
+		cancelBtn.disabled = false;
+		progressArea.hidden = true;
+	}
 });
 
 $("#playlist-form")?.addEventListener("submit", async (e) => {

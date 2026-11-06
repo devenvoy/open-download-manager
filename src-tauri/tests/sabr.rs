@@ -281,6 +281,35 @@ fn sabr_rejects_invalid_itags_and_oversized_request_bodies() {
     let err_audio = sanitize_sabr(&sabr_missing_audio, url);
     assert!(err_audio.is_err());
     assert_eq!(err_audio.unwrap_err(), "Selected SABR format is unavailable.");
+
+    // YouTube real-world formats with colorInfo and enhanced bitrate labels
+    let sabr_real_world = serde_json::json!({
+        "videoId": "wLdZWyLOJCI",
+        "serverAbrStreamingUrl": url,
+        "videoPlaybackUstreamerConfig": "AQID~_+-=:;.",
+        "audioItag": 140,
+        "videoItag": 137,
+        "formats": [
+            {
+                "itag": 140,
+                "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+                "bitrate": 128000,
+                "audioQuality": "AUDIO_QUALITY_MEDIUM"
+            },
+            {
+                "itag": 137,
+                "mimeType": "video/mp4; codecs=\"avc1.640028\"",
+                "bitrate": 4500000,
+                "quality": "hd1080",
+                "qualityLabel": "1080p Premium (Enhanced bitrate)",
+                "colorInfo": {
+                    "transferCharacteristics": "COLOR_TRANSFER_CHARACTERISTICS_BT709"
+                }
+            }
+        ]
+    });
+    let valid_real = sanitize_sabr(&sabr_real_world, url);
+    assert!(valid_real.is_ok(), "Real YouTube colorInfo and qualityLabel must be accepted");
 }
 
 #[test]

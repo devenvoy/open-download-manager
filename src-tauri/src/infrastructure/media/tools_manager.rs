@@ -187,6 +187,32 @@ impl ToolPathResolver {
             return Some((system_path, ToolResolutionSource::SystemPath));
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            // When launched from launchd/Chrome/Finder, PATH is minimal (/usr/bin:/bin:/usr/sbin:/sbin).
+            // Query Apple's standard system utility /usr/libexec/path_helper which constructs the
+            // complete system PATH from /etc/paths and /etc/paths.d without hardcoding any paths.
+            if let Ok(output) = std::process::Command::new("/usr/libexec/path_helper")
+                .arg("-s")
+                .output()
+            {
+                if output.status.success() {
+                    let text = String::from_utf8_lossy(&output.stdout);
+                    if let Some(start) = text.find("PATH=\"") {
+                        let rem = &text[start + 6..];
+                        if let Some(end) = rem.find('"') {
+                            for dir in std::env::split_paths(&rem[..end]) {
+                                let candidate = dir.join(exe_name);
+                                if candidate.is_file() {
+                                    return Some((candidate, ToolResolutionSource::SystemPath));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -328,7 +354,15 @@ impl MediaToolsManager {
             .map_err(|e| AppError::download(format!("Could not create tools directory: {e}")))?;
 
         let dest = tools_dir.join(tool.executable_name());
-        self.downloader.download_binary(url, &dest).await?;
+        let is_archive = url.contains(".zip") || url.contains(".tar.xz") || url.contains(".tar.gz");
+
+        if is_archive {
+            let archive_tmp = tools_dir.join(format!("{}.archive.tmp", tool.executable_name()));
+            self.downloader.download_binary(url, &archive_tmp).await?;
+            extract_executable_from_archive(&archive_tmp, tool.executable_name(), &dest).await?;
+        } else {
+            self.downloader.download_binary(url, &dest).await?;
+        }
         Ok(dest)
     }
 
@@ -337,6 +371,99 @@ impl MediaToolsManager {
         let spec = self.download_spec(tool)?;
         self.install_managed_tool_from_url(tool, &spec.url).await
     }
+}
+
+async fn extract_executable_from_archive(
+    archive: &Path,
+    exe_name: &str,
+    destination: &Path,
+) -> AppResult<()> {
+    let extract_dir = destination.with_extension("extracted_tmp");
+    let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+    tokio::fs::create_dir_all(&extract_dir)
+        .await
+        .map_err(|e| AppError::download(format!("Failed to create extract directory: {e}")))?;
+
+    let is_zip = archive.to_string_lossy().ends_with(".zip");
+    let status = if is_zip {
+        tokio::process::Command::new("unzip")
+            .arg("-q")
+            .arg("-o")
+            .arg(archive)
+            .arg("-d")
+            .arg(&extract_dir)
+            .status()
+            .await
+    } else {
+        tokio::process::Command::new("tar")
+            .arg("-xf")
+            .arg(archive)
+            .arg("-C")
+            .arg(&extract_dir)
+            .status()
+            .await
+    };
+
+    let status = match status {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+            return Err(AppError::download(format!("Archive extraction failed: {e}")));
+        }
+    };
+
+    if !status.success() {
+        let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+        return Err(AppError::download("Failed to extract media tool archive."));
+    }
+
+    // Recursively locate exe_name in extract_dir
+    let mut found = None;
+    let mut stack = vec![extract_dir.clone()];
+    while let Some(dir) = stack.pop() {
+        let mut entries = match tokio::fs::read_dir(&dir).await {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(exe_name) {
+                found = Some(path);
+                break;
+            }
+        }
+        if found.is_some() {
+            break;
+        }
+    }
+
+    let found_path = match found {
+        Some(p) => p,
+        None => {
+            let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+            return Err(AppError::download(format!(
+                "Could not find executable '{exe_name}' inside extracted archive"
+            )));
+        }
+    };
+
+    if let Err(_) = tokio::fs::rename(&found_path, destination).await {
+        let _ = tokio::fs::copy(&found_path, destination).await;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        let _ = std::fs::set_permissions(destination, perms);
+    }
+
+    let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+    let _ = tokio::fs::remove_file(archive).await;
+
+    Ok(())
 }
 
 /// Global convenience helper used by executors

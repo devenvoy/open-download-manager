@@ -169,7 +169,13 @@ async fn loopback_bridge_authenticates_and_handles_browser_downloads() {
     let service = DownloadTransferService::new(history.clone(), executor, 2);
     let settings = Settings::new(directory.clone());
 
-    let bridge = LoopbackBridge::start(directory.clone(), service, settings)
+    let captured_id = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let captured_id_clone = captured_id.clone();
+    let on_download = std::sync::Arc::new(move |id: String| {
+        *captured_id_clone.lock().unwrap() = Some(id);
+    });
+
+    let bridge = LoopbackBridge::start(directory.clone(), service, settings, Some(on_download))
         .await
         .expect("bridge start");
 
@@ -228,6 +234,8 @@ async fn loopback_bridge_authenticates_and_handles_browser_downloads() {
     let download_bytes = download_resp.bytes().await.unwrap();
     let download_json: serde_json::Value = serde_json::from_slice(&download_bytes).unwrap();
     assert_eq!(download_json["ok"], true);
+    let returned_id = download_json["ids"][0].as_str().unwrap().to_string();
+    assert_eq!(*captured_id.lock().unwrap(), Some(returned_id));
     assert!(!download_json["ids"].as_array().unwrap().is_empty());
 
     // Verify record in history

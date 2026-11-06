@@ -86,16 +86,29 @@ pub fn run() {
             let bridge_transfer = download_transfer.clone();
             let bridge_settings = settings.settings().clone();
             let integration_for_bridge = integration_service.clone();
+            let app_handle_for_bridge = app.handle().clone();
+            let on_download = std::sync::Arc::new(move |id: String| {
+                let app = app_handle_for_bridge.clone();
+                let app_for_thread = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    let _ = presentation::window_manager::open_progress_window(app_for_thread, id);
+                });
+            });
+
             tauri::async_runtime::spawn(async move {
                 match crate::infrastructure::bridge::LoopbackBridge::start(
                     bridge_data_dir,
                     bridge_transfer,
                     bridge_settings,
+                    Some(on_download),
                 )
                 .await
                 {
                     Ok(bridge) => {
                         integration_for_bridge.set_bridge_port(bridge.config.port);
+                        // Keep loopback bridge alive for the lifetime of the application
+                        std::future::pending::<()>().await;
+                        drop(bridge);
                     }
                     Err(e) => {
                         eprintln!("Could not start loopback bridge: {}", e.message);

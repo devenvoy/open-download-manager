@@ -599,6 +599,26 @@
 							</div>
 						</div>
 					</fieldset>
+					<fieldset>
+						<legend>Media Tools</legend>
+						<div class="media-tool-line">
+							<div class="media-tool-meta">
+								<strong>FFmpeg</strong>
+								<span id="ffmpeg-status" class="field-help">Checking…</span>
+							</div>
+							<button class="small-button" id="install-ffmpeg-btn" type="button">Install</button>
+						</div>
+						<div class="media-tool-line">
+							<div class="media-tool-meta">
+								<strong>yt-dlp</strong>
+								<span id="ytdlp-status" class="field-help">Checking…</span>
+							</div>
+							<button class="small-button" id="install-ytdlp-btn" type="button">Install</button>
+						</div>
+						<p class="field-help">
+							Media tools are managed automatically by Open Download Manager to combine video and audio streams.
+						</p>
+					</fieldset>
 					<p
 						class="form-error"
 						id="settings-error"
@@ -850,6 +870,61 @@
 					class="button"
 					data-close>
 					Close
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="media-tool-dialog"
+			aria-labelledby="media-tool-title">
+			<div class="dialog-title">
+				<strong id="media-tool-title">FFmpeg Required</strong>
+				<button
+					class="close-button"
+					data-close
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body media-tool-dialog-body">
+				<div class="media-tool-dialog-icon" aria-hidden="true">
+					<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+						<line x1="12" y1="9" x2="12" y2="13"/>
+						<line x1="12" y1="17" x2="12.01" y2="17"/>
+					</svg>
+				</div>
+				<div class="media-tool-dialog-content">
+					<h4 class="media-tool-dialog-heading" id="media-tool-dialog-heading">FFmpeg is required to combine video and audio</h4>
+					<p class="media-tool-dialog-desc">
+						This YouTube video was captured as separate high-definition video and audio tracks.
+						Open Download Manager needs <strong>FFmpeg</strong> to assemble these streams into a complete playable media file.
+					</p>
+					<p class="media-tool-dialog-help">
+						Would you like Open Download Manager to automatically download and install FFmpeg now?
+					</p>
+					<div id="media-tool-dialog-progress" class="media-tool-progress-container" hidden>
+						<div class="media-tool-progress-bar">
+							<div id="media-tool-progress-fill" class="media-tool-progress-fill"></div>
+						</div>
+						<span id="media-tool-dialog-status-text" class="field-help">Downloading and installing FFmpeg…</span>
+					</div>
+					<p id="media-tool-dialog-error" class="form-error" hidden></p>
+				</div>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					class="button primary"
+					id="media-tool-confirm-btn">
+					Download &amp; Install FFmpeg
+				</button>
+				<button
+					type="button"
+					class="button"
+					data-close
+					id="media-tool-cancel-btn">
+					Cancel
 				</button>
 			</div>
 		</dialog>

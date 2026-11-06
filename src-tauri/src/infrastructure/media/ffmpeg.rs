@@ -6,6 +6,7 @@ use crate::application::{
     error::{AppError, AppResult},
 };
 
+#[derive(Clone)]
 pub struct FfmpegTools {
     executable: PathBuf,
 }

@@ -15,7 +15,7 @@ function harness(file,mode){
     createElement(){const host={style:{},remove(){removed++;},attachShadow(){return {querySelector(selector){return selector==='.chooser'?host.chooser||null:{addEventListener(){}};}};}};hosts.push(host);return host;}};
   const context={chrome:{runtime},document,location:{href:'https://www.youtube.com/watch?v=wLdZWyLOJCI',origin:'https://www.youtube.com'},window:{},URL,AbortController,ResizeObserver:Observer,MutationObserver:Observer,IntersectionObserver:Observer,addEventListener,removeEventListener(name){events.delete(name);},requestAnimationFrame(){return 1;},cancelAnimationFrame(){},setTimeout,clearTimeout,dispatchEvent(){},Event,innerHeight:800,innerWidth:1200};
   vm.createContext(context);
-  for(const lib of ['safe-tooltip.js','panel-position.js','chooser-keyboard.js'])if(fs.existsSync(path.join(__dirname,lib)))vm.runInContext(fs.readFileSync(path.join(__dirname,lib),'utf8'),context);
+  for(const lib of ['safe-tooltip.js','panel-position.js','chooser-keyboard.js','format-presentation.js'])if(fs.existsSync(path.join(__dirname,lib)))vm.runInContext(fs.readFileSync(path.join(__dirname,lib),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
   return {context,events,observers,callbacks,hosts,video,get calls(){return calls;},get removed(){return removed;},invalidate(){id=undefined;}};
 }

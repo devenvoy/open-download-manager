@@ -657,7 +657,7 @@ pub fn sanitize_sabr(
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Invalid SABR text.".to_owned())?;
     let ustreamer_config = bounded_text(raw_ustreamer, 131_072, |c| {
-        c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '/' | '=' | '.' | '-')
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '/' | '=' | '.' | '-' | ':' | ';' | ',' | '~')
     })?;
 
     let raw_formats = value
@@ -782,13 +782,13 @@ pub fn sanitize_sabr(
         };
 
         let quality = if let Some(v) = raw.get("quality").and_then(|v| v.as_str()) {
-            Some(bounded_text(v, 80, |c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == ' ')?)
+            Some(bounded_text(v, 80, |c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ' | '(' | ')' | '/' | '+' | ','))?)
         } else {
             None
         };
 
         let quality_label = if let Some(v) = raw.get("qualityLabel").and_then(|v| v.as_str()) {
-            Some(bounded_text(v, 80, |c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == ' ')?)
+            Some(bounded_text(v, 80, |c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ' | '(' | ')' | '/' | '+' | ','))?)
         } else {
             None
         };
@@ -810,7 +810,7 @@ pub fn sanitize_sabr(
 
         let color_info = if let Some(ci) = raw.get("colorInfo").and_then(|v| v.as_object()) {
             let tc = if let Some(s) = ci.get("transferCharacteristics").and_then(|v| v.as_str()) {
-                Some(bounded_text(s, 80, |c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == ' ')?)
+                Some(bounded_text(s, 80, |c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' '))?)
             } else {
                 None
             };

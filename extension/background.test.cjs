@@ -85,10 +85,10 @@ test('captured YouTube session survives a service worker restart',async()=>{
  await restarted.request({action:'download',item:{...item,startNow:true}},sender);
  assert.equal(restarted.nativeRequests[0].sabr.requestBody,'AQID');
 });
-test('SABR choices are hidden until the browser captures a usable session',async()=>{
+test('SABR choices are available immediately from player metadata',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:29,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
  await h.request({action:'playerResponse',data:{videoId:'wLdZWyLOJCI',title:'Captured',sabr:true,sabrUrl:'https://r1.googlevideo.com/videoplayback?id=asset&sabr=1&expire=9999999999',ustreamerConfig:'AQID',clientName:1,clientVersion:'2.20261022.00.00',formats:[{itag:137,mimeType:'video/mp4',height:1080,qualityLabel:'1080p',bitrate:3000000},{itag:140,mimeType:'audio/mp4',bitrate:128000}]}},sender);
- const result=await h.request({action:'listForFrame'},sender);assert.equal(result.items.length,0);assert.match(result.notice,/captured/i);
+ const result=await h.request({action:'listForFrame'},sender);assert.ok(result.items.length>0);assert.equal(result.items[0].quality,'1080p');
 });
 test('duplicate browser downloads share one native handoff',async()=>{
  const h=harness();

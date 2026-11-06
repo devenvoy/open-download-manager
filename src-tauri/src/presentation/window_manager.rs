@@ -170,6 +170,7 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
 
     let app_handle = app.clone();
     let download_id = id.clone();
@@ -312,6 +313,7 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
     Ok(())
 }
 
@@ -342,6 +344,7 @@ pub fn open_add_window(
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
     Ok(())
 }
 
@@ -363,6 +366,7 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
     Ok(())
 }
 
@@ -384,5 +388,6 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
     Ok(())
 }

@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LIBS = ['media-choices.js', 'menu-behavior.js', 'safe-tooltip.js', 'panel-position.js', 'chooser-keyboard.js'];
+const LIBS = ['media-choices.js', 'menu-behavior.js', 'safe-tooltip.js', 'panel-position.js', 'chooser-keyboard.js', 'format-presentation.js'];
 
 function makeEl(tag) {
   const el = {

@@ -224,7 +224,7 @@ impl PairedDownloadExecutor {
         }
 
         // Both video and audio parts downloaded successfully, now mux or convert
-        let ffmpeg = self.ffmpeg.as_ref().ok_or_else(|| {
+        let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
             AppError::download("FFmpeg is required to combine adaptive video and audio tracks.")
         })?;
 
