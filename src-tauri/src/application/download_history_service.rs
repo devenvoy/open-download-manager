@@ -96,7 +96,7 @@ impl DownloadHistoryService {
         Ok(count)
     }
 
-    pub(crate) fn download(&self, id: &str) -> AppResult<DownloadRecord> {
+    pub fn download(&self, id: &str) -> AppResult<DownloadRecord> {
         self.downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?

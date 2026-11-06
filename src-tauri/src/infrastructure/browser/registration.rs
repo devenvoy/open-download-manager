@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::application::error::{AppError, AppResult};
 
 pub const NATIVE_HOST_NAME: &str = "com.open.downloadmanager";
+pub const DEFAULT_CHROME_EXTENSION_ID: &str = "hlomaolpnkkbikjacplamegklgegpjbj";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BrowserType {
@@ -91,7 +92,7 @@ pub fn create_manifest(
             return Err(AppError::browser("Copy the extension ID from your browser’s extensions page."));
         }
         let mut origins = vec![
-            "chrome-extension://hlomaolpnkkbikjacplamegklgegpjbj/".to_owned(),
+            format!("chrome-extension://{DEFAULT_CHROME_EXTENSION_ID}/"),
             format!("chrome-extension://{extension_id}/"),
         ];
         origins.sort();

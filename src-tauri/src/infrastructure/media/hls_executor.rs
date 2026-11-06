@@ -12,9 +12,10 @@ use crate::{
         download_rate_limiter::DownloadRateLimiter,
         download_result::DownloadResult,
         error::{AppError, AppResult},
+        throughput_meter::ThroughputMeter,
     },
     domain::{
-        download::DownloadRecord,
+        download::{DownloadRecord, DownloadSegmentProgress},
         media::{
             calculate_stream_progress, parse_hls, scoped_headers, HlsMediaPlaylist,
             ParsedHls, StreamSegment,
@@ -23,11 +24,37 @@ use crate::{
     infrastructure::media::ffmpeg::FfmpegTools,
 };
 
+struct WorkerProgressState {
+    current_segment: Option<usize>,
+    segment_downloaded: u64,
+}
+
 struct HlsTransferState {
     segments: Vec<StreamSegment>,
-    last_tick_time: std::time::Instant,
-    last_tick_bytes: u64,
-    speed: u64,
+    meter: ThroughputMeter,
+    worker_progress: Vec<WorkerProgressState>,
+}
+
+impl HlsTransferState {
+    fn build_connections_progress(&self, segment_count: usize) -> Vec<DownloadSegmentProgress> {
+        self.worker_progress
+            .iter()
+            .enumerate()
+            .map(|(w_idx, w)| {
+                let (info, downloaded) = match w.current_segment {
+                    Some(seg_idx) => (format!("Segment {}/{}", seg_idx + 1, segment_count), w.segment_downloaded),
+                    None => ("Idle".to_string(), 0),
+                };
+                DownloadSegmentProgress {
+                    start: w_idx as u64,
+                    end: segment_count as u64,
+                    downloaded,
+                    total: 0,
+                    status: info,
+                }
+            })
+            .collect()
+    }
 }
 
 pub struct HlsDownloadExecutor {
@@ -213,18 +240,22 @@ impl HlsDownloadExecutor {
         };
 
         let initial_downloaded: u64 = segments_state.iter().map(|s| s.downloaded).sum();
+        let worker_count = (download.connections as usize).clamp(1, segment_count);
         let state = Arc::new(Mutex::new(HlsTransferState {
             segments: segments_state,
-            last_tick_time: std::time::Instant::now(),
-            last_tick_bytes: initial_downloaded,
-            speed: 0,
+            meter: ThroughputMeter::with_initial_bytes(initial_downloaded),
+            worker_progress: (0..worker_count)
+                .map(|_| WorkerProgressState {
+                    current_segment: None,
+                    segment_downloaded: 0,
+                })
+                .collect(),
         }));
         let next_index = Arc::new(Mutex::new(0_usize));
-        let worker_count = (download.connections as usize).clamp(1, segment_count);
         let referer = download.referer.clone();
 
         let mut workers = tokio::task::JoinSet::new();
-        for _ in 0..worker_count {
+        for worker_id in 0..worker_count {
             let client = self.client();
             let urls = plan.urls.clone();
             let state = state.clone();
@@ -262,6 +293,8 @@ impl HlsDownloadExecutor {
                         &client,
                         &urls[index],
                         index,
+                        worker_id,
+                        segment_count,
                         &parts_dir,
                         &state,
                         &mut control,
@@ -270,6 +303,9 @@ impl HlsDownloadExecutor {
                         referer.as_deref(),
                     )
                     .await?;
+                }
+                if let Ok(mut st) = state.lock() {
+                    st.worker_progress[worker_id].current_segment = None;
                 }
                 Ok(())
             });
@@ -345,6 +381,8 @@ async fn download_hls_segment(
     client: &reqwest::Client,
     url: &str,
     index: usize,
+    worker_id: usize,
+    segment_count: usize,
     parts_dir: &Path,
     state: &Arc<Mutex<HlsTransferState>>,
     control: &mut DownloadControl,
@@ -354,6 +392,12 @@ async fn download_hls_segment(
 ) -> AppResult<()> {
     let temp_part = parts_dir.join(format!("{index}.receiving"));
     let final_part = parts_dir.join(format!("{index}.part"));
+
+    {
+        let mut st = state.lock().unwrap();
+        st.worker_progress[worker_id].current_segment = Some(index);
+        st.worker_progress[worker_id].segment_downloaded = 0;
+    }
 
     let mut req = client.get(url);
     if let Some(r) = referer {
@@ -404,25 +448,19 @@ async fn download_hls_segment(
         {
             let mut st = state.lock().unwrap();
             st.segments[index].downloaded = segment_downloaded;
+            st.worker_progress[worker_id].segment_downloaded = segment_downloaded;
 
-            let now = std::time::Instant::now();
-            let elapsed = now.duration_since(st.last_tick_time).as_millis();
-            if elapsed >= 250 {
-                let total_now: u64 = st.segments.iter().map(|s| s.downloaded).sum();
-                let diff = total_now.saturating_sub(st.last_tick_bytes);
-                st.speed = (diff * 1000) / elapsed.max(1) as u64;
-                st.last_tick_bytes = total_now;
-                st.last_tick_time = now;
-
+            let total_now: u64 = st.segments.iter().map(|s| s.downloaded).sum();
+            if let Some(speed) = st.meter.update(total_now) {
                 let stream_prog = calculate_stream_progress(&st.segments);
-                let speed = st.speed;
+                let conns = st.build_connections_progress(segment_count);
                 drop(st);
 
                 progress_handler(DownloadProgress {
                     downloaded: total_now,
                     total: stream_prog.estimated_bytes,
                     bytes_per_second: speed,
-                    connections_progress: Vec::new(),
+                    connections_progress: conns,
                 });
             }
         }
@@ -441,17 +479,19 @@ async fn download_hls_segment(
         let mut st = state.lock().unwrap();
         st.segments[index].done = true;
         st.segments[index].downloaded = segment_downloaded;
+        st.worker_progress[worker_id].segment_downloaded = segment_downloaded;
 
         let total_downloaded: u64 = st.segments.iter().map(|s| s.downloaded).sum();
         let stream_prog = calculate_stream_progress(&st.segments);
-        let speed = st.speed;
+        let speed = st.meter.current_throughput();
+        let conns = st.build_connections_progress(segment_count);
         drop(st);
 
         progress_handler(DownloadProgress {
             downloaded: total_downloaded,
             total: stream_prog.estimated_bytes,
             bytes_per_second: speed,
-            connections_progress: Vec::new(),
+            connections_progress: conns,
         });
     }
 

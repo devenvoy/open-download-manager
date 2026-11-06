@@ -872,3 +872,55 @@ fn remove_completed_prunes_only_completed_downloads() {
     let removed_again = service.remove_completed().unwrap();
     assert!(removed_again.is_empty());
 }
+
+#[test]
+fn queue_pumping_respects_concurrency_limit_and_promotes_queued_items() {
+    let directory = temporary_directory();
+    let mut settings = Settings::new(directory.clone());
+    settings.connections = 1;
+    let store = DownloadHistoryStore::new(&directory);
+    let history = DownloadHistoryService::new(store).unwrap();
+    let service = DownloadTransferService::with_shell(
+        history.clone(),
+        HttpDownloadExecutor::new().unwrap(),
+        2, // max 2 concurrent
+        RecordingShellService::default(),
+    );
+
+    // Add 3 downloads with queue_only: false
+    let id1 = service
+        .add(
+            download_request("http://127.0.0.1/1.bin".to_owned(), "1.bin", false),
+            &settings,
+        )
+        .unwrap()[0]
+        .clone();
+    let id2 = service
+        .add(
+            download_request("http://127.0.0.1/2.bin".to_owned(), "2.bin", false),
+            &settings,
+        )
+        .unwrap()[0]
+        .clone();
+    let id3 = service
+        .add(
+            download_request("http://127.0.0.1/3.bin".to_owned(), "3.bin", false),
+            &settings,
+        )
+        .unwrap()[0]
+        .clone();
+
+    // Verify first 2 became Connecting or Downloading, while 3rd stayed Queued
+    let rec1 = history.download(&id1).unwrap();
+    let rec2 = history.download(&id2).unwrap();
+    let rec3 = history.download(&id3).unwrap();
+
+    assert!(matches!(rec1.status, DownloadStatus::Connecting | DownloadStatus::Downloading));
+    assert!(matches!(rec2.status, DownloadStatus::Connecting | DownloadStatus::Downloading));
+    assert_eq!(rec3.status, DownloadStatus::Queued);
+
+    // Increasing concurrency limit to 3 automatically promotes id3!
+    service.set_max_concurrent(3);
+    let rec3_after = history.download(&id3).unwrap();
+    assert!(matches!(rec3_after.status, DownloadStatus::Connecting | DownloadStatus::Downloading));
+}

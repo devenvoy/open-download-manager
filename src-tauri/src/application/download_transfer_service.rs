@@ -42,6 +42,7 @@ pub struct DownloadTransferService {
     rate_limiter: Arc<DownloadRateLimiter>,
     controls: Arc<Mutex<HashMap<String, watch::Sender<Option<DownloadStopReason>>>>>,
     shell: Arc<dyn ShellService>,
+    queue_pump_lock: Arc<Mutex<()>>,
 }
 
 impl DownloadTransferService {
@@ -71,6 +72,7 @@ impl DownloadTransferService {
             rate_limiter: Arc::new(DownloadRateLimiter::new(0)),
             controls: Arc::new(Mutex::new(HashMap::new())),
             shell: Arc::new(shell),
+            queue_pump_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -396,6 +398,10 @@ impl DownloadTransferService {
     }
 
     pub fn pump_queue(&self) {
+        let _guard = match self.queue_pump_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let max = self.concurrency.max_concurrent();
         let active = match self.history.active_download_count() {
             Ok(count) => count,
