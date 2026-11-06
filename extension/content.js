@@ -36,14 +36,24 @@
     try{return await api.runtime.sendMessage(message);}
     catch(error){if(/extension context invalidated/i.test(error?.message||''))shutdown();throw error;}
   }
-  function extractVideoId(video) {
+  function extractVideoId(node) {
     try {
+      const el = node;
+      if (el) {
+        const link = el.querySelector?.('a#thumbnail, a[href*="/watch?v="], a[href*="/shorts/"]')
+          || (typeof el.closest === 'function' ? el.closest('a[href*="/watch?v="], a[href*="/shorts/"]') : null);
+        if (link?.href) {
+          const u = new URL(link.href, location.href);
+          const id = u.searchParams.get('v') || /^\/shorts\/([\w-]{11})/.exec(u.pathname)?.[1];
+          if (id && /^[\w-]{11}$/.test(id)) return id;
+        }
+      }
       const pageUrl = new URL(location.href);
       const vParam = pageUrl.searchParams.get('v');
       if (vParam && /^[\w-]{11}$/.test(vParam)) return vParam;
       const shortsMatch = /^\/shorts\/([\w-]{11})/.exec(pageUrl.pathname);
       if (shortsMatch) return shortsMatch[1];
-      const container = typeof video.closest === 'function' ? video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+      const container = typeof node?.closest === 'function' ? node.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
       if (container && typeof container.querySelector === 'function') {
         const link = container.querySelector('a[href*="/watch?v="], a[href*="/shorts/"]');
         if (link && link.href) {
@@ -55,11 +65,12 @@
     } catch {}
     return null;
   }
-  function extractVideoTitle(video) {
+  function extractVideoTitle(node) {
     try {
-      const container = typeof video.closest === 'function' ? video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
-      if (container && typeof container.querySelector === 'function') {
-        const titleEl = container.querySelector('#video-title, #title, h3, [title]');
+      const container = typeof node?.closest === 'function' ? node.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+      const root = container || node;
+      if (root && typeof root.querySelector === 'function') {
+        const titleEl = root.querySelector('#video-title, #title, h3, [title]');
         const text = titleEl?.getAttribute?.('title') || titleEl?.textContent?.trim?.();
         if (text && text.length > 1) return text;
       }
@@ -67,10 +78,11 @@
     return document.title || 'Video';
   }
 
-  function isFeedPreview(video) {
+  function isFeedPreview(video, card) {
+    if (card) return true;
     try {
       if (typeof location !== 'undefined' && location.hostname && location.hostname.includes('youtube.com')) {
-        const isMainWatchPlayer = location.pathname === '/watch' && typeof video.closest === 'function' && video.closest('#movie_player') && !video.closest('#inline-preview-player, [id*="preview"]');
+        const isMainWatchPlayer = location.pathname === '/watch' && typeof video?.closest === 'function' && video.closest('#movie_player') && !video.closest('#inline-preview-player, [id*="preview"]');
         if (isMainWatchPlayer) return false;
         return true;
       }
@@ -84,7 +96,8 @@
 
   function getContainer(record) {
     if (record.container && record.container.isConnected) return record.container;
-    const c = typeof record.video.closest === 'function' ? record.video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
+    const base = record.target || record.video;
+    const c = typeof base?.closest === 'function' ? base.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
     if (c) record.container = c;
     return c;
   }
@@ -94,7 +107,7 @@
     record.lingerTimer = setTimeout(() => {
       record.lingerTimer = null;
       if (!record.hovered && activeChooserRecord !== record) {
-        if (isFeedPreview(record.video)) {
+        if (record.isFeed) {
           record.host.style.display = 'none';
           record.formatsReady = false;
         }
@@ -105,7 +118,7 @@
 
   function prefetchFormats(record) {
     if (record.formatsReady || record.isPrefetching) return;
-    const videoId = record.videoId || extractVideoId(record.video);
+    const videoId = record.videoId || extractVideoId(record.target || record.video);
     if (!videoId) return;
     record.isPrefetching = true;
     send({action:'listForFrame', videoId}).then(result => {
@@ -137,11 +150,11 @@
     clearTimeout(record.lingerTimer);
     record.lingerTimer = null;
     if (!record.videoId) {
-      record.videoId = extractVideoId(record.video);
-      record.videoTitle = extractVideoTitle(record.video);
+      record.videoId = extractVideoId(record.target || record.video);
+      record.videoTitle = extractVideoTitle(record.target || record.video);
     }
     prefetchFormats(record);
-    if (!isFeedPreview(record.video)) {
+    if (!record.isFeed || record.formatsReady) {
       position();
     }
   }
@@ -152,199 +165,247 @@
     if (record.formatsReady) {
       scheduleLinger(record, 10000);
     } else {
-      if (isFeedPreview(record.video)) {
+      if (record.isFeed) {
         record.host.style.display = 'none';
       }
     }
   }
 
+  function attachRecord({ video, card, target, videoId, videoTitle, canonicalUrl }) {
+    const liveTarget = target || video || card;
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;z-index:2147483647;display:none;pointer-events:auto';
+    const shadow = host.attachShadow({mode:'closed'});
+    shadow.innerHTML = `<style>${PANEL_CSS}</style><div class="bar"><button class="download" type="button">↓ Download this video ▾</button><button class="dismiss" type="button" title="Hide this download panel" aria-label="Hide this download panel">×</button></div>`;
+    const button = shadow.querySelector('.download');
+    const dismiss = shadow.querySelector('.dismiss');
+    const isFeed = isFeedPreview(video, card);
+    const resolvedVideoId = videoId || extractVideoId(liveTarget);
+    const resolvedVideoTitle = videoTitle || extractVideoTitle(liveTarget);
+    const resolvedCanonical = canonicalUrl || (resolvedVideoId ? `https://www.youtube.com/watch?v=${resolvedVideoId}` : null);
+
+    const record = {
+      video: video || null,
+      card: card || null,
+      target: liveTarget,
+      host,
+      shadow,
+      dismissed: false,
+      chooser: null,
+      menuHost: null,
+      videoId: resolvedVideoId,
+      videoTitle: resolvedVideoTitle,
+      canonicalUrl: resolvedCanonical,
+      prefetchedChoices: null,
+      isPrefetching: false,
+      lingerTimer: null,
+      hovered: false,
+      frozenChooserPos: null,
+      formatsReady: false,
+      savedPlace: null,
+      container: card || (video ? getContainer({ video }) : null),
+      isFeed
+    };
+    records.add(record);
+    resizeObserver.observe(liveTarget);
+    record.intersectionObserver = new IntersectionObserver(() => position(), {threshold: [0, 0.25, 0.5, 0.75, 1]});
+    record.intersectionObserver.observe(liveTarget);
+    document.documentElement.appendChild(host);
+
+    if (typeof host.addEventListener === 'function') {
+      host.addEventListener('mouseenter', () => onEnter(record));
+      host.addEventListener('mouseleave', () => onLeave(record));
+    }
+
+    if (video && typeof video.addEventListener === 'function') {
+      video.addEventListener('mouseenter', () => onEnter(record), {signal: listeners.signal});
+      video.addEventListener('mouseleave', () => onLeave(record), {signal: listeners.signal});
+    }
+
+    if (card && typeof card.addEventListener === 'function') {
+      card.addEventListener('mouseenter', () => onEnter(record), {signal: listeners.signal});
+      card.addEventListener('mouseleave', () => onLeave(record), {signal: listeners.signal});
+    }
+
+    const container = record.container;
+    if (container && container !== video && container !== card && typeof container.addEventListener === 'function') {
+      container.addEventListener('mouseenter', () => onEnter(record), {signal: listeners.signal});
+      container.addEventListener('mouseleave', () => onLeave(record), {signal: listeners.signal});
+    }
+
+    if (video) {
+      const report = () => {
+        const urls = [video.currentSrc, video.src, ...Array.from(video.querySelectorAll?.('source') || [], source => source.src)].map(direct).filter(Boolean);
+        if (urls.length) send({action:'remember', items: urls.map(url => ({url, title:document.title}))}).catch(() => {});
+      };
+      video.addEventListener?.('loadedmetadata', report, {signal:listeners.signal});
+      record.sourceObserver=new MutationObserver(report);
+      record.sourceObserver.observe(video,{attributes:true,attributeFilter:['src'],subtree:true,childList:true});
+      report();
+    }
+
+    dismiss.addEventListener('click', event => {
+      event.preventDefault(); event.stopPropagation();
+      record.dismissed = true;
+      if (record.chooser) { record.chooser.remove(); record.chooser = null; }
+      if (record.menuHost) { record.menuHost.remove(); record.menuHost = null; }
+      if (activeChooserRecord === record) activeChooserRecord = null;
+      shadow.querySelector('.chooser')?.remove();
+      host.style.display = 'none';
+    });
+
+    button.addEventListener('click', async event => {
+      event.preventDefault(); event.stopPropagation();
+      if (record.chooser || activeChooserRecord === record) {
+        closeChoosers();
+        return;
+      }
+      closeChoosers();
+      clearTimeout(record.lingerTimer);
+      record.lingerTimer = null;
+      record.hovered = true;
+      const url = direct(video?.currentSrc || video?.src || video?.querySelector?.('source')?.src);
+
+      const initialRect = button.getBoundingClientRect();
+      record.frozenChooserPos = {
+        top: initialRect.top,
+        bottom: initialRect.bottom,
+        right: initialRect.right,
+        left: initialRect.left,
+        width: initialRect.width || 120,
+        height: initialRect.height || 27,
+      };
+      const chooser = document.createElement('div');
+      chooser.className = 'chooser';
+      record.chooser = chooser;
+      activeChooserRecord = record;
+
+      shadow.append(chooser);
+
+      chooser.addEventListener('keydown', event => {
+        globalThis.odmChooserKeys.handleKey(event, chooser, shadow.activeElement, {
+          close: () => {
+            closeChoosers();
+            button.focus();
+          }
+        });
+      });
+
+      const chooserWidth = Math.min(420, innerWidth - 12);
+      chooser.style.position = 'fixed';
+      chooser.style.width = `${chooserWidth}px`;
+      const left = Math.max(6, Math.min(innerWidth - chooserWidth - 6, record.frozenChooserPos.right - chooserWidth));
+      chooser.style.left = `${left}px`;
+      const below = record.frozenChooserPos.bottom + 4;
+      chooser.style.top = `${below}px`;
+
+      const hint = document.createElement('p');
+      const renderChoices = (choices) => {
+        hint.textContent = 'Choose a format to download';
+        globalThis.odmFormatPresentation.populateChooser(chooser, choices, document, {
+          fallbackTitle: record.videoTitle || document.title || 'Video',
+          getTooltip: globalThis.odmSafeTooltip,
+          onSelect: async (item, row) => {
+            row.disabled = true;
+            hint.textContent = 'Opening download options…';
+            try {
+              const videoId = record.videoId || item.videoId;
+              const canonicalUrl = item.canonicalUrl || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : item.url);
+              const title = record.videoTitle || item.title || document.title;
+              const downloadPayload = {
+                ...item,
+                videoId,
+                canonicalUrl,
+                referer: canonicalUrl,
+                title,
+                startNow: false
+              };
+              const response = await send({action:'download', item: downloadPayload});
+              globalThis.odmMenuResult(response, {
+                accepted: () => {
+                  closeChoosers();
+                },
+                rejected: message => { hint.textContent = friendlyError(message); }
+              });
+            } catch(error) { hint.textContent = friendlyError(error.message); }
+            row.disabled = !!item.unsupported;
+          }
+        });
+        const chooserHeight = Math.min(chooser.scrollHeight || 360, Math.min(360, innerHeight * 0.6));
+        const above = record.frozenChooserPos.top - chooserHeight - 4;
+        chooser.style.top = `${below + chooserHeight <= innerHeight - 6 ? below : Math.max(6, above)}px`;
+        globalThis.odmChooserKeys.focusFirst(chooser);
+      };
+
+      if (record.prefetchedChoices && record.prefetchedChoices.length) {
+        chooser.append(hint);
+        renderChoices(record.prefetchedChoices);
+        return;
+      }
+
+      hint.textContent = 'Checking available video formats…';
+      chooser.append(hint);
+      try {
+        const videoId = record.videoId || extractVideoId(record.target || record.video);
+        const result = await send({action:'listForFrame', videoId});
+        if (!result?.ok) throw new Error(result?.error || 'Could not list video formats.');
+        const candidates = result?.items || [];
+        const youtube = /(^|\.)youtube\.com$/.test(location.hostname);
+        if (!youtube && url && !candidates.some(item => item.url === url)) {
+          candidates.unshift({url, title: record.videoTitle || document.title});
+        }
+        if (!candidates.length) {
+          hint.textContent = result.notice || (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No direct media links detected. Play the video and try again.');
+          return;
+        }
+        const choices = globalThis.mediaChoices(candidates, {url, poster: video?.poster});
+        if (!choices.length) {
+          hint.textContent = 'No complete formats detected for this video yet. Play it briefly, then try again.';
+          return;
+        }
+        record.prefetchedChoices = choices;
+        renderChoices(choices);
+      } catch(error) {
+        hint.textContent = error.message;
+      }
+    });
+    return record;
+  }
+
   function scan() {
     pending = false;
     if(!connected())return;
+
+    const isYouTube = typeof location !== 'undefined' && location.hostname && location.hostname.includes('youtube.com');
+    if (isYouTube) {
+      const cardSelectors = 'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer, yt-lockup-view-model';
+      for (const card of document.querySelectorAll(cardSelectors)) {
+        if (seen.has(card)) continue;
+        const link = card.querySelector('a#thumbnail, a[href*="/watch?v="], a[href*="/shorts/"]');
+        if (!link?.href) continue;
+        const u = new URL(link.href, location.href);
+        const videoId = u.searchParams.get('v') || /^\/shorts\/([\w-]{11})/.exec(u.pathname)?.[1];
+        if (!videoId || !/^[\w-]{11}$/.test(videoId)) continue;
+        seen.add(card);
+
+        const titleEl = card.querySelector('#video-title, #title, h3, [title]');
+        const videoTitle = titleEl?.getAttribute?.('title') || titleEl?.textContent?.trim?.() || document.title || 'Video';
+        const target = card.querySelector('ytd-thumbnail, #thumbnail') || card;
+        attachRecord({ card, target, videoId, videoTitle, canonicalUrl: `https://www.youtube.com/watch?v=${videoId}` });
+      }
+    }
+
     for (const video of document.querySelectorAll('video')) {
       if (seen.has(video)) continue;
+      if (isYouTube && typeof video.closest === 'function' && video.closest('#inline-preview-player, [id*="preview"], ytd-preview')) {
+        continue;
+      }
       seen.add(video);
-      const host = document.createElement('div');
-      host.style.cssText = 'position:fixed;z-index:2147483647;display:none;pointer-events:auto';
-      const shadow = host.attachShadow({mode:'closed'});
-      shadow.innerHTML = `<style>${PANEL_CSS}</style><div class="bar"><button class="download" type="button">↓ Download this video ▾</button><button class="dismiss" type="button" title="Hide this download panel" aria-label="Hide this download panel">×</button></div>`;
-      const button = shadow.querySelector('.download');
-      const dismiss = shadow.querySelector('.dismiss');
-      const record = {
-        video,
-        host,
-        shadow,
-        dismissed: false,
-        chooser: null,
-        menuHost: null,
-        videoId: extractVideoId(video),
-        videoTitle: extractVideoTitle(video),
-        prefetchedChoices: null,
-        isPrefetching: false,
-        lingerTimer: null,
-        hovered: false,
-        frozenChooserPos: null,
-        formatsReady: false,
-        savedPlace: null,
-        container: null
-      };
-      records.add(record);
-      resizeObserver.observe(video);
-      record.intersectionObserver = new IntersectionObserver(() => position(), {threshold: [0, 0.25, 0.5, 0.75, 1]});
-      record.intersectionObserver.observe(video);
-      document.documentElement.appendChild(host);
-
-      if (typeof host.addEventListener === 'function') {
-        host.addEventListener('mouseenter', () => onEnter(record));
-        host.addEventListener('mouseleave', () => onLeave(record));
-      }
-
-      if (typeof video.addEventListener === 'function') {
-        video.addEventListener('mouseenter', () => onEnter(record), {signal: listeners.signal});
-        video.addEventListener('mouseleave', () => onLeave(record), {signal: listeners.signal});
-      }
-
-      const container = typeof video.closest === 'function' ? video.closest('#video-preview, ytd-video-preview, ytd-rich-item-renderer, yt-lockup-view-model, ytd-thumbnail, ytd-video-renderer, ytd-compact-video-renderer') : null;
-      if (container && typeof container.addEventListener === 'function') {
-        container.addEventListener('mouseenter', () => onEnter(record), {signal: listeners.signal});
-        container.addEventListener('mouseleave', () => onLeave(record), {signal: listeners.signal});
-      }
-
-      const report = () => {
-        const urls = [video.currentSrc, video.src, ...Array.from(video.querySelectorAll('source'), source => source.src)].map(direct).filter(Boolean);
-        if (urls.length) send({action:'remember', items: urls.map(url => ({url, title:document.title}))}).catch(() => {});
-      };
-      video.addEventListener('loadedmetadata', report, {signal:listeners.signal});
-      record.sourceObserver=new MutationObserver(report);
-      record.sourceObserver.observe(video,{attributes:true,attributeFilter:['src'],subtree:true,childList:true});
-      report();if(stopped)return;
-      dismiss.addEventListener('click',event=>{
-        event.preventDefault();event.stopPropagation();
-        record.dismissed=true;
-        if(record.chooser){record.chooser.remove();record.chooser=null;}
-        if(record.menuHost){record.menuHost.remove();record.menuHost=null;}
-        if(activeChooserRecord === record) activeChooserRecord = null;
-        shadow.querySelector('.chooser')?.remove();
-        host.style.display='none';
-      });
-      button.addEventListener('click', async event => {
-        event.preventDefault(); event.stopPropagation();
-        if (record.chooser || activeChooserRecord === record) {
-          closeChoosers();
-          return;
-        }
-        closeChoosers();
-        clearTimeout(record.lingerTimer);
-        record.lingerTimer = null;
-        record.hovered = true;
-        const url = direct(video.currentSrc || video.src || video.querySelector('source')?.src);
-
-        const initialRect = button.getBoundingClientRect();
-        record.frozenChooserPos = {
-          top: initialRect.top,
-          bottom: initialRect.bottom,
-          right: initialRect.right,
-          left: initialRect.left,
-          width: initialRect.width || 120,
-          height: initialRect.height || 27,
-        };
-        const chooser = document.createElement('div');
-        chooser.className = 'chooser';
-        record.chooser = chooser;
-        activeChooserRecord = record;
-
-        shadow.append(chooser);
-
-        chooser.addEventListener('keydown', event => {
-          globalThis.odmChooserKeys.handleKey(event, chooser, shadow.activeElement, {
-            close: () => {
-              closeChoosers();
-              button.focus();
-            }
-          });
-        });
-
-        const chooserWidth = Math.min(420, innerWidth - 12);
-        chooser.style.position = 'fixed';
-        chooser.style.width = `${chooserWidth}px`;
-        const left = Math.max(6, Math.min(innerWidth - chooserWidth - 6, record.frozenChooserPos.right - chooserWidth));
-        chooser.style.left = `${left}px`;
-        const below = record.frozenChooserPos.bottom + 4;
-        chooser.style.top = `${below}px`;
-
-        const hint = document.createElement('p');
-        const renderChoices = (choices) => {
-          hint.textContent = 'Choose a format to download';
-          globalThis.odmFormatPresentation.populateChooser(chooser, choices, document, {
-            fallbackTitle: record.videoTitle || document.title || 'Video',
-            getTooltip: globalThis.odmSafeTooltip,
-            onSelect: async (item, row) => {
-              row.disabled = true;
-              hint.textContent = 'Opening download options…';
-              try {
-                const videoId = record.videoId || item.videoId;
-                const canonicalUrl = item.canonicalUrl || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : item.url);
-                const title = record.videoTitle || item.title || document.title;
-                const downloadPayload = {
-                  ...item,
-                  videoId,
-                  canonicalUrl,
-                  referer: canonicalUrl,
-                  title,
-                  startNow: false
-                };
-                const response = await send({action:'download', item: downloadPayload});
-                globalThis.odmMenuResult(response, {
-                  accepted: () => {
-                    closeChoosers();
-                  },
-                  rejected: message => { hint.textContent = friendlyError(message); }
-                });
-              } catch(error) { hint.textContent = friendlyError(error.message); }
-              row.disabled = !!item.unsupported;
-            }
-          });
-          const chooserHeight = Math.min(chooser.scrollHeight || 360, Math.min(360, innerHeight * 0.6));
-          const above = record.frozenChooserPos.top - chooserHeight - 4;
-          chooser.style.top = `${below + chooserHeight <= innerHeight - 6 ? below : Math.max(6, above)}px`;
-          globalThis.odmChooserKeys.focusFirst(chooser);
-        };
-
-        if (record.prefetchedChoices && record.prefetchedChoices.length) {
-          chooser.append(hint);
-          renderChoices(record.prefetchedChoices);
-          return;
-        }
-
-        hint.textContent = 'Checking available video formats…';
-        chooser.append(hint);
-        try {
-          const videoId = record.videoId || extractVideoId(video);
-          const result = await send({action:'listForFrame', videoId});
-          if (!result?.ok) throw new Error(result?.error || 'Could not list video formats.');
-          const candidates = result?.items || [];
-          const youtube = /(^|\.)youtube\.com$/.test(location.hostname);
-          if (!youtube && url && !candidates.some(item => item.url === url)) {
-            candidates.unshift({url, title: record.videoTitle || document.title});
-          }
-          if (!candidates.length) {
-            hint.textContent = result.notice || (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No direct media links detected. Play the video and try again.');
-            return;
-          }
-          const choices = globalThis.mediaChoices(candidates, {url, poster: video.poster});
-          if (!choices.length) {
-            hint.textContent = 'No complete formats detected for this video yet. Play it briefly, then try again.';
-            return;
-          }
-          record.prefetchedChoices = choices;
-          renderChoices(choices);
-        } catch(error) {
-          hint.textContent = error.message;
-        }
-      });
+      attachRecord({ video, target: video, videoId: extractVideoId(video), videoTitle: extractVideoTitle(video) });
     }
     position();
   }
+
   function friendlyError(message) {
     if (/native messaging host not found/i.test(message || '')) return 'Chrome cannot find the desktop connector. Open Open Download Manager → Browser Integration → Refresh browsers, then reload this extension and page. Details: ' + message;
     if (/forbidden/i.test(message || '')) return 'Chrome native messaging permissions issue. Reload the extension at chrome://extensions and retry. Details: ' + message;
@@ -354,7 +415,7 @@
     if (activeChooserRecord && activeChooserRecord !== except) {
       if (activeChooserRecord.chooser) { activeChooserRecord.chooser.remove(); activeChooserRecord.chooser = null; }
       if (activeChooserRecord.menuHost) { activeChooserRecord.menuHost.remove(); activeChooserRecord.menuHost = null; }
-      if (!activeChooserRecord.hovered && isFeedPreview(activeChooserRecord.video)) {
+      if (!activeChooserRecord.hovered && activeChooserRecord.isFeed) {
         activeChooserRecord.host.style.display = 'none';
       }
       activeChooserRecord = null;
@@ -367,34 +428,39 @@
     }
     position();
   }
-  function resolveParent(video) {
+  function resolveParent(node) {
     const fullscreen = document.fullscreenElement;
-    if (fullscreen && fullscreen !== video && typeof fullscreen.contains === 'function' && fullscreen.contains(video)) return fullscreen;
+    if (fullscreen && fullscreen !== node && typeof fullscreen.contains === 'function' && fullscreen.contains(node)) return fullscreen;
     return document.documentElement;
   }
   function position() {
     if(!connected())return;
     for (const record of records) {
-      if (!record.video.isConnected) {
+      const liveNode = record.target || record.video;
+      if (!liveNode || !liveNode.isConnected) {
         if (record.chooser || record.lingerTimer || record.hovered || activeChooserRecord === record) continue;
-        resizeObserver.unobserve(record.video); record.sourceObserver.disconnect(); record.intersectionObserver?.disconnect();
+        if (liveNode) {
+          resizeObserver.unobserve(liveNode);
+          record.intersectionObserver?.disconnect();
+        }
+        record.sourceObserver?.disconnect();
         clearTimeout(record.lingerTimer);
         record.host.remove();
         if (record.menuHost) { record.menuHost.remove(); record.menuHost = null; }
         records.delete(record);
         continue;
       }
-      const parent = resolveParent(record.video);
+      const parent = resolveParent(liveNode);
       if(record.host.parentNode !== parent) parent.appendChild(record.host);
 
       if (activeChooserRecord && activeChooserRecord !== record) {
-        if (isFeedPreview(record.video)) {
+        if (record.isFeed) {
           record.host.style.display = 'none';
           continue;
         }
       }
 
-      let rect = record.video.getBoundingClientRect();
+      let rect = liveNode.getBoundingClientRect();
       const container = getContainer(record);
       if ((rect.width <= 100 || rect.height <= 60) && container) {
         const cRect = container.getBoundingClientRect();
@@ -408,7 +474,7 @@
       if (place) record.savedPlace = place;
 
       const activePlace = place || record.savedPlace;
-      const isPreview = isFeedPreview(record.video);
+      const isPreview = record.isFeed;
       const shouldShow = isPreview
         ? (Boolean(record.formatsReady) && (record.hovered || record.lingerTimer !== null || activeChooserRecord === record) && Boolean(activePlace) && !record.dismissed && !scrolling)
         : (Boolean(place) && !record.dismissed && !scrolling);

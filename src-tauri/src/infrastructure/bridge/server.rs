@@ -325,7 +325,8 @@ async fn handle_bridge_connection(
         let is_youtube = valid_browser.youtube_format.is_some()
             || valid_browser.referer.as_ref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"))
             || valid_browser.url.contains("youtube.com")
-            || valid_browser.url.contains("youtu.be");
+            || valid_browser.url.contains("youtu.be")
+            || valid_browser.url.contains("googlevideo.com");
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
             filename: valid_browser.filename,

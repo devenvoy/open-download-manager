@@ -207,6 +207,8 @@ fn sabr_handoff_accepts_only_a_bounded_captured_googlevideo_session() {
         urls: None,
         filename: None,
         referer: None,
+        canonical_url: None,
+        video_id: None,
         request_headers: None,
     };
 

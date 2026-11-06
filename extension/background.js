@@ -105,7 +105,20 @@ async function enqueue(item, tabId) {
   if (unsupported(url, item.mime) || item.unsupported) throw new Error(item.reason || 'DASH streams are unsupported.');
   const requestHeaders=requestContext.get(tabId)?.get(url);
   const effectiveReferer = item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null) || item.referer || requestHeaders?.referer;
-  return nativeSend({action: 'download', url, youtubeFormat:item.youtubeFormat, sabr, startNow:item.startNow===true, audioUrl:httpUrl(item.audioUrl)||undefined, outputFormat:item.outputFormat, filename: item.filename, referer: httpUrl(effectiveReferer) || undefined,requestHeaders});
+  return nativeSend({
+    action: 'download',
+    url,
+    youtubeFormat: item.youtubeFormat,
+    sabr,
+    startNow: item.startNow === true,
+    audioUrl: httpUrl(item.audioUrl) || undefined,
+    outputFormat: item.outputFormat,
+    filename: item.filename,
+    referer: httpUrl(effectiveReferer) || undefined,
+    canonicalUrl: item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : undefined),
+    videoId: item.videoId,
+    requestHeaders
+  });
 }
 function updateSession(key,change) {
   const next = serial.then(async () => {
@@ -225,16 +238,26 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
           player = youtubePlayersByVideo.get(id);
         }
         console.log('[ODM Background] cached player videoId:', player?.videoId, 'expected:', id);
-        if(player?.videoId!==id) {
-          console.warn('[ODM Background] player cache mismatch. Have:', player?.videoId, 'want:', id);
-          return {ok:true,items:[]};
+        if(player?.videoId===id) {
+          const capture=player.sabr?await sabrCapture(sender.tab.id):undefined;
+          console.log('[ODM Background] sabrCapture status:', !!capture);
+          const active={...player,sabrUrl:capture?.url||player.sabrUrl};
+          let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
+          console.log('[ODM Background] Returning', items.length, 'format choices');
+          if(items.length) {
+            return {ok:true,items};
+          }
         }
-        const capture=player.sabr?await sabrCapture(sender.tab.id):undefined;
-        console.log('[ODM Background] sabrCapture status:', !!capture);
-        const active={...player,sabrUrl:capture?.url||player.sabrUrl};
-        let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
-        console.log('[ODM Background] Returning', items.length, 'format choices');
-        return {ok:true,items};
+        try {
+          const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+          const nativeRes = await nativeSend({action: 'formats', url: watchUrl});
+          if (nativeRes?.ok && Array.isArray(nativeRes.items) && nativeRes.items.length) {
+            return {ok: true, items: nativeRes.items};
+          }
+        } catch (e) {
+          // Native bridge offline or video unavailable
+        }
+        return {ok:true,items:[]};
       }
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);

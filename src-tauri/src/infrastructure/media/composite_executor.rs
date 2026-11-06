@@ -72,7 +72,9 @@ impl DownloadExecutor for CompositeDownloadExecutor {
             || download.url.contains(".m3u8?");
         let is_youtube = download.kind.as_deref() == Some("youtube")
             || crate::domain::media::youtube_url(&download.url).is_some()
-            || download.youtube_format.is_some();
+            || download.youtube_format.is_some()
+            || download.url.contains("googlevideo.com")
+            || download.referer.as_deref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"));
 
         if is_sabr {
             let sabr = self.sabr_executor.clone();

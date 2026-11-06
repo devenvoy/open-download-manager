@@ -58,6 +58,8 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         urls: None,
         filename: Some("my video.mp4".to_owned()),
         referer: Some("https://example.com/page".to_owned()),
+        canonical_url: None,
+        video_id: None,
         request_headers: Some(headers),
     };
 
@@ -84,6 +86,8 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         urls: None,
         filename: None,
         referer: None,
+        canonical_url: None,
+        video_id: None,
         request_headers: None,
     };
     assert!(sanitize_browser_request(invalid_formats).is_err());
@@ -99,6 +103,8 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         urls: None,
         filename: None,
         referer: None,
+        canonical_url: None,
+        video_id: None,
         request_headers: None,
     };
     let sanitized_formats = sanitize_browser_request(valid_formats).unwrap();

@@ -4,7 +4,7 @@ use url::Url;
 
 use crate::domain::{download::sanitize_filename, media::sabr::{sanitize_sabr, SabrSession}};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserIncomingMessage {
     pub action: String,
@@ -17,6 +17,8 @@ pub struct BrowserIncomingMessage {
     pub urls: Option<Vec<String>>,
     pub filename: Option<String>,
     pub referer: Option<String>,
+    pub canonical_url: Option<String>,
+    pub video_id: Option<String>,
     #[serde(rename = "requestHeaders")]
     pub request_headers: Option<HashMap<String, String>>,
 }
@@ -127,10 +129,26 @@ pub fn sanitize_browser_request(
         None
     };
 
-    let referer = if let Some(ref_url) = msg.referer {
-        Some(validate_url(&ref_url)?)
+    let canonical = msg.canonical_url.and_then(|u| validate_url(&u).ok());
+    let derived_video_url = if let Some(ref vid) = msg.video_id {
+        if vid.len() == 11 && vid.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            Some(format!("https://www.youtube.com/watch?v={vid}"))
+        } else {
+            None
+        }
     } else {
         None
+    };
+
+    let referer = if let Some(ref_url) = msg.referer {
+        let validated = validate_url(&ref_url)?;
+        if valid_url.contains("googlevideo.com") && !validated.contains("/watch?v=") && !validated.contains("/shorts/") {
+            canonical.or(derived_video_url).or(Some(validated))
+        } else {
+            Some(validated)
+        }
+    } else {
+        canonical.or(derived_video_url)
     };
 
     let mut filtered_headers = HashMap::new();

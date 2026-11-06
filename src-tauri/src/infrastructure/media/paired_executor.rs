@@ -149,7 +149,15 @@ impl PairedDownloadExecutor {
                             speed_limit,
                         )
                         .await;
+                } else {
+                    return Err(AppError::download(
+                        "Could not resolve canonical YouTube watch URL for this media stream. Please open the video page directly to download.",
+                    ));
                 }
+            } else {
+                return Err(AppError::download(
+                    "yt-dlp is required to download YouTube streams. Please install it in Settings > Tools.",
+                ));
             }
         }
 

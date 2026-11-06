@@ -69,8 +69,20 @@ impl YoutubeDownloadExecutor {
                     }
                 }
                 None
-            })
-            .unwrap_or_else(|| download.url.clone());
+            });
+
+        let target_url = match canonical_url {
+            Some(u) => u,
+            None => {
+                if download.url.contains("googlevideo.com") {
+                    return Err(AppError::download(
+                        "Could not resolve canonical YouTube watch URL for this media stream. Please open the video page directly to download.",
+                    ));
+                } else {
+                    download.url.clone()
+                }
+            }
+        };
 
         let directory = download
             .directory
@@ -96,7 +108,7 @@ impl YoutubeDownloadExecutor {
 
         ytdlp
             .download(
-                &canonical_url,
+                &target_url,
                 download.youtube_format.as_deref(),
                 &destination,
                 progress_handler,
