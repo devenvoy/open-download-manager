@@ -20,4 +20,6 @@ pub struct ValidatedDownloadRequest {
     pub kind: Option<String>,
     pub sabr: Option<NormalizedSabrSession>,
     pub reuse_active: bool,
+    pub referer: Option<String>,
+    pub youtube_format: Option<String>,
 }

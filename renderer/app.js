@@ -847,20 +847,35 @@ function showDialog(id) {
 	const dialog = $(id);
 	if (!dialog.open) dialog.showModal();
 }
+let chosenYouTubeFormat = null;
+let currentVideoChoices = [];
+
 function isYouTubePlaylistUrl(text) {
 	if (!text || typeof text !== "string") return false;
 	const trimmed = text.trim();
 	if (!/^https?:\/\//i.test(trimmed)) return false;
 	return /(?:youtube\.com\/(?:playlist\?list=|watch\?.*[?&]list=)|youtu\.be\/.*[?&]list=)([\w-]{10,64})/i.test(trimmed);
 }
+function isYouTubeVideoUrl(text) {
+	if (!text || typeof text !== "string") return false;
+	const trimmed = text.trim();
+	if (!/^https?:\/\//i.test(trimmed)) return false;
+	if (isYouTubePlaylistUrl(trimmed)) return false;
+	return /(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i.test(trimmed);
+}
 function checkPlaylistUrl() {
-	const banner = $("#playlist-banner");
-	if (banner) {
-		banner.hidden = !isYouTubePlaylistUrl($("#download-urls").value);
-	}
+	const val = $("#download-urls")?.value || "";
+	const playlistBanner = $("#playlist-banner");
+	const videoBanner = $("#video-banner");
+	const isPlaylist = isYouTubePlaylistUrl(val);
+	const isVideo = isYouTubeVideoUrl(val);
+	if (playlistBanner) playlistBanner.hidden = !isPlaylist;
+	if (videoBanner) videoBanner.hidden = !isVideo;
 }
 function openAdd(text = "", scheduled = "") {
 	pendingReviewId = null;
+	chosenYouTubeFormat = null;
+	currentVideoChoices = [];
 	$("#add-error").hidden = true;
 	$("#download-urls").value = text;
 	$("#download-urls").readOnly = false;
@@ -1833,6 +1848,57 @@ $("#playlist-banner-btn")?.addEventListener("click", async () => {
 	}
 });
 
+$("#video-banner-btn")?.addEventListener("click", async () => {
+	const url = $("#download-urls").value.trim();
+	if (!url) return;
+	const btn = $("#video-banner-btn");
+	const errorEl = $("#add-error");
+	errorEl.hidden = true;
+	try {
+		btn.disabled = true;
+		btn.textContent = "Loading formats…";
+		const choices = await call("getVideoFormats", url);
+		currentVideoChoices = choices || [];
+		if (!currentVideoChoices.length) throw new Error("No available formats found for this video.");
+		$("#video-formats-name").textContent = currentVideoChoices[0].title || "YouTube Video";
+		const dur = currentVideoChoices[0].duration;
+		$("#video-formats-details").textContent = dur ? `Duration: ${Math.floor(dur / 60)}m ${Math.floor(dur % 60)}s` : "";
+		const select = $("#video-format-select");
+		select.innerHTML = "";
+		currentVideoChoices.forEach((choice, idx) => {
+			const opt = document.createElement("option");
+			opt.value = String(idx);
+			const sizeStr = choice.estimatedSize ? ` (~${(choice.estimatedSize / (1024 * 1024)).toFixed(1)} MB)` : "";
+			opt.textContent = `${choice.format} ${choice.quality || ""} - ${choice.audioState}${sizeStr}`;
+			select.appendChild(opt);
+		});
+		$("#video-formats-error").hidden = true;
+		showDialog("#video-formats-dialog");
+	} catch (err) {
+		errorEl.textContent = messageOf(err);
+		errorEl.hidden = false;
+	} finally {
+		btn.disabled = false;
+		btn.textContent = "Choose Quality / Format…";
+	}
+});
+
+$("#video-formats-form")?.addEventListener("submit", (e) => {
+	e.preventDefault();
+	const select = $("#video-format-select");
+	const idx = Number(select.value);
+	const choice = currentVideoChoices[idx];
+	if (choice) {
+		chosenYouTubeFormat = choice.youtubeFormat;
+		const ext = choice.outputFormat || (choice.format === "MP3" ? "mp3" : "mp4");
+		const title = choice.title || "video";
+		$("#download-filename").value = `${title}.${ext}`;
+		$("#download-category").value = ext === "mp3" ? "Audio" : "Video";
+		$("#video-banner-btn").textContent = `Selected: ${choice.quality || choice.format} (${ext.toUpperCase()})`;
+	}
+	$("#video-formats-dialog").close();
+});
+
 $("#playlist-select-all")?.addEventListener("click", () => {
 	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = true));
 });
@@ -1996,6 +2062,7 @@ $("#add-form").addEventListener("submit", async (event) => {
 			...(scheduledAt ? { scheduledAt } : {}),
 			...(directory ? { directory } : {}),
 			...(selectedCategory ? { category: selectedCategory } : {}),
+			...(chosenYouTubeFormat ? { youtubeFormat: chosenYouTubeFormat } : {}),
 			description,
 			queueOnly: event.submitter?.dataset.queueOnly === "true",
 		};
@@ -2003,6 +2070,7 @@ $("#add-form").addEventListener("submit", async (event) => {
 			? await call("review", { id: pendingReviewId, ...data })
 			: await call("add", { urls, ...data });
 		pendingReviewId = null;
+		chosenYouTubeFormat = null;
 		if (!addMode) $("#add-dialog").close();
 		setView("all");
 		await refresh();

@@ -33,6 +33,8 @@ pub struct DownloadRequest {
     pub sabr: Option<SabrSession>,
     #[serde(default)]
     pub reuse_active: Option<bool>,
+    pub referer: Option<String>,
+    pub youtube_format: Option<String>,
 }
 
 impl DownloadRequest {
@@ -114,6 +116,14 @@ impl DownloadRequest {
             None
         };
 
+        let kind = self.kind.or_else(|| {
+            if urls.iter().any(|u| crate::domain::media::youtube_url(u.url().as_str()).is_some()) {
+                Some("youtube".to_owned())
+            } else {
+                None
+            }
+        });
+
         Ok(ValidatedDownloadRequest {
             urls,
             filename,
@@ -124,9 +134,11 @@ impl DownloadRequest {
             review_only: self.review_only.unwrap_or(false),
             scheduled_at,
             audio_url,
-            kind: self.kind,
+            kind,
             sabr,
             reuse_active: self.reuse_active.unwrap_or(false),
+            referer: self.referer,
+            youtube_format: self.youtube_format,
         })
     }
 }

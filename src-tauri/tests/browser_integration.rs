@@ -111,9 +111,11 @@ fn native_host_manifest_structures_match_browser_specifications() {
     let dummy_exe = PathBuf::from("/usr/local/bin/open-download-manager-native-host");
     let chrome_manifest = create_manifest(BrowserType::Chrome, "abcdefghijklmnopabcdefghijklmnop", &dummy_exe).unwrap();
     assert_eq!(chrome_manifest.name, NATIVE_HOST_NAME);
-    assert_eq!(
-        chrome_manifest.allowed_origins.unwrap(),
-        vec!["chrome-extension://abcdefghijklmnopabcdefghijklmnop/".to_owned()]
+    assert!(
+        chrome_manifest
+            .allowed_origins
+            .unwrap()
+            .contains(&"chrome-extension://abcdefghijklmnopabcdefghijklmnop/".to_owned())
     );
     assert!(chrome_manifest.allowed_extensions.is_none());
 
@@ -289,6 +291,8 @@ async fn browser_download_review_lifecycle_and_validation() {
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
     };
 
     let ids = service.add(request, &settings).unwrap();
@@ -409,6 +413,8 @@ async fn browser_review_cancellation_and_download_later() {
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
     };
     let ids1 = service.add(req1, &settings).unwrap();
     let id1 = &ids1[0];
@@ -432,6 +438,8 @@ async fn browser_review_cancellation_and_download_later() {
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
     };
     let ids2 = service.add(req2, &settings).unwrap();
     let id2 = &ids2[0];

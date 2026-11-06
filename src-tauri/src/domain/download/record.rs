@@ -60,6 +60,10 @@ pub struct DownloadRecord {
     pub connections_progress: Vec<DownloadSegmentProgress>,
     #[serde(default)]
     pub audio_url: Option<String>,
+    #[serde(default)]
+    pub referer: Option<String>,
+    #[serde(default)]
+    pub youtube_format: Option<String>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
 }

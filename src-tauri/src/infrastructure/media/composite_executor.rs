@@ -13,7 +13,7 @@ use crate::{
         http_download_executor::{create_http_client, HttpDownloadExecutor},
         media::{
             hls_executor::HlsDownloadExecutor, paired_executor::PairedDownloadExecutor,
-            sabr_executor::SabrDownloadExecutor,
+            sabr_executor::SabrDownloadExecutor, youtube_executor::YoutubeDownloadExecutor,
         },
     },
 };
@@ -24,6 +24,7 @@ pub struct CompositeDownloadExecutor {
     hls_executor: Arc<HlsDownloadExecutor>,
     paired_executor: Arc<PairedDownloadExecutor>,
     sabr_executor: Arc<SabrDownloadExecutor>,
+    youtube_executor: Arc<YoutubeDownloadExecutor>,
     client: Arc<RwLock<reqwest::Client>>,
 }
 
@@ -35,6 +36,7 @@ impl CompositeDownloadExecutor {
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
+            youtube_executor: Arc::new(YoutubeDownloadExecutor::new()),
             client: shared_client,
         }
     }
@@ -48,6 +50,7 @@ impl CompositeDownloadExecutor {
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
+            youtube_executor: Arc::new(YoutubeDownloadExecutor::new()),
             client: shared_client,
         }
     }
@@ -67,6 +70,9 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         let is_hls = download.kind.as_deref() == Some("hls")
             || download.url.ends_with(".m3u8")
             || download.url.contains(".m3u8?");
+        let is_youtube = download.kind.as_deref() == Some("youtube")
+            || crate::domain::media::youtube_url(&download.url).is_some()
+            || download.youtube_format.is_some();
 
         if is_sabr {
             let sabr = self.sabr_executor.clone();
@@ -87,6 +93,13 @@ impl DownloadExecutor for CompositeDownloadExecutor {
                 hls.transfer(download, progress_handler, control, rate_limiter)
                     .await
             })
+        } else if is_youtube {
+            let youtube = self.youtube_executor.clone();
+            Box::pin(async move {
+                youtube
+                    .transfer(download, progress_handler, control, rate_limiter)
+                    .await
+            })
         } else {
             self.http_executor
                 .execute(download, progress_handler, control, rate_limiter)
@@ -97,6 +110,7 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         let _ = self.sabr_executor.discard_partial(download);
         let _ = self.paired_executor.discard_partial(download);
         let _ = self.hls_executor.discard_partial(download);
+        let _ = self.youtube_executor.discard_partial(download);
         self.http_executor.discard_partial(download)
     }
 

@@ -13,13 +13,17 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::download::{DownloadRecord, DownloadSegmentProgress},
-    infrastructure::media::ffmpeg::FfmpegTools,
+    domain::{
+        download::{DownloadRecord, DownloadSegmentProgress},
+        media::youtube_url,
+    },
+    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
 };
 
 pub struct PairedDownloadExecutor {
     client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
+    ytdlp: Option<YtDlpTools>,
 }
 
 struct PairedState {
@@ -35,6 +39,7 @@ impl PairedDownloadExecutor {
         Self {
             client: Arc::new(std::sync::RwLock::new(client)),
             ffmpeg: FfmpegTools::new(),
+            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -42,6 +47,7 @@ impl PairedDownloadExecutor {
         Self {
             client,
             ffmpeg: FfmpegTools::new(),
+            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -60,6 +66,69 @@ impl PairedDownloadExecutor {
             AppError::download("Paired download requires both video and audio URLs.")
         })?;
         let video_url = download.url.clone();
+
+        let is_real_youtube = video_url.contains("googlevideo.com")
+            || audio_url.contains("googlevideo.com")
+            || video_url.contains("youtube.com")
+            || video_url.contains("youtu.be")
+            || download.referer.as_deref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"));
+
+        if is_real_youtube {
+            let ytdlp_tool = self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new);
+            if let Some(ytdlp) = ytdlp_tool {
+                let canonical_url = download
+                    .referer
+                    .as_deref()
+                    .and_then(youtube_url)
+                    .or_else(|| youtube_url(&video_url))
+                    .or_else(|| {
+                        if let Ok(parsed) = url::Url::parse(&video_url) {
+                            if let Some((_, docid)) = parsed.query_pairs().find(|(k, _)| k == "docid" || k == "id") {
+                                let s = docid.to_string();
+                                if s.len() == 11 {
+                                    return Some(format!("https://www.youtube.com/watch?v={s}"));
+                                }
+                            }
+                        }
+                        None
+                    });
+
+                if let Some(target_url) = canonical_url {
+                    let directory = download
+                        .directory
+                        .as_ref()
+                        .map(PathBuf::from)
+                        .ok_or_else(|| AppError::download("Download directory is not set."))?;
+
+                    let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
+                    let destination_filename = if is_mp3 {
+                        download.filename.clone()
+                    } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
+                        download.filename.clone()
+                    } else {
+                        let base = Path::new(&download.filename)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(&download.filename);
+                        format!("{base}.mp4")
+                    };
+
+                    let destination = directory.join(destination_filename);
+                    let speed_limit = rate_limiter.limit_kbps() as u64;
+
+                    return ytdlp
+                        .download(
+                            &target_url,
+                            download.youtube_format.as_deref(),
+                            &destination,
+                            progress_handler,
+                            control,
+                            speed_limit,
+                        )
+                        .await;
+                }
+            }
+        }
 
         let directory = download
             .directory

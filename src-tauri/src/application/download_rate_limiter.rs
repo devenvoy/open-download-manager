@@ -20,6 +20,10 @@ impl DownloadRateLimiter {
         }
     }
 
+    pub fn limit_kbps(&self) -> u32 {
+        self.limit_kbps.load(Ordering::Acquire)
+    }
+
     pub fn set_limit_kbps(&self, limit_kbps: u32) {
         self.limit_kbps.store(limit_kbps, Ordering::Release);
         self.next_allowed_nanos.store(

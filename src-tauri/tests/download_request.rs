@@ -18,6 +18,8 @@ fn request(url: &str) -> DownloadRequest {
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
     }
 }
 
@@ -40,9 +42,9 @@ fn accepts_http_and_https_addresses_and_uses_default_directory() {
 fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
     for url in [
         "file:///etc/passwd",
+        "ftp://example.test/file.bin",
         "https://user:password@example.test/file.bin",
         "https://example.test/video.mpd",
-        "https://youtube.com/watch?v=private",
     ] {
         assert!(
             request(url)
@@ -51,6 +53,14 @@ fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
             "{url} should be rejected"
         );
     }
+}
+
+#[test]
+fn accepts_youtube_addresses() {
+    let valid = request("https://www.youtube.com/watch?v=wLdZWyLOJCI")
+        .validate(PathBuf::from("/tmp/downloads"))
+        .expect("YouTube address should be accepted");
+    assert_eq!(valid.kind, Some("youtube".to_owned()));
 }
 
 #[test]

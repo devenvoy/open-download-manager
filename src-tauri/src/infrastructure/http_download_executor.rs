@@ -806,24 +806,14 @@ impl DownloadExecutor for HttpDownloadExecutor {
     ) -> DownloadExecution {
         let executor = self.clone();
         Box::pin(async move {
-            let cleanup_record = download.clone();
-            let result = executor
+            executor
                 .transfer(
                     download,
                     Arc::clone(&progress_handler),
                     control,
                     rate_limiter,
                 )
-                .await;
-            if result
-                .as_ref()
-                .is_err_and(|error| error.code != "download_paused")
-            {
-                if let Err(error) = executor.discard_partial(&cleanup_record) {
-                    eprintln!("Could not remove a partial download: {}", error.message);
-                }
-            }
-            result
+                .await
         })
     }
 

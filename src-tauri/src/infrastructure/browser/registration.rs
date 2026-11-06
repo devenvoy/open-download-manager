@@ -90,12 +90,18 @@ pub fn create_manifest(
         if !is_valid {
             return Err(AppError::browser("Copy the extension ID from your browser’s extensions page."));
         }
+        let mut origins = vec![
+            "chrome-extension://hlomaolpnkkbikjacplamegklgegpjbj/".to_owned(),
+            format!("chrome-extension://{extension_id}/"),
+        ];
+        origins.sort();
+        origins.dedup();
         Ok(NativeHostManifest {
             name: NATIVE_HOST_NAME.to_owned(),
             description: "Open Download Manager browser bridge".to_owned(),
             path: host_exe_path.to_string_lossy().into_owned(),
             host_type: "stdio".to_owned(),
-            allowed_origins: Some(vec![format!("chrome-extension://{extension_id}/")]),
+            allowed_origins: Some(origins),
             allowed_extensions: None,
         })
     }

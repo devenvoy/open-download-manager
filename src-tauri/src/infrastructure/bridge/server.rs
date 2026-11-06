@@ -322,6 +322,10 @@ async fn handle_bridge_connection(
         let review_only = !valid_browser.start_now && confirm;
         let queue_only = !valid_browser.start_now && confirm;
         let is_paired = valid_browser.audio_url.is_some();
+        let is_youtube = valid_browser.youtube_format.is_some()
+            || valid_browser.referer.as_ref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"))
+            || valid_browser.url.contains("youtube.com")
+            || valid_browser.url.contains("youtu.be");
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
             filename: valid_browser.filename,
@@ -332,9 +336,19 @@ async fn handle_bridge_connection(
             review_only: Some(review_only),
             scheduled_at: None,
             audio_url: valid_browser.audio_url,
-            kind: if is_paired { Some("paired".to_owned()) } else { None },
+            kind: if valid_browser.sabr.is_some() {
+                Some("sabr".to_owned())
+            } else if is_paired {
+                Some("paired".to_owned())
+            } else if is_youtube {
+                Some("youtube".to_owned())
+            } else {
+                None
+            },
             sabr: valid_browser.sabr,
             reuse_active: Some(true),
+            referer: valid_browser.referer,
+            youtube_format: valid_browser.youtube_format,
         };
 
         match transfer_service.add(download_req, &settings) {

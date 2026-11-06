@@ -253,6 +253,23 @@ pub async fn get_playlist_info(
 }
 
 #[tauri::command]
+pub async fn get_video_formats(
+    state: State<'_, AppState>,
+    url: String,
+) -> AppResult<Vec<crate::domain::media::YouTubeFormatChoice>> {
+    let ytdlp = state
+        .ytdlp
+        .clone()
+        .or_else(|| YtDlpTools::new().map(Arc::new))
+        .ok_or_else(|| {
+            AppError::download(
+                "yt-dlp is not available. Ensure yt-dlp is installed and available in PATH or the app tools directory.",
+            )
+        })?;
+    ytdlp.fetch_formats(&url).await
+}
+
+#[tauri::command]
 pub fn add_playlist_downloads(
     state: State<'_, AppState>,
     request: AddPlaylistDownloadsRequest,

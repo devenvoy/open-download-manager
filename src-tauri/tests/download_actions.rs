@@ -47,6 +47,8 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
     }
 }
 

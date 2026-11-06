@@ -49,6 +49,8 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             connections_progress: Vec::new(),
             audio_url: None,
             sabr: None,
+            referer: None,
+            youtube_format: None,
         });
     }
     records

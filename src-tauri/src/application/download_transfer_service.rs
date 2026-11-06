@@ -184,6 +184,8 @@ impl DownloadTransferService {
                             Some("sabr".to_owned())
                         } else if request.audio_url.is_some() {
                             Some("paired".to_owned())
+                        } else if crate::domain::media::youtube_url(url.url().as_str()).is_some() {
+                            Some("youtube".to_owned())
                         } else {
                             Some(HTTP_DOWNLOAD_KIND.to_owned())
                         }
@@ -202,6 +204,8 @@ impl DownloadTransferService {
                     connections_progress: Vec::new(),
                     audio_url: request.audio_url.clone(),
                     sabr: request.sabr.clone(),
+                    referer: request.referer.clone(),
+                    youtube_format: request.youtube_format.clone(),
                 }
             })
             .collect::<Vec<_>>();
@@ -271,13 +275,15 @@ impl DownloadTransferService {
                     error: None,
                     notice: Some(format!("Playlist item {} of {}.", idx + 1, total_count)),
                     estimated: NEW_DOWNLOAD_IS_ESTIMATED,
-                    kind: Some(HTTP_DOWNLOAD_KIND.to_owned()),
+                    kind: Some("youtube".to_owned()),
                     resumable: Some(NEW_DOWNLOAD_IS_RESUMABLE),
                     duration: None,
                     connections: settings.connections,
                     connections_progress: Vec::new(),
                     audio_url: None,
                     sabr: None,
+                    referer: None,
+                    youtube_format: None,
                 }
             })
             .collect();

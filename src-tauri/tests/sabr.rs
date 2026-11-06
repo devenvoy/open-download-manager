@@ -365,6 +365,8 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         kind: None,
         sabr: Some(sabr.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
     };
 
     let ids1 = transfer_service.add(req1, &settings).unwrap();
@@ -388,6 +390,8 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         kind: None,
         sabr: Some(sabr2.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
     };
 
     let ids2 = transfer_service.add(req2, &settings).unwrap();
@@ -409,6 +413,8 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         kind: None,
         sabr: Some(sabr3.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
     };
 
     let ids3 = transfer_service.add(req3, &settings).unwrap();
@@ -594,6 +600,8 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         connections_progress: Vec::new(),
         audio_url: None,
         sabr: Some(sabr_session),
+        referer: None,
+        youtube_format: None,
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -695,6 +703,8 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         connections_progress: Vec::new(),
         audio_url: None,
         sabr: Some(sabr_session),
+        referer: None,
+        youtube_format: None,
     };
 
     let (tx, rx) = watch::channel(None);

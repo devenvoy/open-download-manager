@@ -326,6 +326,12 @@
 							Select Videos…
 						</button>
 					</div>
+					<div id="video-banner" class="banner-notice" hidden>
+						<span>YouTube video detected!</span>
+						<button type="button" class="button" id="video-banner-btn">
+							Choose Quality / Format…
+						</button>
+					</div>
 					<div class="form-line">
 						<label for="download-category">Category:</label
 						><select id="download-category">
@@ -453,6 +459,41 @@
 						id="playlist-download-btn">
 						Download Selected
 					</button>
+				</div>
+			</form>
+		</dialog>
+
+		<dialog
+			id="video-formats-dialog"
+			aria-labelledby="video-formats-title">
+			<form id="video-formats-form">
+				<div class="dialog-title">
+					<strong id="video-formats-title">Choose Quality / Format</strong>
+					<button
+						type="button"
+						class="close-button"
+						data-close
+						aria-label="Close">
+						×
+					</button>
+				</div>
+				<div class="dialog-body">
+					<div class="playlist-header">
+						<div class="playlist-meta">
+							<h3 id="video-formats-name">YouTube Video</h3>
+							<p id="video-formats-details" class="field-help"></p>
+						</div>
+					</div>
+					<p id="video-formats-error" class="error-notice" hidden></p>
+					<div class="form-line">
+						<label for="video-format-select">Format:</label>
+						<select id="video-format-select" class="full-width" style="padding: 6px;"></select>
+					</div>
+				</div>
+				<div class="dialog-footer">
+					<span class="spacer"></span>
+					<button type="button" class="button" data-close>Cancel</button>
+					<button type="submit" class="button primary" id="video-formats-apply">Select Format</button>
 				</div>
 			</form>
 		</dialog>
