@@ -183,3 +183,17 @@ pub fn add_playlist_downloads(
         .download_transfer
         .add_playlist_downloads(request, &settings)
 }
+
+#[tauri::command]
+pub fn get_media_tools_status() -> AppResult<Vec<crate::domain::media_tools::MediaToolStatus>> {
+    let manager = crate::infrastructure::media::MediaToolsManager::default_service();
+    Ok(manager.status_all())
+}
+
+#[tauri::command]
+pub async fn install_media_tool(
+    tool: crate::domain::media_tools::MediaToolType,
+) -> AppResult<crate::domain::media_tools::MediaToolStatus> {
+    let manager = crate::infrastructure::media::MediaToolsManager::default_service();
+    manager.download_tool(tool).await
+}

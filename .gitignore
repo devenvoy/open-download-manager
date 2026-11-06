@@ -33,3 +33,5 @@ src-tauri/target/
 src-tauri/gen/
 .DS_Store
 issues/
+pr/
+.agents/

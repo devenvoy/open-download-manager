@@ -11,9 +11,9 @@ use presentation::{
     app_state::AppState,
     commands::{
         add_download, add_playlist_downloads, browser_setup_action, check_for_updates, download_action,
-        export_downloads_to_file, get_integration_info, get_playlist_info, import_downloads_from_file,
-        register_browser, remove_completed, review_download, show_about_dialog, snapshot,
-        update_settings,
+        export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
+        import_downloads_from_file, install_media_tool, register_browser, remove_completed,
+        review_download, show_about_dialog, snapshot, update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -203,7 +203,9 @@ pub fn run() {
             show_about_dialog,
             check_for_updates,
             get_playlist_info,
-            add_playlist_downloads
+            add_playlist_downloads,
+            get_media_tools_status,
+            install_media_tool
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

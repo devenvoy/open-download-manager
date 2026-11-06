@@ -11,5 +11,8 @@ pub use ffmpeg::FfmpegTools;
 pub use hls_executor::HlsDownloadExecutor;
 pub use paired_executor::PairedDownloadExecutor;
 pub use sabr_executor::SabrDownloadExecutor;
-pub use tools_manager::find_tool_path;
+pub use tools_manager::{
+    find_tool_path, BoxFuture, HttpToolDownloaderClient, MediaToolsManager, ToolDownloaderClient,
+    ToolPathResolver,
+};
 pub use ytdlp::YtDlpTools;

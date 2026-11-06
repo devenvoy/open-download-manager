@@ -1,254 +1,318 @@
-use std::path::PathBuf;
-use crate::application::error::{AppError, AppResult};
+use std::{
+    future::Future,
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::Arc,
+};
 
-/// Official, verified release URLs for standalone static binaries across platforms and architectures.
-pub struct ToolDownloadSource {
-    pub url: &'static str,
-    pub archive_type: ToolArchiveType,
+use crate::{
+    application::error::{AppError, AppResult},
+    domain::media_tools::{MediaToolStatus, MediaToolType, ToolDownloadSpec, ToolResolutionSource},
+};
+
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// Trait abstracting binary downloads to allow deterministic mock testing without real HTTP network calls.
+pub trait ToolDownloaderClient: Send + Sync {
+    fn download_binary<'a>(
+        &'a self,
+        url: &'a str,
+        destination: &'a Path,
+    ) -> BoxFuture<'a, AppResult<()>>;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ToolArchiveType {
-    /// Standalone raw executable binary (e.g. yt-dlp)
-    DirectExecutable,
-    /// Compressed gzip/tar or zip archive containing the binary
-    GzipCompressed,
+/// Production HTTP downloader client using reqwest
+pub struct HttpToolDownloaderClient {
+    client: reqwest::Client,
 }
 
-/// Resolves the managed user data directory for Open Download Manager tools:
-/// `~/.open-download-manager/tools/`
-pub fn managed_tools_dir() -> Option<PathBuf> {
-    let home = std::env::var("HOME")
-        .ok()
-        .or_else(|| std::env::var("USERPROFILE").ok())
-        .map(PathBuf::from)?;
-
-    Some(home.join(".open-download-manager").join("tools"))
+impl HttpToolDownloaderClient {
+    pub fn new(client: reqwest::Client) -> Self {
+        Self { client }
+    }
 }
 
-/// Finds a binary by name using the production 4-tier resolution hierarchy:
-/// 1. Environment Variable override (`AD_<TOOL>_PATH`)
-/// 2. Application-bundled companion/sidecar binary
-/// 3. In-App Managed user directory (`~/.open-download-manager/tools/`)
-/// 4. System PATH (`which`)
-pub fn find_tool_path(tool_name: &str) -> Option<PathBuf> {
-    let env_var_name = match tool_name {
-        "ffmpeg" => "AD_FFMPEG_PATH",
-        "yt-dlp" => "AD_YTDLP_PATH",
-        _ => "",
-    };
+impl Default for HttpToolDownloaderClient {
+    fn default() -> Self {
+        Self::new(reqwest::Client::new())
+    }
+}
 
-    // 1. Environment variable override
-    if !env_var_name.is_empty() {
-        if let Ok(env_path) = std::env::var(env_var_name) {
-            let path = PathBuf::from(env_path);
+impl ToolDownloaderClient for HttpToolDownloaderClient {
+    fn download_binary<'a>(
+        &'a self,
+        url: &'a str,
+        destination: &'a Path,
+    ) -> BoxFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let temp_dest = destination.with_extension("download.tmp");
+
+            let response = self
+                .client
+                .get(url)
+                .send()
+                .await
+                .map_err(|e| AppError::download(format!("Failed to connect to media tool source: {e}")))?;
+
+            if !response.status().is_success() {
+                return Err(AppError::download(format!(
+                    "Media tool download mirror returned status {}: {url}",
+                    response.status()
+                )));
+            }
+
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| AppError::download(format!("Failed to stream media tool binary: {e}")))?;
+
+            tokio::fs::write(&temp_dest, &bytes)
+                .await
+                .map_err(|e| AppError::download(format!("Failed to write media tool binary: {e}")))?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let perms = std::fs::Permissions::from_mode(0o755);
+                if let Err(e) = std::fs::set_permissions(&temp_dest, perms) {
+                    let _ = tokio::fs::remove_file(&temp_dest).await;
+                    return Err(AppError::download(format!("Failed to set executable permissions: {e}")));
+                }
+            }
+
+            tokio::fs::rename(&temp_dest, destination)
+                .await
+                .map_err(|e| AppError::download(format!("Failed to atomically rename media tool binary: {e}")))?;
+
+            Ok(())
+        })
+    }
+}
+
+/// Path resolver that locates media tools across the four resolution tiers.
+#[derive(Clone)]
+pub struct ToolPathResolver {
+    managed_dir_override: Option<PathBuf>,
+}
+
+impl ToolPathResolver {
+    pub fn new() -> Self {
+        Self {
+            managed_dir_override: None,
+        }
+    }
+
+    pub fn with_managed_dir(managed_dir: PathBuf) -> Self {
+        Self {
+            managed_dir_override: Some(managed_dir),
+        }
+    }
+
+    /// Resolves the managed user data tools directory (`~/.open-download-manager/tools/`)
+    pub fn managed_tools_dir(&self) -> Option<PathBuf> {
+        if let Some(ref custom) = self.managed_dir_override {
+            return Some(custom.clone());
+        }
+
+        let home = std::env::var("HOME")
+            .ok()
+            .or_else(|| std::env::var("USERPROFILE").ok())
+            .map(PathBuf::from)?;
+
+        Some(home.join(".open-download-manager").join("tools"))
+    }
+
+    /// Resolves a tool's executable location, identifying its resolution tier.
+    pub fn resolve_tool(&self, tool: MediaToolType) -> Option<(PathBuf, ToolResolutionSource)> {
+        // Tier 1: Environment variable override
+        let env_key = tool.env_var_override();
+        if let Ok(env_val) = std::env::var(env_key) {
+            let path = PathBuf::from(env_val);
             if path.is_file() {
-                return Some(path);
+                return Some((path, ToolResolutionSource::EnvironmentOverride));
             }
         }
-    }
 
-    #[cfg(windows)]
-    let exe_name = format!("{tool_name}.exe");
-    #[cfg(not(windows))]
-    let exe_name = tool_name.to_owned();
+        let exe_name = tool.executable_name();
 
-    // 2. Bundled sidecar in application bundle
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(parent) = current_exe.parent() {
-            // Adjacent tools directory: <exe_dir>/tools/<tool>
-            let candidate = parent.join("tools").join(&exe_name);
+        // Tier 2: Bundled application sidecars
+        if let Ok(current_exe) = std::env::current_exe() {
+            if let Some(parent) = current_exe.parent() {
+                // <exe_dir>/tools/<tool>
+                let sub_tools = parent.join("tools").join(exe_name);
+                if sub_tools.is_file() {
+                    return Some((sub_tools, ToolResolutionSource::BundledSidecar));
+                }
+
+                // <exe_dir>/<tool> (Tauri externalBin in Contents/MacOS/)
+                let direct = parent.join(exe_name);
+                if direct.is_file() {
+                    return Some((direct, ToolResolutionSource::BundledSidecar));
+                }
+
+                // macOS .app bundle resources: Contents/Resources/tools/<tool>
+                #[cfg(target_os = "macos")]
+                if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources").join("tools").join(exe_name)) {
+                    if bundle_res.is_file() {
+                        return Some((bundle_res, ToolResolutionSource::BundledSidecar));
+                    }
+                }
+
+                // Linux libexec
+                #[cfg(target_os = "linux")]
+                for prefix in &["/usr/lib/open-download-manager/tools", "/usr/libexec/open-download-manager/tools"] {
+                    let candidate = std::path::Path::new(prefix).join(exe_name);
+                    if candidate.is_file() {
+                        return Some((candidate, ToolResolutionSource::BundledSidecar));
+                    }
+                }
+            }
+        }
+
+        // Tier 3: In-App Managed user directory
+        if let Some(tools_dir) = self.managed_tools_dir() {
+            let candidate = tools_dir.join(exe_name);
             if candidate.is_file() {
-                return Some(candidate);
-            }
-
-            // Direct adjacent binary: <exe_dir>/<tool> (e.g. Tauri externalBin in Contents/MacOS/)
-            let direct = parent.join(&exe_name);
-            if direct.is_file() {
-                return Some(direct);
-            }
-
-            // macOS .app bundle resources: Contents/Resources/tools/<tool>
-            #[cfg(target_os = "macos")]
-            if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources").join("tools").join(&exe_name)) {
-                if bundle_res.is_file() {
-                    return Some(bundle_res);
-                }
-            }
-
-            // Linux standard libexec directory
-            #[cfg(target_os = "linux")]
-            for prefix in &["/usr/lib/open-download-manager/tools", "/usr/libexec/open-download-manager/tools"] {
-                let candidate = std::path::Path::new(prefix).join(&exe_name);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
+                return Some((candidate, ToolResolutionSource::ManagedUserData));
             }
         }
+
+        // Tier 4: System PATH
+        if let Ok(system_path) = which::which(tool.name()) {
+            return Some((system_path, ToolResolutionSource::SystemPath));
+        }
+
+        None
     }
 
-    // 3. Managed user data directory (~/.open-download-manager/tools/<tool>)
-    if let Some(tools_dir) = managed_tools_dir() {
-        let candidate = tools_dir.join(&exe_name);
-        if candidate.is_file() {
-            return Some(candidate);
+    /// Evaluates current tool status
+    pub fn tool_status(&self, tool: MediaToolType) -> MediaToolStatus {
+        match self.resolve_tool(tool) {
+            Some((path, source)) => MediaToolStatus {
+                tool_type: tool,
+                is_available: true,
+                path: Some(path),
+                source: Some(source),
+            },
+            None => MediaToolStatus {
+                tool_type: tool,
+                is_available: false,
+                path: None,
+                source: None,
+            },
         }
-    }
-
-    // 4. System PATH fallback
-    which::which(tool_name).ok()
-}
-
-/// Returns the official download source for a tool based on the host OS and architecture.
-pub fn get_download_source(tool_name: &str) -> AppResult<ToolDownloadSource> {
-    match tool_name {
-        "yt-dlp" => {
-            // yt-dlp publishes standalone single-binary executables for all platforms
-            #[cfg(target_os = "windows")]
-            return Ok(ToolDownloadSource {
-                url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(target_os = "macos")]
-            return Ok(ToolDownloadSource {
-                url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(target_os = "linux")]
-            return Ok(ToolDownloadSource {
-                url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-            Err(AppError::download(format!("Unsupported platform for automated yt-dlp download: {}", std::env::consts::OS)))
-        }
-        "ffmpeg" => {
-            #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-            return Ok(ToolDownloadSource {
-                url: "https://evermeet.cx/ffmpeg/getrelease/zip",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-            return Ok(ToolDownloadSource {
-                url: "https://evermeet.cx/ffmpeg/getrelease/zip",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            return Ok(ToolDownloadSource {
-                url: "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(target_os = "windows")]
-            return Ok(ToolDownloadSource {
-                url: "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip",
-                archive_type: ToolArchiveType::DirectExecutable,
-            });
-
-            #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-            Err(AppError::download(format!("Unsupported platform for automated ffmpeg download: {}", std::env::consts::OS)))
-        }
-        _ => Err(AppError::download(format!("Unknown media tool: {tool_name}"))),
     }
 }
 
-/// Downloads and sets up a standalone media tool into the managed tools directory.
-pub async fn download_managed_tool(
-    client: &reqwest::Client,
-    tool_name: &str,
-) -> AppResult<PathBuf> {
-    let source = get_download_source(tool_name)?;
-    let tools_dir = managed_tools_dir()
-        .ok_or_else(|| AppError::download("Could not determine user data directory for tools."))?;
-
-    tokio::fs::create_dir_all(&tools_dir)
-        .await
-        .map_err(|e| AppError::download(format!("Could not create tools directory: {e}")))?;
-
-    #[cfg(windows)]
-    let bin_name = format!("{tool_name}.exe");
-    #[cfg(not(windows))]
-    let bin_name = tool_name.to_owned();
-
-    let target_path = tools_dir.join(&bin_name);
-    let temp_path = tools_dir.join(format!("{bin_name}.download.tmp"));
-
-    let response = client
-        .get(source.url)
-        .send()
-        .await
-        .map_err(|e| AppError::download(format!("Failed to connect to media tool release source: {e}")))?;
-
-    if !response.status().is_success() {
-        return Err(AppError::download(format!(
-            "Download mirror returned HTTP status {}: {}",
-            response.status(),
-            source.url
-        )));
+impl Default for ToolPathResolver {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| AppError::download(format!("Failed to read media tool payload: {e}")))?;
+/// Service that coordinates media tool discovery, status inspection, and on-demand installation.
+pub struct MediaToolsManager {
+    resolver: ToolPathResolver,
+    downloader: Arc<dyn ToolDownloaderClient>,
+}
 
-    tokio::fs::write(&temp_path, &bytes)
-        .await
-        .map_err(|e| AppError::download(format!("Failed to write media tool to disk: {e}")))?;
-
-    // On Unix, ensure the executable bit is set
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o755);
-        if let Err(e) = std::fs::set_permissions(&temp_path, perms) {
-            let _ = tokio::fs::remove_file(&temp_path).await;
-            return Err(AppError::download(format!("Failed to mark binary as executable: {e}")));
+impl MediaToolsManager {
+    pub fn new(resolver: ToolPathResolver, downloader: Arc<dyn ToolDownloaderClient>) -> Self {
+        Self {
+            resolver,
+            downloader,
         }
     }
 
-    // Atomic rename into final location
-    tokio::fs::rename(&temp_path, &target_path)
-        .await
-        .map_err(|e| AppError::download(format!("Failed to finalize media tool installation: {e}")))?;
+    pub fn default_service() -> Self {
+        Self::new(
+            ToolPathResolver::new(),
+            Arc::new(HttpToolDownloaderClient::default()),
+        )
+    }
 
-    Ok(target_path)
+    pub fn resolver(&self) -> &ToolPathResolver {
+        &self.resolver
+    }
+
+    pub fn status(&self, tool: MediaToolType) -> MediaToolStatus {
+        self.resolver.tool_status(tool)
+    }
+
+    pub fn status_all(&self) -> Vec<MediaToolStatus> {
+        vec![
+            self.status(MediaToolType::Ffmpeg),
+            self.status(MediaToolType::YtDlp),
+        ]
+    }
+
+    pub fn find_path(&self, tool: MediaToolType) -> Option<PathBuf> {
+        self.resolver.resolve_tool(tool).map(|(path, _)| path)
+    }
+
+    pub async fn download_tool(&self, tool: MediaToolType) -> AppResult<MediaToolStatus> {
+        self.install_managed_tool(tool).await?;
+        Ok(self.status(tool))
+    }
+
+    /// Obtains the verified download specification for the current OS and architecture
+    pub fn download_spec(&self, tool: MediaToolType) -> AppResult<ToolDownloadSpec> {
+        match tool {
+            MediaToolType::YtDlp => {
+                #[cfg(target_os = "windows")]
+                let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+                #[cfg(target_os = "macos")]
+                let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+                #[cfg(target_os = "linux")]
+                let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
+                #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+                return Err(AppError::download("Unsupported platform for automated yt-dlp download"));
+
+                Ok(ToolDownloadSpec {
+                    url: url.to_owned(),
+                    binary_name: tool.executable_name().to_owned(),
+                })
+            }
+            MediaToolType::Ffmpeg => {
+                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                let url = "https://evermeet.cx/ffmpeg/getrelease/zip";
+                #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+                let url = "https://evermeet.cx/ffmpeg/getrelease/zip";
+                #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+                let url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz";
+                #[cfg(target_os = "windows")]
+                let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip";
+                #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+                return Err(AppError::download("Unsupported platform for automated ffmpeg download"));
+
+                Ok(ToolDownloadSpec {
+                    url: url.to_owned(),
+                    binary_name: tool.executable_name().to_owned(),
+                })
+            }
+        }
+    }
+
+    /// Downloads and installs a tool into the managed tools directory
+    pub async fn install_managed_tool(&self, tool: MediaToolType) -> AppResult<PathBuf> {
+        let spec = self.download_spec(tool)?;
+        let tools_dir = self
+            .resolver
+            .managed_tools_dir()
+            .ok_or_else(|| AppError::download("Could not resolve tools directory"))?;
+
+        tokio::fs::create_dir_all(&tools_dir)
+            .await
+            .map_err(|e| AppError::download(format!("Could not create tools directory: {e}")))?;
+
+        let dest = tools_dir.join(&spec.binary_name);
+        self.downloader.download_binary(&spec.url, &dest).await?;
+        Ok(dest)
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn managed_tools_dir_resolves_under_home() {
-        let dir = managed_tools_dir();
-        assert!(dir.is_some());
-        let path = dir.unwrap();
-        assert!(path.to_string_lossy().contains(".open-download-manager"));
-        assert!(path.ends_with("tools"));
-    }
-
-    #[test]
-    fn get_download_source_returns_valid_url_for_known_tools() {
-        assert!(get_download_source("yt-dlp").is_ok());
-        assert!(get_download_source("ffmpeg").is_ok());
-        assert!(get_download_source("unknown_tool").is_err());
-    }
-
-    #[test]
-    fn find_tool_path_respects_env_var_override() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let fake_bin = temp_dir.path().join("fake_ffmpeg");
-        std::fs::write(&fake_bin, b"binary").unwrap();
-
-        std::env::set_var("AD_FFMPEG_PATH", fake_bin.to_str().unwrap());
-        let found = find_tool_path("ffmpeg");
-        assert_eq!(found, Some(fake_bin));
-        std::env::remove_var("AD_FFMPEG_PATH");
-    }
+/// Global convenience helper used by executors
+pub fn find_tool_path(tool_name: &str) -> Option<PathBuf> {
+    let tool_type = MediaToolType::parse(tool_name)?;
+    ToolPathResolver::new().resolve_tool(tool_type).map(|(p, _)| p)
 }

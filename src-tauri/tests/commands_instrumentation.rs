@@ -25,7 +25,7 @@ use open_download_manager_lib::{
         app_state::AppState,
         commands::{
             add_download, browser_setup_action, download_action, get_integration_info,
-            register_browser, remove_completed, review_download, snapshot,
+            get_media_tools_status, register_browser, remove_completed, review_download, snapshot,
         },
     },
 };
@@ -430,4 +430,18 @@ async fn commands_integration_info_and_browser_setup_through_tauri_state() {
         "abcdefghijklmnopabcdefghijklmnop".to_owned(),
     ).await;
     assert!(reg_result.is_ok());
+}
+
+#[tokio::test]
+async fn commands_media_tools_status() {
+    let statuses = get_media_tools_status().expect("get_media_tools_status succeeds");
+    assert_eq!(statuses.len(), 2);
+    assert_eq!(
+        statuses[0].tool_type,
+        open_download_manager_lib::domain::media_tools::MediaToolType::Ffmpeg
+    );
+    assert_eq!(
+        statuses[1].tool_type,
+        open_download_manager_lib::domain::media_tools::MediaToolType::YtDlp
+    );
 }

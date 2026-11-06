@@ -311,3 +311,36 @@ test('playlist methods invoke get_playlist_info and add_playlist_downloads', asy
     }
   });
 });
+
+test('media tools methods invoke get_media_tools_status and install_media_tool', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        if (args[0] === 'get_media_tools_status') {
+          return [
+            { toolType: 'ffmpeg', isAvailable: true, path: '/usr/local/bin/ffmpeg', source: 'system-path' },
+            { toolType: 'yt-dlp', isAvailable: false, path: null, source: null }
+          ];
+        }
+        if (args[0] === 'install_media_tool') {
+          return { toolType: args[1].tool, isAvailable: true, path: '/home/user/.open-download-manager/tools/' + args[1].tool, source: 'managed-user-data' };
+        }
+        return null;
+      }
+    }
+  });
+
+  const statuses = await api.getMediaToolsStatus();
+  assert.equal(statuses.length, 2);
+  assert.equal(statuses[0].toolType, 'ffmpeg');
+  assert.equal(statuses[0].isAvailable, true);
+  assert.equal(calls[0][0], 'get_media_tools_status');
+
+  const installed = await api.installMediaTool('yt-dlp');
+  assert.equal(installed.toolType, 'yt-dlp');
+  assert.equal(installed.isAvailable, true);
+  assert.equal(calls[1][0], 'install_media_tool');
+  assert.deepEqual(calls[1][1], { tool: 'yt-dlp' });
+});
