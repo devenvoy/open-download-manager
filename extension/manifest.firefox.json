@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Open Download Manager Integration",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Send links and detected direct video downloads to Open Download Manager.",
   "permissions": ["nativeMessaging", "storage", "contextMenus", "webRequest", "downloads"],
   "host_permissions": ["http://*/*", "https://*/*"],

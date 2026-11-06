@@ -1,6 +1,6 @@
 [package]
 name = "open-download-manager"
-version = "0.1.2"
+version = "0.1.3"
 description = "Open Download Manager desktop application"
 authors = ["Open Download Manager contributors"]
 edition = "2021"
