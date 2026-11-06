@@ -83,7 +83,7 @@
             if(!choices.length){hint.textContent='No complete formats detected for this video yet. Play it briefly, then try again.';return;}
             choices.forEach((item,index)=>{
               const row=document.createElement('button');row.className='row';row.type='button';row.disabled=item.unsupported;
-              row.title=item.reason||'';
+              row.title=globalThis.odmSafeTooltip(item.reason);
               const format=item.format||(/\.m3u8(?:[?#]|$)/i.test(item.url)?'HLS':/\.(mp4|webm|mp3|m4a|mov)(?:[?#]|$)/i.exec(item.url)?.[1]?.toUpperCase()||'Media');
               const title = item.asset ? `Video ${item.asset}` : item.title || document.title || 'Video';
               row.textContent = `${index+1}. ${item.quality || format} · ${format} · ${item.audioState}${item.bitrate ? ' · '+Math.round(item.bitrate/1000)+' kbps' : ''} — ${title}`;
