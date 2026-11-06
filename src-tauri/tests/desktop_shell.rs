@@ -106,3 +106,30 @@ fn tray_show_main_window_helper_handles_mock_app() {
     // When main window does not exist in mock, show_main_window does not panic
     show_main_window(&app.handle());
 }
+
+#[test]
+fn test_macos_and_linux_autostart_sync_in_sandbox() {
+    let sandbox = temporary_directory();
+
+    // 1. macOS LaunchAgent
+    assert!(open_download_manager_lib::infrastructure::autostart::sync_autostart_macos(true, &sandbox).is_ok());
+    let plist = sandbox.join("Library/LaunchAgents/com.open.downloadmanager.plist");
+    assert!(plist.exists());
+    let plist_content = std::fs::read_to_string(&plist).unwrap();
+    assert!(plist_content.contains("com.open.downloadmanager"));
+    assert!(plist_content.contains("--background"));
+
+    assert!(open_download_manager_lib::infrastructure::autostart::sync_autostart_macos(false, &sandbox).is_ok());
+    assert!(!plist.exists());
+
+    // 2. Linux XDG Autostart
+    assert!(open_download_manager_lib::infrastructure::autostart::sync_autostart_linux(true, &sandbox).is_ok());
+    let desktop = sandbox.join(".config/autostart/open-download-manager.desktop");
+    assert!(desktop.exists());
+    let desktop_content = std::fs::read_to_string(&desktop).unwrap();
+    assert!(desktop_content.contains("[Desktop Entry]"));
+    assert!(desktop_content.contains("--background"));
+
+    assert!(open_download_manager_lib::infrastructure::autostart::sync_autostart_linux(false, &sandbox).is_ok());
+    assert!(!desktop.exists());
+}

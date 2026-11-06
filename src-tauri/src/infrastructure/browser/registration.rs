@@ -101,6 +101,36 @@ pub fn create_manifest(
     }
 }
 
+/// Resolves the OS-specific native messaging hosts directory for a given browser
+pub fn browser_native_messaging_dir(browser: BrowserType, home: &Path) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        let app_support = home.join("Library/Application Support");
+        match browser {
+            BrowserType::Chrome => app_support.join("Google/Chrome/NativeMessagingHosts"),
+            BrowserType::Edge => app_support.join("Microsoft Edge/NativeMessagingHosts"),
+            BrowserType::Brave => app_support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+            BrowserType::Opera => app_support.join("com.operasoftware.Opera/NativeMessagingHosts"),
+            BrowserType::Firefox => app_support.join("Mozilla/NativeMessagingHosts"),
+        }
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        match browser {
+            BrowserType::Firefox => home.join(".mozilla/native-messaging-hosts"),
+            BrowserType::Chrome => home.join(".config/google-chrome/NativeMessagingHosts"),
+            BrowserType::Edge => home.join(".config/microsoft-edge/NativeMessagingHosts"),
+            BrowserType::Brave => home.join(".config/BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+            BrowserType::Opera => home.join(".config/opera/NativeMessagingHosts"),
+        }
+    }
+    #[cfg(windows)]
+    {
+        let _ = browser;
+        home.to_path_buf()
+    }
+}
+
 pub async fn register_browser_manifest(
     browser: BrowserType,
     extension_id: &str,
@@ -146,31 +176,10 @@ pub async fn register_browser_manifest(
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
         if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            let app_support = home.join("Library/Application Support");
-            let nm_dir = match browser {
-                BrowserType::Chrome => app_support.join("Google/Chrome/NativeMessagingHosts"),
-                BrowserType::Edge => app_support.join("Microsoft Edge/NativeMessagingHosts"),
-                BrowserType::Brave => app_support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
-                BrowserType::Opera => app_support.join("com.operasoftware.Opera/NativeMessagingHosts"),
-                BrowserType::Firefox => app_support.join("Mozilla/NativeMessagingHosts"),
-            };
-            if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
-                let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
-                let _ = tokio::fs::write(&target_file, &json_content).await;
-            }
-        }
-    }
-
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    {
-        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            let nm_dir = match browser {
-                BrowserType::Firefox => home.join(".mozilla/native-messaging-hosts"),
-                _ => home.join(".config/google-chrome/NativeMessagingHosts"),
-            };
+            let nm_dir = browser_native_messaging_dir(browser, &home);
             if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
                 let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
                 let _ = tokio::fs::write(&target_file, &json_content).await;
@@ -205,28 +214,10 @@ pub async fn unregister_browser_manifest(
             .await;
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
         if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            let app_support = home.join("Library/Application Support");
-            let nm_dir = match browser {
-                BrowserType::Chrome => app_support.join("Google/Chrome/NativeMessagingHosts"),
-                BrowserType::Edge => app_support.join("Microsoft Edge/NativeMessagingHosts"),
-                BrowserType::Brave => app_support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
-                BrowserType::Opera => app_support.join("com.operasoftware.Opera/NativeMessagingHosts"),
-                BrowserType::Firefox => app_support.join("Mozilla/NativeMessagingHosts"),
-            };
-            let _ = tokio::fs::remove_file(nm_dir.join(format!("{NATIVE_HOST_NAME}.json"))).await;
-        }
-    }
-
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    {
-        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            let nm_dir = match browser {
-                BrowserType::Firefox => home.join(".mozilla/native-messaging-hosts"),
-                _ => home.join(".config/google-chrome/NativeMessagingHosts"),
-            };
+            let nm_dir = browser_native_messaging_dir(browser, &home);
             let _ = tokio::fs::remove_file(nm_dir.join(format!("{NATIVE_HOST_NAME}.json"))).await;
         }
     }

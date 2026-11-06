@@ -20,7 +20,7 @@ use open_download_manager_lib::{
     infrastructure::{
         bridge::LoopbackBridge,
         browser::{
-            create_manifest,
+            browser_native_messaging_dir, create_manifest,
             scanner::{inspect_firefox_profile, inspect_profile, FIREFOX_EXTENSION_ID},
             BrowserType, NATIVE_HOST_NAME,
         },
@@ -125,6 +125,34 @@ fn native_host_manifest_structures_match_browser_specifications() {
     // Invalid extension ID checks
     assert!(create_manifest(BrowserType::Chrome, "invalid-short-id", &dummy_exe).is_err());
     assert!(create_manifest(BrowserType::Firefox, "", &dummy_exe).is_err());
+}
+
+#[test]
+fn test_browser_native_messaging_directories_resolve() {
+    let home = PathBuf::from("/mock/home/user");
+    let chrome_dir = browser_native_messaging_dir(BrowserType::Chrome, &home);
+    let edge_dir = browser_native_messaging_dir(BrowserType::Edge, &home);
+    let brave_dir = browser_native_messaging_dir(BrowserType::Brave, &home);
+    let opera_dir = browser_native_messaging_dir(BrowserType::Opera, &home);
+    let firefox_dir = browser_native_messaging_dir(BrowserType::Firefox, &home);
+
+    #[cfg(target_os = "macos")]
+    {
+        assert_eq!(chrome_dir, home.join("Library/Application Support/Google/Chrome/NativeMessagingHosts"));
+        assert_eq!(edge_dir, home.join("Library/Application Support/Microsoft Edge/NativeMessagingHosts"));
+        assert_eq!(brave_dir, home.join("Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"));
+        assert_eq!(opera_dir, home.join("Library/Application Support/com.operasoftware.Opera/NativeMessagingHosts"));
+        assert_eq!(firefox_dir, home.join("Library/Application Support/Mozilla/NativeMessagingHosts"));
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        assert_eq!(chrome_dir, home.join(".config/google-chrome/NativeMessagingHosts"));
+        assert_eq!(edge_dir, home.join(".config/microsoft-edge/NativeMessagingHosts"));
+        assert_eq!(brave_dir, home.join(".config/BraveSoftware/Brave-Browser/NativeMessagingHosts"));
+        assert_eq!(opera_dir, home.join(".config/opera/NativeMessagingHosts"));
+        assert_eq!(firefox_dir, home.join(".mozilla/native-messaging-hosts"));
+    }
 }
 
 #[tokio::test]
