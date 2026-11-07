@@ -18,7 +18,9 @@ use crate::{
         error::{AppError, AppResult},
     },
     domain::{
-        download::{sanitize_filename, DownloadRecord},
+        download::{
+            sanitize_filename, DestinationAllocator, DownloadRecord, FileConflictPolicy,
+        },
         settings::ProxySettings,
     },
 };
@@ -39,6 +41,7 @@ use validator::SegmentValidator;
 pub struct HttpDownloadExecutor {
     client: Arc<RwLock<reqwest::Client>>,
     segment_validators: Arc<Mutex<HashMap<String, SegmentValidator>>>,
+    allocator: DestinationAllocator,
 }
 
 impl HttpDownloadExecutor {
@@ -51,6 +54,7 @@ impl HttpDownloadExecutor {
         Self {
             client: Arc::new(RwLock::new(client)),
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
+            allocator: DestinationAllocator::new(),
         }
     }
 
@@ -58,7 +62,23 @@ impl HttpDownloadExecutor {
         Self {
             client,
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
+            allocator: DestinationAllocator::new(),
         }
+    }
+
+    pub fn with_shared_client_and_allocator(
+        client: Arc<RwLock<reqwest::Client>>,
+        allocator: DestinationAllocator,
+    ) -> Self {
+        Self {
+            client,
+            segment_validators: Arc::new(Mutex::new(HashMap::new())),
+            allocator,
+        }
+    }
+
+    pub fn allocator(&self) -> DestinationAllocator {
+        self.allocator.clone()
     }
 
     pub fn client(&self) -> reqwest::Client {
@@ -90,15 +110,53 @@ impl HttpDownloadExecutor {
         if filename.is_empty() {
             return Err(AppError::download("The download file name is invalid."));
         }
-        let mut destination = directory.join(filename);
+        let mut destination = directory.join(&filename);
         fs::create_dir_all(&directory).await.map_err(|error| {
             AppError::download(format!("Could not create the download folder: {error}"))
         })?;
-        if fs::try_exists(&destination).await.map_err(|error| {
-            AppError::download(format!("Could not check the destination file: {error}"))
-        })? {
-            return Err(AppError::download("A file with that name already exists."));
+
+        if destination.is_dir() {
+            return Err(AppError::download(
+                "The destination path is an existing directory.",
+            ));
         }
+
+        let destination_exists = fs::try_exists(&destination).await.map_err(|error| {
+            AppError::download(format!("Could not check the destination file: {error}"))
+        })?;
+        let is_claimed = self.allocator.is_claimed(&destination);
+
+        if destination_exists || is_claimed {
+            match download.conflict_policy {
+                Some(FileConflictPolicy::Overwrite) => {
+                    // Safe overwrite: Destination remains untouched on disk while downloading.
+                    // Atomic replacement happens only in assembler::finalize after full validation.
+                }
+                Some(FileConflictPolicy::Rename) => {
+                    destination = self
+                        .allocator
+                        .allocate_conflict_free_destination(&directory, &filename);
+                }
+                Some(FileConflictPolicy::Skip) => {
+                    return Err(AppError {
+                        code: "download_skipped",
+                        message: "Download skipped because destination file already exists."
+                            .to_owned(),
+                    });
+                }
+                Some(FileConflictPolicy::Cancel) => {
+                    return Err(AppError {
+                        code: "download_cancelled",
+                        message: "Download cancelled due to destination conflict.".to_owned(),
+                    });
+                }
+                None | Some(FileConflictPolicy::Ask) => {
+                    return Err(AppError::conflict("A file with that name already exists."));
+                }
+            }
+        }
+
+        let _claim_guard = self.allocator.claim_guard(destination.clone());
 
         let mut metrics = crate::infrastructure::metrics::TransferMetrics::new(
             &download.id,
@@ -127,7 +185,14 @@ impl HttpDownloadExecutor {
                         .and_then(|s| s.to_str())
                         .unwrap_or("");
                     if crate::domain::download::is_generic_filename(current_stem) {
-                        destination = destination.with_file_name(better_name);
+                        let sanitized_better = sanitize_filename(&better_name);
+                        if !sanitized_better.is_empty() {
+                            if download.conflict_policy == Some(FileConflictPolicy::Rename) {
+                                destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
+                            } else {
+                                destination = directory.join(sanitized_better);
+                            }
+                        }
                     }
                 }
                 metrics.range_supported = true;

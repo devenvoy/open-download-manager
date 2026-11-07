@@ -13,4 +13,6 @@ pub struct ReviewDownloadRequest {
     #[serde(default)]
     pub queue_only: Option<bool>,
     pub scheduled_at: Option<String>,
+    #[serde(default)]
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
 }

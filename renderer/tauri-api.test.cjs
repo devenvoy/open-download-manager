@@ -222,6 +222,23 @@ test('review invokes review_download Rust command with request', async () => {
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ request }));
 });
 
+test('checkDestinationConflict invokes check_destination_conflict Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { type: 'resolved', path: '/downloads/test.zip', policy: 'overwrite' };
+      }
+    }
+  });
+
+  const result = await api.checkDestinationConflict({ directory: '/downloads', filename: 'test.zip' });
+  assert.deepEqual(result, { type: 'resolved', path: '/downloads/test.zip', policy: 'overwrite' });
+  assert.equal(calls[0][0], 'check_destination_conflict');
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ directory: '/downloads', filename: 'test.zip' }));
+});
+
 test('integration invokes get_integration_info Rust command', async () => {
   const calls = [];
   const api = loadApi({

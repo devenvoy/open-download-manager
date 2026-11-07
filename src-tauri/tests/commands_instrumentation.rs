@@ -386,6 +386,7 @@ async fn commands_review_download_through_tauri_state() {
         description: Some("Reviewed via command".to_owned()),
         queue_only: Some(true),
         scheduled_at: None,
+        conflict_policy: None,
     };
 
     let result = review_download(state.clone(), rev_req).unwrap();

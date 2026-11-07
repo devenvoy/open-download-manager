@@ -54,6 +54,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             youtube_format: None,
             etag: None,
             validator: None,
+            conflict_policy: None,
         });
     }
     records

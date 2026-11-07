@@ -70,6 +70,8 @@ pub struct DownloadRecord {
     pub etag: Option<String>,
     #[serde(default, deserialize_with = "super::validator::deserialize_optional_transfer_validator")]
     pub validator: Option<super::validator::TransferValidator>,
+    #[serde(default)]
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
 }
@@ -163,6 +165,7 @@ impl DownloadRecord {
                 _ => None,
             }),
             validator: self.validator.as_ref(),
+            conflict_policy: self.conflict_policy,
         }
     }
 }
@@ -198,4 +201,5 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub transfer_kind: Option<&'a str>,
     pub etag: Option<&'a str>,
     pub validator: Option<&'a super::validator::TransferValidator>,
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
 }

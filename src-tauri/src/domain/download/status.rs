@@ -15,6 +15,8 @@ pub enum DownloadStatus {
     Completed,
     #[serde(rename = "error", alias = "failed")]
     Failed,
+    #[serde(rename = "skipped")]
+    Skipped,
 }
 
 impl DownloadStatus {

@@ -64,6 +64,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             youtube_format: None,
             etag: None,
             validator: None,
+            conflict_policy: None,
         },
         DownloadRecord {
             id: "2".to_string(),
@@ -96,6 +97,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             youtube_format: None,
             etag: None,
             validator: None,
+            conflict_policy: None,
         },
         DownloadRecord {
             id: "3".to_string(),
@@ -128,6 +130,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             youtube_format: None,
             etag: None,
             validator: None,
+            conflict_policy: None,
         },
     ];
 
@@ -176,6 +179,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
         youtube_format: None,
         etag: None,
         validator: None,
+        conflict_policy: None,
     }];
     let loaded_again = provider.load(&extra);
     assert!(!loaded_again, "already loaded extension should not reload");

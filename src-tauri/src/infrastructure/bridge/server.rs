@@ -369,6 +369,7 @@ async fn handle_bridge_connection(
             reuse_active: Some(true),
             referer,
             youtube_format: valid_browser.youtube_format,
+            conflict_policy: None,
         };
 
         match transfer_service.add(download_req, &settings) {

@@ -1,5 +1,6 @@
 mod action;
 mod address;
+mod conflict;
 mod download_policy;
 mod filename;
 mod protocol;
@@ -12,6 +13,10 @@ mod validator;
 
 pub use action::DownloadAction;
 pub use address::DownloadAddress;
+pub use conflict::{
+    generate_indexed_filename, split_filename_for_rename, ClaimGuard, ConflictResolutionOutcome,
+    DestinationAllocator, FileConflictPolicy,
+};
 pub use filename::{
     filename_from_url, is_generic_filename, parse_content_disposition_filename,
     redact_download_url, sanitize_filename,
