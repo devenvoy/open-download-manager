@@ -59,7 +59,7 @@ impl PairedDownloadExecutor {
         &self,
         download: DownloadRecord,
         progress_handler: DownloadProgressHandler,
-        mut control: DownloadControl,
+        control: DownloadControl,
         rate_limiter: Arc<DownloadRateLimiter>,
     ) -> AppResult<DownloadResult> {
         let audio_url = download.audio_url.clone().ok_or_else(|| {
@@ -67,29 +67,24 @@ impl PairedDownloadExecutor {
         })?;
         let video_url = download.url.clone();
 
-        let is_real_youtube = video_url.contains("googlevideo.com")
-            || audio_url.contains("googlevideo.com")
-            || video_url.contains("youtube.com")
-            || video_url.contains("youtu.be")
-            || download.referer.as_deref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"));
-
-        if is_real_youtube {
-            let ytdlp_tool = self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new);
-            if let Some(ytdlp) = ytdlp_tool {
+        match self
+            .native_paired(
+                &download,
+                &video_url,
+                &audio_url,
+                progress_handler.clone(),
+                control.clone(),
+                rate_limiter.clone(),
+            )
+            .await
+        {
+            Ok(res) => Ok(res),
+            Err(err) => {
                 let canonical_url = download
                     .referer
                     .as_deref()
                     .and_then(youtube_url)
                     .or_else(|| youtube_url(&video_url))
-                    .or_else(|| {
-                        download.sabr.as_ref().and_then(|s| {
-                            if !s.video_id.is_empty() {
-                                Some(format!("https://www.youtube.com/watch?v={}", s.video_id))
-                            } else {
-                                None
-                            }
-                        })
-                    })
                     .or_else(|| {
                         if let Ok(parsed) = url::Url::parse(&video_url) {
                             if let Some((_, docid)) = parsed.query_pairs().find(|(k, _)| k == "docid" || k == "id") {
@@ -102,7 +97,10 @@ impl PairedDownloadExecutor {
                         None
                     });
 
-                if let Some(target_url) = canonical_url {
+                if let (Some(ytdlp), Some(target_url)) = (
+                    self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new),
+                    canonical_url,
+                ) {
                     let directory = download
                         .directory
                         .as_ref()
@@ -143,23 +141,28 @@ impl PairedDownloadExecutor {
                         .download(
                             &target_url,
                             format_spec.as_deref(),
+                            download.referer.as_deref(),
                             &destination,
                             progress_handler,
                             control,
                             speed_limit,
                         )
                         .await;
-                } else {
-                    return Err(AppError::download(
-                        "Could not resolve canonical YouTube watch URL for this media stream. Please open the video page directly to download.",
-                    ));
                 }
-            } else {
-                return Err(AppError::download(
-                    "yt-dlp is required to download YouTube streams. Please install it in Settings > Tools.",
-                ));
+                Err(err)
             }
         }
+    }
+
+    async fn native_paired(
+        &self,
+        download: &DownloadRecord,
+        video_url: &str,
+        audio_url: &str,
+        progress_handler: DownloadProgressHandler,
+        mut control: DownloadControl,
+        rate_limiter: Arc<DownloadRateLimiter>,
+    ) -> AppResult<DownloadResult> {
 
         let directory = download
             .directory
@@ -172,17 +175,55 @@ impl PairedDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not create parts directory: {e}")))?;
 
-        let urls = [video_url, audio_url];
+        let urls = [video_url.to_string(), audio_url.to_string()];
 
         // Probe both URLs to discover Content-Length if available
         let mut totals: [Option<u64>; 2] = [None, None];
         for (i, url) in urls.iter().enumerate() {
-            if let Ok(resp) = self.client().head(url).send().await {
-                if resp.status().is_success() {
-                    totals[i] = resp.content_length();
+            if let Ok(parsed) = url::Url::parse(url) {
+                if let Some((_, clen)) = parsed.query_pairs().find(|(k, _)| k == "clen") {
+                    if let Ok(len) = clen.parse::<u64>() {
+                        totals[i] = Some(len);
+                    }
+                }
+            }
+            if totals[i].is_none() {
+                if let Ok(resp) = self.client().head(url.clone()).send().await {
+                    if resp.status().is_success() {
+                        totals[i] = resp.content_length();
+                    }
                 }
             }
         }
+
+        let initial_total = match (totals[0], totals[1]) {
+            (Some(v), Some(a)) => Some(v + a),
+            (Some(v), None) => Some(v),
+            (None, Some(a)) => Some(a),
+            _ => None,
+        };
+        progress_handler(DownloadProgress {
+            downloaded: 0,
+            total: initial_total,
+            bytes_per_second: 0,
+            connections_progress: vec![
+                DownloadSegmentProgress {
+                    start: 0,
+                    end: totals[0].unwrap_or(0),
+                    downloaded: 0,
+                    total: totals[0].unwrap_or(0),
+                    status: "connecting".to_string(),
+                },
+                DownloadSegmentProgress {
+                    start: 0,
+                    end: totals[1].unwrap_or(0),
+                    downloaded: 0,
+                    total: totals[1].unwrap_or(0),
+                    status: "connecting".to_string(),
+                },
+            ],
+            notice: None,
+        });
 
         let state = Arc::new(Mutex::new(PairedState {
             downloaded: [0, 0],
@@ -207,7 +248,7 @@ impl PairedDownloadExecutor {
                 let final_part = parts_dir.join(format!("{index}.part"));
 
                 let mut response = client
-                    .get(&url)
+                    .get(url)
                     .send()
                     .await
                     .map_err(|e| AppError::download(format!("Could not connect to track {index}: {e}")))?;
@@ -292,6 +333,7 @@ impl PairedDownloadExecutor {
                             total,
                             bytes_per_second: speed,
                             connections_progress: segs,
+                            notice: None,
                         });
                     }
                 }

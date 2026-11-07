@@ -12,3 +12,15 @@ test('choices keep only the matching tweet and deduplicate paired audio',()=>{
   assert.equal(choices.filter(i=>i.format==='MP3').length,1);
   assert.equal(choices.filter(i=>i.audioState==='Video + audio').length,2);
 });
+test('extensionless webm media keeps its detected format and quality',()=>{
+  const choices=mediaChoices([{
+    url:'https://cdn.example/stream?signature=hidden',
+    mime:'video/webm; codecs="vp09.00.10.08"',
+    quality:'720p',
+    media:true
+  }]);
+  assert.equal(choices.length,1);
+  assert.equal(choices[0].format,'WEBM');
+  assert.equal(choices[0].outputFormat,'webm');
+  assert.equal(choices[0].quality,'720p');
+});

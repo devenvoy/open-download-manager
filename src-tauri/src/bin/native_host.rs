@@ -33,6 +33,7 @@ async fn run() -> Result<(), String> {
     let endpoint = match action {
         "formats" => "/formats",
         "download" => "/downloads",
+        "refresh" => "/downloads/refresh",
         _ => return Err("Unsupported native action.".to_owned()),
     };
 

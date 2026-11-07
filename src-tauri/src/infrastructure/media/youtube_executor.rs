@@ -41,7 +41,7 @@ impl YoutubeDownloadExecutor {
     ) -> AppResult<DownloadResult> {
         let ytdlp = self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new).ok_or_else(|| {
             AppError::download(
-                "yt-dlp is required to download YouTube streams. Please install it from Settings > Tools.",
+                "yt-dlp is required to download extracted video streams. Please install it from Settings > Tools.",
             )
         })?;
 
@@ -90,10 +90,11 @@ impl YoutubeDownloadExecutor {
             .map(PathBuf::from)
             .ok_or_else(|| AppError::download("Download directory is not set."))?;
 
-        let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
-        let destination_filename = if is_mp3 {
-            download.filename.clone()
-        } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
+        let filename_lower = download.filename.to_ascii_lowercase();
+        let destination_filename = if filename_lower.ends_with(".mp3")
+            || filename_lower.ends_with(".webm")
+            || filename_lower.ends_with(".mp4")
+        {
             download.filename.clone()
         } else {
             let base = Path::new(&download.filename)
@@ -110,6 +111,7 @@ impl YoutubeDownloadExecutor {
             .download(
                 &target_url,
                 download.youtube_format.as_deref(),
+                download.referer.as_deref(),
                 &destination,
                 progress_handler,
                 control,

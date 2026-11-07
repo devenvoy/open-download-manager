@@ -84,7 +84,7 @@ function makeVideo(rect, harness) {
 }
 
 function harness(videos, listResponse) {
-  const h = { activeElement: null, hosts: [], videos, rafQueue: [] };
+  const h = { activeElement: null, hosts: [], videos, shadowHosts: [], rafQueue: [] };
   const runtime = {
     id: 'test-extension',
     sendMessage(message) {
@@ -111,7 +111,11 @@ function harness(videos, listResponse) {
     title: 'Videos',
     documentElement,
     fullscreenElement: null,
-    querySelectorAll(selector) { return selector === 'video' ? h.videos : []; },
+    querySelectorAll(selector) {
+      if (selector === 'video') return h.videos;
+      if (selector === '*') return h.shadowHosts;
+      return [];
+    },
     createElement(tag) { const el = makeEl(tag); el.ownerHarness = h; return el; },
     addEventListener(name, fn) { (documentListeners[name] ||= []).push(fn); },
   };
@@ -134,7 +138,8 @@ function harness(videos, listResponse) {
   h.windowListeners = windowListeners;
   // The document-level mutation observer watches documentElement with subtree.
   h.mutationObserver = h.observers.find(observer => observer instanceof MutationObserverStub && observer.options && observer.options.subtree);
-  h.triggerMutation = () => { h.mutationObserver.fn(); for (const fn of h.rafQueue.splice(0)) fn(); };
+  h.flushFrame = () => { for (const fn of h.rafQueue.splice(0)) fn(); };
+  h.triggerMutation = () => { h.mutationObserver.fn(); h.flushFrame(); };
   h.scroll = event => { for (const fn of windowListeners.scroll || []) fn(event); };
   h.resize = () => { for (const fn of windowListeners.resize || []) fn(); };
   return h;
@@ -183,6 +188,41 @@ test('SPA navigation removes the panel of a detached video and panels new videos
   h.triggerMutation();
   assert.equal(h.hosts.length, 2, 'scan picks up the new video');
   assert.equal(h.hosts[1].style.display, 'block');
+});
+
+test('videos in open shadow roots are discovered, including after dynamic insertion', () => {
+  const h = harness([], ITEMS);
+  const shadowRoot = {
+    videos: [],
+    querySelectorAll(selector) {
+      if (selector === 'video') return this.videos;
+      return [];
+    },
+  };
+  h.shadowHosts.push({ shadowRoot });
+  h.triggerMutation();
+  assert.equal(h.hosts.length, 0, 'empty shadow root has no player panel');
+
+  shadowRoot.videos.push(makeVideo({ ...RECT }));
+  const observer = h.observers.find(value => value.target === shadowRoot);
+  assert.ok(observer, 'shadow root is observed for later changes');
+  observer.fn();
+  h.flushFrame();
+  assert.equal(h.hosts.length, 1, 'new shadow-root video gets a player panel');
+});
+
+test('unverified media links trigger extractor discovery and remain available on fallback', async () => {
+  const video = makeVideo({ ...RECT });
+  const h = harness([video], {
+    ok: true,
+    items: [{ url: video.currentSrc, title: 'Clip', media: true }],
+  });
+  const host = h.hosts[0];
+  await host.shadow.download.listeners.click[0]({ preventDefault() {}, stopPropagation() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(h.sent.includes('extractFormats'), 'generic extractor is queried for unverified media');
+  assert.equal(host.shadow.querySelector('.chooser').querySelectorAll('.row').length, 1);
+  assert.match(host.shadow.querySelector('.chooser').children[0].textContent, /showing detected media links/i);
 });
 
 test('scrolling inside the chooser keeps it open; page scrolling closes it', async () => {

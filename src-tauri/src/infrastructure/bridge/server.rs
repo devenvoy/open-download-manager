@@ -287,7 +287,7 @@ async fn handle_bridge_connection(
         };
 
         if let Some(tools) = ytdlp {
-            match tools.fetch_formats(&parsed.url).await {
+            match tools.fetch_site_formats(&parsed.url).await {
                 Ok(items) => {
                     let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": items})).await;
                 }
@@ -301,7 +301,7 @@ async fn handle_bridge_connection(
         return;
     }
 
-    if path == "/downloads" {
+    if path == "/downloads" || path == "/downloads/refresh" {
         let msg: BrowserIncomingMessage = match serde_json::from_slice(&body) {
             Ok(m) => m,
             Err(e) => {
@@ -318,19 +318,41 @@ async fn handle_bridge_connection(
             }
         };
 
+        if valid_browser.action == "refresh" || path == "/downloads/refresh" {
+            if let Some(ref target_id) = valid_browser.download_id {
+                let norm_sabr = valid_browser.sabr.as_ref().and_then(|s| crate::domain::media::sabr::normalize_sabr_session(s).ok());
+                match transfer_service.refresh_download(
+                    target_id,
+                    Some(valid_browser.url.clone()),
+                    valid_browser.audio_url.clone(),
+                    norm_sabr,
+                ) {
+                    Ok(id) => {
+                        let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "id": id})).await;
+                    }
+                    Err(e) => {
+                        let _ = send_json_response(socket, 400, &serde_json::json!({"error": e.message})).await;
+                    }
+                }
+                return;
+            }
+        }
+
         let confirm = settings.confirm_browser_downloads;
         let review_only = !valid_browser.start_now && confirm;
         let queue_only = !valid_browser.start_now && confirm;
         let is_paired = valid_browser.audio_url.is_some();
-        let is_youtube = valid_browser.youtube_format.is_some()
-            || valid_browser.referer.as_ref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"))
-            || valid_browser.url.contains("youtube.com")
-            || valid_browser.url.contains("youtu.be")
-            || valid_browser.url.contains("googlevideo.com");
-        let primary_url = if is_youtube && valid_browser.canonical_url.is_some() {
-            valid_browser.canonical_url.clone().unwrap()
+        let is_raw_youtube_page = crate::domain::media::youtube_url(&valid_browser.url).is_some();
+        let primary_url = valid_browser.url.clone();
+        let referer = valid_browser.canonical_url.clone().or(valid_browser.referer.clone());
+        let kind = if valid_browser.sabr.is_some() {
+            Some("sabr".to_owned())
+        } else if is_paired {
+            Some("paired".to_owned())
+        } else if is_raw_youtube_page {
+            Some("youtube".to_owned())
         } else {
-            valid_browser.url.clone()
+            None
         };
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![primary_url]),
@@ -342,18 +364,10 @@ async fn handle_bridge_connection(
             review_only: Some(review_only),
             scheduled_at: None,
             audio_url: valid_browser.audio_url,
-            kind: if valid_browser.sabr.is_some() {
-                Some("sabr".to_owned())
-            } else if is_paired {
-                Some("paired".to_owned())
-            } else if is_youtube {
-                Some("youtube".to_owned())
-            } else {
-                None
-            },
+            kind,
             sabr: valid_browser.sabr,
             reuse_active: Some(true),
-            referer: valid_browser.referer,
+            referer,
             youtube_format: valid_browser.youtube_format,
         };
 

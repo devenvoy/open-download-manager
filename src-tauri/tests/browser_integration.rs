@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
+    io::{Read, Write},
     path::PathBuf,
 };
 
@@ -49,6 +50,7 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
 
     let msg = BrowserIncomingMessage {
         action: "download".to_owned(),
+        download_id: None,
         url: Some("https://example.com/video.mp4".to_owned()),
         youtube_format: Some("137+140".to_owned()),
         sabr: None,
@@ -74,9 +76,23 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
     assert_eq!(sanitized.headers.get("authorization").map(String::as_str), Some("Bearer token"));
     assert!(!sanitized.headers.contains_key("x-custom-tracking"));
 
-    // Formats action requires a YouTube watch URL
-    let invalid_formats = BrowserIncomingMessage {
+    let webm_request = BrowserIncomingMessage {
+        action: "download".to_owned(),
+        url: Some("https://example.com/watch/1".to_owned()),
+        output_format: Some("webm".to_owned()),
+        ..BrowserIncomingMessage::default()
+    };
+    assert_eq!(
+        sanitize_browser_request(webm_request)
+            .unwrap()
+            .output_format
+            .as_deref(),
+        Some("webm")
+    );
+
+    let generic_formats = BrowserIncomingMessage {
         action: "formats".to_owned(),
+        download_id: None,
         url: Some("https://example.com/not-youtube".to_owned()),
         youtube_format: None,
         sabr: None,
@@ -90,10 +106,13 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         video_id: None,
         request_headers: None,
     };
-    assert!(sanitize_browser_request(invalid_formats).is_err());
+    let sanitized_generic_formats = sanitize_browser_request(generic_formats).unwrap();
+    assert_eq!(sanitized_generic_formats.url, "https://example.com/not-youtube");
+    assert!(sanitized_generic_formats.canonical_url.is_none());
 
-    let valid_formats = BrowserIncomingMessage {
+    let youtube_formats = BrowserIncomingMessage {
         action: "formats".to_owned(),
+        download_id: None,
         url: Some("https://www.youtube.com/watch?v=wLdZWyLOJCI".to_owned()),
         youtube_format: None,
         sabr: None,
@@ -107,9 +126,19 @@ fn browser_request_sanitizer_enforces_rules_and_preserves_whitelisted_headers() 
         video_id: None,
         request_headers: None,
     };
-    let sanitized_formats = sanitize_browser_request(valid_formats).unwrap();
-    assert_eq!(sanitized_formats.action, "formats");
-    assert_eq!(sanitized_formats.url, "https://www.youtube.com/watch?v=wLdZWyLOJCI");
+    let sanitized_youtube_formats = sanitize_browser_request(youtube_formats).unwrap();
+    assert_eq!(sanitized_youtube_formats.action, "formats");
+    assert_eq!(
+        sanitized_youtube_formats.url,
+        "https://www.youtube.com/watch?v=wLdZWyLOJCI"
+    );
+
+    let invalid_formats = BrowserIncomingMessage {
+        action: "formats".to_owned(),
+        url: Some("file:///video".to_owned()),
+        ..BrowserIncomingMessage::default()
+    };
+    assert!(sanitize_browser_request(invalid_formats).is_err());
 }
 
 #[test]
@@ -621,4 +650,199 @@ async fn browser_setup_actions_and_firefox_manifest_preparation() {
     assert!(bad_action.message.contains("Unknown browser setup action."));
 
     fs::remove_dir_all(temp_root).expect("cleanup directory");
+}
+
+fn serve_real_world_expiring_media_stream(full_file: Vec<u8>) -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("fixture listener bind");
+    let address = listener.local_addr().expect("fixture address");
+    std::thread::spawn(move || {
+        // Request 1: Initial request with initial token -> sends first 64KB, then drops connection
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"real-video-v1\"\r\nConnection: close\r\n\r\n",
+                full_file.len()
+            );
+            let _ = stream.write_all(&full_file[..64 * 1024]);
+        }
+
+        // Request 2: Retry with the OLD expired token -> returns 403 Forbidden
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            let req_str = String::from_utf8_lossy(&buf);
+            if req_str.contains("expired_token") {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 403 Forbidden\r\nContent-Length: 15\r\nConnection: close\r\n\r\nAccess Expired!"
+                );
+            }
+        }
+
+        // Request 3: Fresh request with fresh_token from browser refresh -> Range request accepted!
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 2048];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let req_str = String::from_utf8_lossy(&buf[..n]);
+            let offset = req_str
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("range")
+                        .then(|| {
+                            value
+                                .trim()
+                                .strip_prefix("bytes=")?
+                                .trim_end_matches('-')
+                                .parse::<usize>()
+                                .ok()
+                        })
+                        .flatten()
+                })
+                .unwrap_or(0);
+
+            if offset > 0 {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {}-{}/{}\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"real-video-v1\"\r\nConnection: close\r\n\r\n",
+                    offset,
+                    full_file.len() - 1,
+                    full_file.len(),
+                    full_file.len() - offset
+                );
+                let _ = stream.write_all(&full_file[offset..]);
+            } else {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"real-video-v1\"\r\nConnection: close\r\n\r\n",
+                    full_file.len()
+                );
+                let _ = stream.write_all(&full_file);
+            }
+        }
+    });
+    format!("http://{address}")
+}
+
+#[tokio::test]
+async fn real_user_scenario_browser_link_expired_and_refreshed_through_bridge() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("create directory");
+
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service");
+    let executor = HttpDownloadExecutor::new().expect("http executor");
+    let service = DownloadTransferService::new(history.clone(), executor, 2);
+    let mut settings = Settings::new(directory.clone());
+    settings.connections = 1;
+
+    let bridge = LoopbackBridge::start(directory.clone(), service, settings, None)
+        .await
+        .expect("bridge start");
+
+    let port = bridge.config.port;
+    let token = bridge.config.token.clone();
+    let client = reqwest::Client::new();
+    let bridge_url = format!("http://127.0.0.1:{port}");
+
+    // Mock media stream: 256 KB file
+    let full_file = (0..256 * 1024)
+        .map(|i| (i % 251) as u8)
+        .collect::<Vec<_>>();
+    let stream_server = serve_real_world_expiring_media_stream(full_file.clone());
+
+    // 1. Real browser user initiates download of a video stream with a temporary token
+    let initial_payload = serde_json::json!({
+        "action": "download",
+        "url": format!("{stream_server}/video.mp4?token=expired_token"),
+        "filename": "vacation_video.mp4",
+        "referer": "https://video.example.com/watch/101",
+        "startNow": true
+    });
+
+    let resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&initial_payload).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 201);
+    let resp_json: serde_json::Value = resp.json().await.unwrap();
+    let download_id = resp_json["ids"][0].as_str().unwrap().to_string();
+
+    // 2. The transfer starts, downloads 64KB, then disconnects. Reconnect with expired token fails with 403.
+    // The download status transitions to Failed with expired error message.
+    let mut final_status = DownloadStatus::Connecting;
+    for _ in 0..100 {
+        if let Ok(d) = history.download(&download_id) {
+            if d.status == DownloadStatus::Failed {
+                final_status = d.status;
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(final_status, DownloadStatus::Failed);
+
+    let failed_rec = history.download(&download_id).unwrap();
+    assert!(failed_rec.error.as_deref().unwrap_or("").contains("expired"));
+    let download_dir = PathBuf::from(failed_rec.directory.as_ref().unwrap());
+
+    // Verify verified partial bytes (64KB) are preserved on disk
+    let partial_file = download_dir.join(format!(".open-download-manager-{download_id}.part"));
+    assert!(partial_file.exists());
+    assert_eq!(fs::metadata(&partial_file).unwrap().len(), 64 * 1024);
+
+    // 3. User returns to the video page in browser and clicks Download (extension sends fresh URL with new token)
+    let refresh_payload = serde_json::json!({
+        "action": "download",
+        "url": format!("{stream_server}/video.mp4?token=fresh_token"),
+        "filename": "vacation_video.mp4",
+        "referer": "https://video.example.com/watch/101",
+        "startNow": true
+    });
+
+    let refresh_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&refresh_payload).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refresh_resp.status().as_u16(), 201);
+    let refresh_json: serde_json::Value = refresh_resp.json().await.unwrap();
+    // Must reuse the exact same download record
+    assert_eq!(refresh_json["ids"][0].as_str().unwrap(), download_id);
+
+    // 4. Download resumes from 64KB using Range request, preserves bytes, and finishes!
+    let mut completed = false;
+    for _ in 0..100 {
+        if let Ok(d) = history.download(&download_id) {
+            if d.status == DownloadStatus::Completed {
+                completed = true;
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(completed, "Download should complete successfully after refresh");
+
+    // 5. Verify full file integrity on disk (every single byte matches!)
+    let dest_file = download_dir.join("vacation_video.mp4");
+    assert!(dest_file.exists());
+    let saved_bytes = fs::read(&dest_file).unwrap();
+    assert_eq!(saved_bytes.len(), full_file.len());
+    assert_eq!(saved_bytes, full_file);
+
+    // 6. Verify explanation notice was attached
+    let record = history.download(&download_id).unwrap();
+    assert!(record.notice.as_deref().unwrap_or("").contains("refreshed"));
+
+    bridge.stop().await;
+    fs::remove_dir_all(directory).expect("cleanup directory");
 }

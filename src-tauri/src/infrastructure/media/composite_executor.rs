@@ -70,11 +70,11 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         let is_hls = download.kind.as_deref() == Some("hls")
             || download.url.ends_with(".m3u8")
             || download.url.contains(".m3u8?");
-        let is_youtube = download.kind.as_deref() == Some("youtube")
-            || crate::domain::media::youtube_url(&download.url).is_some()
-            || download.youtube_format.is_some()
-            || download.url.contains("googlevideo.com")
-            || download.referer.as_deref().map_or(false, |r| r.contains("youtube.com") || r.contains("youtu.be"));
+        let is_direct_stream = download.url.contains("googlevideo.com") || download.url.contains("videoplayback");
+        let is_youtube = !is_direct_stream
+            && (download.kind.as_deref() == Some("youtube")
+                || crate::domain::media::youtube_url(&download.url).is_some()
+                || download.youtube_format.is_some());
 
         if is_sabr {
             let sabr = self.sabr_executor.clone();

@@ -14,4 +14,6 @@ pub use sabr::{
     NormalizedSabrSession, SabrAudioTrack, SabrClientInfo, SabrFormat, SabrSession,
 };
 pub use stream_progress::{calculate_stream_progress, StreamProgress, StreamSegment};
-pub use youtube::{choices_from_info, youtube_error, youtube_url, YouTubeFormatChoice};
+pub use youtube::{
+    choices_from_info, site_choices_from_info, youtube_error, youtube_url, YouTubeFormatChoice,
+};

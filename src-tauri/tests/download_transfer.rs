@@ -4,7 +4,7 @@ use std::{
     net::TcpListener,
     path::PathBuf,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use open_download_manager_lib::{
@@ -1001,6 +1001,183 @@ async fn segmented_download_recovers_from_midstream_segment_drop() {
         fs::read(directory.join("segmented_recovered.bin")).unwrap(),
         body,
         "assembled segmented download should match full file after midstream recovery"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+fn serve_partial_then_changed_full(
+    initial_body: Vec<u8>,
+    new_full_body: Vec<u8>,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener
+        .local_addr()
+        .expect("local fixture should expose its address");
+    thread::spawn(move || {
+        // Request 1: sends partial bytes
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n",
+                initial_body.len()
+            );
+            let _ = stream.write_all(&initial_body[..10 * 1024]);
+        }
+
+        // Request 2: resume with If-Range / Range -> returns 200 OK with new_full_body because resource changed
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"v2\"\r\nConnection: close\r\n\r\n",
+                new_full_body.len()
+            );
+            let _ = stream.write_all(&new_full_body);
+        }
+    });
+    format!("http://{address}/changed_file.bin")
+}
+
+#[tokio::test]
+async fn expired_media_link_can_be_refreshed_and_resumed_from_browser() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let expired_url = serve_once("403 Forbidden", b"forbidden");
+    let valid_url = serve_once("200 OK", b"refreshed video stream content");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(expired_url, "video.mp4"), &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Failed
+    );
+
+    // Refresh the expired download with the fresh URL
+    service
+        .refresh_download(&ids[0], Some(valid_url), None, None)
+        .expect("download should be refreshed");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("video.mp4")).unwrap(),
+        b"refreshed video stream content"
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert!(record.notice.as_deref().unwrap_or("").contains("refreshed"));
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn resource_changed_on_resume_explains_restart_and_preserves_correctness() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let initial_body = vec![7u8; 100 * 1024];
+    let new_full_body = b"completely new content after server file changed".to_vec();
+    let url = serve_partial_then_changed_full(initial_body, new_full_body.clone());
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(url, "changed.bin"), &settings)
+        .expect("download should be accepted");
+
+    // Wait until download completes through midstream drop recovery and restart
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("changed.bin")).unwrap(),
+        new_full_body
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert!(
+        record
+            .notice
+            .as_deref()
+            .unwrap_or("")
+            .contains("restarted")
+            || record
+                .notice
+                .as_deref()
+                .unwrap_or("")
+                .contains("changed"),
+        "notice should explain restart: {:?}",
+        record.notice
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn immediate_cancellation_during_retry_wait_stops_promptly() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("fixture address");
+    thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+        }
+    });
+    let url = format!("http://{address}/rate_limited.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let start = Instant::now();
+    let ids = service
+        .add(download_request(url, "cancelled_retry.bin"), &settings)
+        .expect("download should start");
+
+    // Give it a brief moment to receive 429 and enter wait_before_retry
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Immediately cancel the download
+    service
+        .action(&ids[0], DownloadAction::Cancel)
+        .expect("download should cancel");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Cancelled
+    );
+
+    // Assert it cancelled immediately rather than waiting 30 seconds
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "Cancellation took too long: {:?}",
+        start.elapsed()
+    );
+    assert!(
+        !directory
+            .join(format!(".open-download-manager-{}.part", ids[0]))
+            .exists(),
+        "partial file should be removed on cancel"
     );
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }

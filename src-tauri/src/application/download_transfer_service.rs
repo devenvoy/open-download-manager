@@ -114,8 +114,10 @@ impl DownloadTransferService {
                 DownloadStatus::Queued,
                 DownloadStatus::Paused,
                 DownloadStatus::Scheduled,
+                DownloadStatus::Failed,
             ];
-            let existing_id = self.history.with_downloads(|existing_records| {
+            let first_req_url = request.urls.first().map(|u| u.url().to_string()).unwrap_or_default();
+            let matched_download = self.history.with_downloads(|existing_records| {
                 existing_records
                     .iter()
                     .find(|d| {
@@ -123,21 +125,38 @@ impl DownloadTransferService {
                             return false;
                         }
                         if let Some(ref req_sabr) = request.sabr {
-                            d.sabr.as_ref().map_or(false, |s| {
+                            d.sabr.as_ref().is_some_and(|s| {
                                 s.video_id == req_sabr.video_id
                                     && s.video_itag == req_sabr.video_itag
                                     && s.audio_itag == req_sabr.audio_itag
                             })
                         } else {
-                            let first_req_url = request.urls.first().map(|u| u.url().as_str()).unwrap_or("");
-                            d.sabr.is_none()
-                                && d.url == first_req_url
-                                && d.audio_url == request.audio_url
+                            (d.sabr.is_none() && d.url == first_req_url && d.audio_url == request.audio_url)
+                                || (d.referer.is_some() && d.referer == request.referer && request.filename.as_ref().is_some_and(|f| d.filename == *f))
                         }
                     })
-                    .map(|d| d.id.clone())
+                    .map(|d| (d.id.clone(), d.status.clone()))
             })?;
-            if let Some(existing_id) = existing_id {
+
+            if let Some((existing_id, status)) = matched_download {
+                if status == DownloadStatus::Failed || status == DownloadStatus::Paused {
+                    self.history.update_download(&existing_id, |d| {
+                        if !first_req_url.is_empty() {
+                            d.url = first_req_url.clone();
+                        }
+                        if request.audio_url.is_some() {
+                            d.audio_url = request.audio_url.clone();
+                        }
+                        if request.sabr.is_some() {
+                            d.sabr = request.sabr.clone();
+                        }
+                        d.error = None;
+                        d.notice = Some("Download link refreshed from browser; resuming transfer.".to_owned());
+                    })?;
+                    if status == DownloadStatus::Failed {
+                        let _ = self.start_download(&existing_id, true);
+                    }
+                }
                 return Ok(vec![existing_id]);
             }
         }
@@ -303,6 +322,34 @@ impl DownloadTransferService {
             self.pump_queue();
         }
         Ok(vec![id])
+    }
+
+    pub fn refresh_download(
+        &self,
+        id: &str,
+        new_url: Option<String>,
+        new_audio_url: Option<String>,
+        new_sabr: Option<crate::domain::media::sabr::NormalizedSabrSession>,
+    ) -> AppResult<String> {
+        let record = self.history.download(id)?;
+        self.history.update_download(id, |d| {
+            if let Some(u) = new_url {
+                d.url = u;
+            }
+            if let Some(a) = new_audio_url {
+                d.audio_url = Some(a);
+            }
+            if let Some(s) = new_sabr {
+                d.sabr = Some(s);
+            }
+            d.error = None;
+            d.notice = Some("Download link refreshed from browser; resuming transfer.".to_owned());
+        })?;
+        if record.status == DownloadStatus::Failed || record.status == DownloadStatus::Paused {
+            let retry = record.status == DownloadStatus::Failed;
+            self.start_download(id, retry)?;
+        }
+        Ok(id.to_owned())
     }
 
     pub fn action(&self, id: &str, action: DownloadAction) -> AppResult<()> {
@@ -591,6 +638,9 @@ impl DownloadTransferService {
                 download.total = progress.total;
                 download.speed = progress.bytes_per_second;
                 download.connections_progress = progress.connections_progress;
+                if progress.notice.is_some() {
+                    download.notice = progress.notice;
+                }
             }) {
                 eprintln!(
                     "Could not update download progress for {download_id}: {}",

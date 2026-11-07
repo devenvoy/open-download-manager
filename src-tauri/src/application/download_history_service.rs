@@ -176,10 +176,6 @@ impl DownloadHistoryService {
         downloads[index].last_try = Some(last_try);
         downloads[index].error = None;
         downloads[index].speed = 0;
-        if retry {
-            downloads[index].downloaded = 0;
-            downloads[index].total = None;
-        }
         if let Err(error) = self.repository.save(&downloads) {
             downloads[index] = previous;
             return Err(error);
@@ -461,6 +457,30 @@ impl DownloadHistoryService {
         drop(downloads);
         self.publish_change();
         Ok(true)
+    }
+
+    pub fn update_download(
+        &self,
+        id: &str,
+        update: impl FnOnce(&mut DownloadRecord),
+    ) -> AppResult<()> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        let previous = downloads[index].clone();
+        update(&mut downloads[index]);
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads[index] = previous;
+            return Err(error);
+        }
+        drop(downloads);
+        self.publish_change();
+        Ok(())
     }
 
     pub fn notify_complete(&self, id: &str) -> AppResult<()> {

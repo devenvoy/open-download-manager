@@ -198,6 +198,7 @@ fn sabr_handoff_accepts_only_a_bounded_captured_googlevideo_session() {
 
     let msg = BrowserIncomingMessage {
         action: "download".to_owned(),
+        download_id: None,
         url: Some(url.to_owned()),
         youtube_format: None,
         sabr: Some(sabr.clone()),

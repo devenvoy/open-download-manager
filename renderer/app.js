@@ -674,9 +674,9 @@ function rowFor(d) {
 	);
 	statusCell.title = d.error || names[status] || status;
 	const description =
-		d.description ||
-		d.error ||
-		d.notice ||
+		(status === "failed"
+			? (d.error || d.notice || d.description)
+			: (d.notice || d.description || d.error)) ||
 		(d.scheduledAt && status === "scheduled"
 			? `Starts ${date(d.scheduledAt)}`
 			: "");
@@ -958,8 +958,9 @@ function renderDetails() {
 		content = $("#details-content");
 	$("#details-title").textContent =
 		`${percent !== null ? `${Math.floor(percent)}% ` : ""}${d.filename || "Download status"}`;
-	$("#transfer-source").textContent = d.url || "";
-	$("#transfer-source").title = d.url || "";
+	const sourceAddress = d.referer || d.url || "";
+	$("#transfer-source").textContent = sourceAddress;
+	$("#transfer-source").title = d.url || sourceAddress;
 	const names = {
 		completed: "Complete",
 		downloading: "Receiving data…",
@@ -1019,9 +1020,17 @@ function renderDetails() {
 		? d.connectionsProgress
 		: [];
 	const bars = $("#segment-bars"),
-		map = $("#segment-map");
+		map = $("#segment-map"),
+		caption = document.querySelector(".connection-caption");
 	bars.replaceChildren();
 	map.replaceChildren();
+	if (segments.length <= 1) {
+		map.style.display = "none";
+		if (caption) caption.style.display = "none";
+	} else {
+		map.style.display = "flex";
+		if (caption) caption.style.display = "";
+	}
 	for (let index = 0; index < segments.length; index++) {
 		const segment = segments[index];
 		const row = element("tr");
@@ -1061,11 +1070,14 @@ function renderDetails() {
 			const errText = d.error || "Download failed or was interrupted.";
 			const isFfmpeg = /ffmpeg/i.test(errText);
 			const isYtdlp = /yt-dlp/i.test(errText);
+			const isExpired = /expired|HTTP 403|HTTP 410/i.test(errText);
 			$("#detail-error-title").textContent = isFfmpeg
 				? "FFmpeg Assembly Required"
 				: isYtdlp
 					? "YouTube Media Tool Required"
-					: "Download Interrupted";
+					: isExpired
+						? "Download Link Expired"
+						: "Download Interrupted";
 			$("#detail-error-summary").textContent = errText;
 			$("#detail-error-view-btn").onclick = () => openErrorDialog(d.id);
 			$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");

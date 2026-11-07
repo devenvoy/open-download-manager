@@ -461,6 +461,7 @@ async fn download_hls_segment(
                     total: stream_prog.estimated_bytes,
                     bytes_per_second: speed,
                     connections_progress: conns,
+                    notice: None,
                 });
             }
         }
@@ -492,6 +493,7 @@ async fn download_hls_segment(
             total: stream_prog.estimated_bytes,
             bytes_per_second: speed,
             connections_progress: conns,
+            notice: None,
         });
     }
 

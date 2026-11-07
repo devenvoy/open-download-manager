@@ -25,6 +25,21 @@ test('video selection forwards explicit one-click download intent',async()=>{
   await h.request({action:'download',item:{url:'https://example.com/video.mp4'}},sender);
   assert.equal(h.nativeRequests[1].startNow,false);
 });
+test('generic format discovery forwards the current HTTP page to the native extractor',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:31,url:'https://vkvideo.ru/video-211472768_456240796'}};
+ const result=await h.request({action:'extractFormats'},sender);
+ assert.equal(result.ok,true);
+ assert.deepEqual(h.nativeRequests,[{action:'formats',url:'https://vkvideo.ru/video-211472768_456240796'}]);
+});
+test('later page-source reports do not erase captured media metadata',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:32,url:'https://player.example/watch'}};
+ const url='https://cdn.example/stream?id=video';
+ h.events.response({tabId:32,url,statusCode:200,type:'media',responseHeaders:[{name:'Content-Type',value:'video/mp4'}]});
+ await h.request({action:'remember',items:[{url,title:'Captured video',media:true}]},sender);
+ const result=await h.request({action:'listForFrame'},sender);
+ assert.equal(result.items[0].mime,'video/mp4');
+ assert.equal(result.items[0].media,true);
+});
 test('YouTube menu uses captured player formats without a desktop discovery request',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:7,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
  const base='https://r1.googlevideo.com/videoplayback?id=asset&expire=9999999999&itag=';

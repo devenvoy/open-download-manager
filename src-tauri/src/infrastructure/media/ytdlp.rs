@@ -1,5 +1,6 @@
 use std::{path::{Path, PathBuf}, process::Stdio, time::Duration};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt}, process::Command};
+use url::Url;
 
 use crate::{
     application::{
@@ -8,12 +9,10 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::{
-        download::DownloadSegmentProgress,
-        media::{
-            choices_from_info, parse_playlist_json, parse_youtube_playlist_url, youtube_error,
-            youtube_url, PlaylistMetadata, YouTubeFormatChoice,
-        },
+    domain::media::{
+        choices_from_info, parse_playlist_json, parse_youtube_playlist_url,
+        site_choices_from_info, youtube_error, youtube_url, PlaylistMetadata,
+        YouTubeFormatChoice,
     },
 };
 
@@ -35,14 +34,35 @@ impl YtDlpTools {
     pub async fn fetch_formats(&self, input_url: &str) -> AppResult<Vec<YouTubeFormatChoice>> {
         let canonical_url = youtube_url(input_url)
             .ok_or_else(|| AppError::download("A valid YouTube video URL is required."))?;
+        self.fetch_site_formats_from_url(&canonical_url, true).await
+    }
 
+    pub async fn fetch_site_formats(&self, input_url: &str) -> AppResult<Vec<YouTubeFormatChoice>> {
+        let parsed = Url::parse(input_url)
+            .map_err(|_| AppError::download("A valid HTTP(S) video page is required."))?;
+        if !matches!(parsed.scheme(), "http" | "https")
+            || parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+        {
+            return Err(AppError::download("A valid HTTP(S) video page is required."));
+        }
+        let is_yt = youtube_url(input_url).is_some();
+        self.fetch_site_formats_from_url(parsed.as_str(), is_yt).await
+    }
+
+    async fn fetch_site_formats_from_url(
+        &self,
+        input_url: &str,
+        is_youtube: bool,
+    ) -> AppResult<Vec<YouTubeFormatChoice>> {
         let mut command = Command::new(&self.executable);
         command
             .arg("--skip-download")
             .arg("--dump-single-json")
             .arg("--no-playlist")
             .arg("--no-colors")
-            .arg(&canonical_url)
+            .arg(input_url)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -69,7 +89,7 @@ impl YtDlpTools {
         let status = tokio::select! {
             _ = tokio::time::sleep(timeout) => {
                 let _ = child.kill().await;
-                return Err(AppError::download("YouTube request timed out."));
+                return Err(AppError::download("Video format discovery timed out."));
             }
             res = async {
                 let (status, _, _) = tokio::try_join!(
@@ -83,14 +103,23 @@ impl YtDlpTools {
 
         if !status.success() {
             let stderr = String::from_utf8_lossy(&stderr_bytes);
-            let (msg, _, _) = youtube_error(&stderr);
-            return Err(AppError::download(msg));
+            if is_youtube {
+                let (message, _, _) = youtube_error(&stderr);
+                return Err(AppError::download(message));
+            }
+            return Err(AppError::download(
+                "Could not discover video formats on this page. It may require sign-in, use DRM, or expose an unsupported player.",
+            ));
         }
 
         let json_value: serde_json::Value = serde_json::from_slice(&stdout_bytes)
-            .map_err(|e| AppError::download(format!("Invalid YouTube JSON: {e}")))?;
+            .map_err(|e| AppError::download(format!("Invalid video extractor response: {e}")))?;
 
-        choices_from_info(&json_value, &canonical_url).map_err(AppError::download)
+        if is_youtube {
+            choices_from_info(&json_value, input_url).map_err(AppError::download)
+        } else {
+            site_choices_from_info(&json_value, input_url).map_err(AppError::download)
+        }
     }
 
     pub async fn fetch_playlist_info(&self, input_url: &str) -> AppResult<PlaylistMetadata> {
@@ -160,6 +189,7 @@ impl YtDlpTools {
         &self,
         video_url: &str,
         format_spec: Option<&str>,
+        referer: Option<&str>,
         destination: &Path,
         progress_handler: DownloadProgressHandler,
         mut control: DownloadControl,
@@ -170,6 +200,8 @@ impl YtDlpTools {
             .arg("--newline")
             .arg("--no-colors")
             .arg("--no-playlist")
+            .arg("--concurrent-fragments")
+            .arg("8")
             .arg("--progress")
             .arg("--progress-delta")
             .arg("0.5")
@@ -178,6 +210,9 @@ impl YtDlpTools {
 
         if let Some(ffmpeg_path) = super::tools::find_tool_path("ffmpeg") {
             command.arg("--ffmpeg-location").arg(ffmpeg_path);
+        }
+        if let Some(referer) = referer {
+            command.arg("--referer").arg(referer);
         }
 
         if let Some(spec) = format_spec {
@@ -197,12 +232,16 @@ impl YtDlpTools {
             command.arg("-f").arg("bv*+ba/best");
         }
 
-        let is_mp3 = destination
+        let output_format = destination
             .to_string_lossy()
             .to_ascii_lowercase()
-            .ends_with(".mp3");
-        if is_mp3 {
+            .rsplit_once('.')
+            .map(|(_, extension)| extension.to_owned())
+            .unwrap_or_default();
+        if output_format == "mp3" {
             command.arg("--extract-audio").arg("--audio-format").arg("mp3");
+        } else if matches!(output_format.as_str(), "mp4" | "webm") {
+            command.arg("--merge-output-format").arg(output_format);
         } else {
             command.arg("--merge-output-format").arg("mp4");
         }
@@ -262,13 +301,8 @@ impl YtDlpTools {
                                         downloaded,
                                         total,
                                         bytes_per_second: speed,
-                                        connections_progress: vec![DownloadSegmentProgress {
-                                            start: 0,
-                                            end: total.unwrap_or(downloaded),
-                                            downloaded,
-                                            total: total.unwrap_or(downloaded),
-                                            status: "downloading".to_string(),
-                                        }],
+                                        connections_progress: Vec::new(),
+                                        notice: None,
                                     });
                                 }
                             }
@@ -295,7 +329,11 @@ impl YtDlpTools {
         if !status.success() {
             let _ = tokio::fs::remove_file(destination).await;
             let combined_err = stderr_lines.join("\n");
-            let (msg, _, _) = youtube_error(&combined_err);
+            let msg = if youtube_url(video_url).is_some() {
+                youtube_error(&combined_err).0
+            } else {
+                extractor_error(&combined_err)
+            };
             return Err(AppError::download(msg));
         }
 
@@ -305,7 +343,7 @@ impl YtDlpTools {
             .unwrap_or(0);
 
         if total_size == 0 {
-            return Err(AppError::download("YouTube download produced an empty file."));
+            return Err(AppError::download("Video download produced an empty file."));
         }
 
         Ok(DownloadResult {
@@ -318,4 +356,42 @@ impl YtDlpTools {
 
 fn find_ytdlp_path() -> Option<PathBuf> {
     super::tools::find_tool_path("yt-dlp")
+}
+
+fn extractor_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("http error 429") || lower.contains("too many requests") {
+        return "The video site is temporarily refusing requests. Try again later.".to_owned();
+    }
+    if lower.contains("sign in")
+        || lower.contains("login required")
+        || lower.contains("authentication required")
+    {
+        return "This video page requires sign-in or browser verification, which is not supported."
+            .to_owned();
+    }
+
+    let redacted_lines: Vec<String> = raw
+        .lines()
+        .map(|line| {
+            line.split_whitespace()
+                .map(|token| {
+                    if token.starts_with("http://") || token.starts_with("https://") {
+                        "[URL]"
+                    } else {
+                        token
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect();
+    redacted_lines
+        .iter()
+        .rev()
+        .find(|line| line.starts_with("ERROR:"))
+        .or_else(|| redacted_lines.last())
+        .map(|line| line.trim().chars().take(700).collect())
+        .filter(|message: &String| !message.is_empty())
+        .unwrap_or_else(|| "Video download failed.".to_owned())
 }

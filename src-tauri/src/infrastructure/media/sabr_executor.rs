@@ -115,6 +115,7 @@ impl SabrDownloadExecutor {
                     .download(
                         &canonical_url,
                         Some(&format_spec),
+                        download.referer.as_deref(),
                         &destination,
                         progress_handler,
                         control,
@@ -332,6 +333,7 @@ impl SabrDownloadExecutor {
                 total,
                 bytes_per_second: speed,
                 connections_progress: segs,
+                notice: None,
             });
         }
 
@@ -354,6 +356,7 @@ impl SabrDownloadExecutor {
                 total: total.or(Some(video_downloaded + audio_downloaded)),
                 bytes_per_second: 0,
                 connections_progress: Vec::new(),
+                notice: None,
             });
         }
 

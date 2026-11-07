@@ -64,7 +64,7 @@ async function discoverHls(tabId,url) {
   if(seen.has(url)||seen.size>=20)return;seen.add(url);hlsActive++;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
   try {
-    const response=await fetch(url,{signal:controller.signal,credentials:'omit'});
+    const response=await fetch(url,{signal:controller.signal,credentials:'include'});
     if(!response.ok)throw new Error('Manifest fetch failed.');
     const reader=response.body.getReader();let size=0;const chunks=[];
     while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1048576){await reader.cancel();throw new Error('Manifest too large.');}chunks.push(value);}
@@ -72,7 +72,9 @@ async function discoverHls(tabId,url) {
     const variants=globalThis.parseHlsMaster(new TextDecoder().decode(bytes),response.url||url);
     let title='';try{title=(await api.tabs.get(tabId)).title||'';}catch{}
     if(hlsSeen.get(tabId)===seen)await remember(tabId,variants.map(item=>({...item,title})));
-  } catch {} finally {clearTimeout(timer);hlsActive--;}
+  } catch {
+    await remember(tabId,[{url,mime:'application/vnd.apple.mpegurl',format:'HLS',unsupported:true,reason:'Could not read the HLS playlist. The stream may require site authorization.'}]).catch(()=>{});
+  } finally {clearTimeout(timer);hlsActive--;}
 }
 function nativeSend(payload) {
   return new Promise((resolve, reject) => {
@@ -141,12 +143,12 @@ async function remember(tabId, items) {
     for (const item of items.slice(0, 100)) {
       const url = httpUrl(item.url);
       if (!url || isFragment(url)) continue;
-      const value={url, mime: String(item.mime || '').slice(0, 100), title: String(item.title || '').slice(0, 180), quality:String(item.quality||'').slice(0,40),bitrate:Number(item.bitrate)||0,format:String(item.format||'').slice(0,20),separateAudio:!!item.separateAudio,reason:String(item.reason||'').slice(0,180),unsupported: unsupported(url, item.mime)||!!item.unsupported};
+      const value={url, mime: String(item.mime || '').slice(0, 100), media:item.media===true, title: String(item.title || '').slice(0, 180), quality:String(item.quality||'').slice(0,40),bitrate:Number(item.bitrate)||0,format:String(item.format||'').slice(0,20),separateAudio:!!item.separateAudio,reason:String(item.reason||'').slice(0,180),unsupported: unsupported(url, item.mime)||!!item.unsupported};
       value.audioUrl=httpUrl(item.audioUrl)||undefined;
       value.codecs=String(item.codecs||'').slice(0,200);
       value.masterUrl=httpUrl(item.masterUrl)||undefined;
       const existing=prior.findIndex(v=>v.url===url);
-      if(existing>=0){const previous=prior[existing];if(previous.format==='HLS'&&!item.format){if(value.title)previous.title=value.title;continue;}prior[existing]={...previous,...value,audioUrl:value.audioUrl||previous.audioUrl,codecs:value.codecs||previous.codecs,masterUrl:value.masterUrl||previous.masterUrl,title:value.title||previous.title,quality:value.quality||previous.quality,bitrate:value.bitrate||previous.bitrate,format:value.format||previous.format,separateAudio:value.separateAudio||previous.separateAudio,unsupported:value.unsupported||previous.unsupported,reason:value.reason||previous.reason};continue;}
+      if(existing>=0){const previous=prior[existing];if(previous.format==='HLS'&&!item.format){if(value.title)previous.title=value.title;continue;}const mime=value.mime||previous.mime;prior[existing]={...previous,...value,mime,media:value.media||previous.media,audioUrl:value.audioUrl||previous.audioUrl,codecs:value.codecs||previous.codecs,masterUrl:value.masterUrl||previous.masterUrl,title:value.title||previous.title,quality:value.quality||previous.quality,bitrate:value.bitrate||previous.bitrate,format:value.format||previous.format,separateAudio:value.separateAudio||previous.separateAudio,unsupported:unsupported(url,mime)||value.unsupported||previous.unsupported,reason:value.reason||previous.reason};continue;}
       prior.push(value);
     }
     map[tabId] = prior.slice(-100);
@@ -167,8 +169,9 @@ api.webRequest.onHeadersReceived.addListener(details => {
     youtubeObserved.set(details.tabId,urls.slice(0,100));
     if(youtubeObserved.size>50)youtubeObserved.delete(youtubeObserved.keys().next().value);
   }
-  if (details.type === 'media' || /^(video|audio)\//i.test(mime) || unsupported(details.url, mime)) {
-    remember(details.tabId, [{url: details.url, mime}]).catch(() => {});
+  const isMedia=details.type==='media'||/^(video|audio)\//i.test(mime);
+  if (isMedia || unsupported(details.url, mime)) {
+    remember(details.tabId, [{url: details.url, mime, media:isMedia}]).catch(() => {});
   }
   if(/\.m3u8(?:[?#]|$)/i.test(details.url)||/mpegurl/i.test(mime))discoverHls(details.tabId,details.url);
 }, {urls: ['http://*/*', 'https://*/*']}, ['responseHeaders']);
@@ -263,7 +266,13 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
       }
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);
-      return {ok:true, items:(data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => item.unsupported || item.format==='HLS' || /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url))};
+      return {ok:true, items:(data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => item.unsupported || item.media || item.format==='HLS' || /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url))};
+    }
+    if(message.action==='extractFormats'&&sender.tab){
+      const pageUrl=httpUrl(sender.tab.url||'');
+      if(!pageUrl)throw new Error('Only HTTP(S) video pages can be inspected.');
+      const result=await nativeSend({action:'formats',url:pageUrl});
+      return {ok:true,items:Array.isArray(result.items)?result.items.slice(0,100):[]};
     }
     throw new Error('Unsupported extension request.');
   };

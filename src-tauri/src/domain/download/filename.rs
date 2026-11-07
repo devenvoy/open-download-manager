@@ -46,6 +46,18 @@ pub fn redact_download_url(value: &str) -> String {
 }
 
 pub fn filename_from_url(url: &Url) -> String {
+    let host = url.host_str().unwrap_or("");
+    let is_youtube = host.contains("youtube.com") || host.contains("youtu.be") || host.contains("googlevideo.com");
+    if is_youtube {
+        if let Some((_, v)) = url.query_pairs().find(|(k, _)| k == "v" || k == "docid" || k == "id") {
+            let v_str = v.trim();
+            if v_str.len() == 11 && v_str.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+                return format!("YouTube Video {v_str}.mp4");
+            }
+        }
+        return "YouTube Video.mp4".to_string();
+    }
+
     let name = url
         .path_segments()
         .and_then(|mut segments| segments.next_back())

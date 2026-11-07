@@ -2,7 +2,7 @@
 
 A modern, high-performance download manager built with Rust and Tauri, featuring a compact desktop interface and seamless browser video capture. Original open-source implementation inspired by IDM.
 
-**Early preview:** Private/sign-in-required, DRM and live media are unsupported. Please report bugs without sharing session tokens or signed media links.
+**Early preview:** Support varies by site. Private/sign-in-required, DRM and live media are unsupported. Please report bugs without sharing session tokens or signed media links.
 
 ## Getting Started
 
@@ -19,8 +19,8 @@ The browser extension integrates with Chrome, Edge, Brave, Opera, and Firefox.
 
 - HTTP(S) downloads with multi-threaded segmented ranges where supported.
 - Pause/resume for supported transfers, history management, scheduling, and speed limits.
-- Chrome, Edge, Brave, Opera, and Firefox media detection and quality selection; selected video/audio tracks are combined locally with FFmpeg.
-- YouTube browser-session capture with SABR / adaptive format streaming and paired muxing.
+- Chrome, Edge, Brave, Opera, and Firefox media detection and quality selection, including players in open shadow roots.
+- Generic video-page format discovery through yt-dlp (MP4/WebM video and MP3 audio options), alongside YouTube browser-session capture with SABR / adaptive format streaming and paired muxing.
 - YouTube playlist detection and batch download queues.
 - Download File Info with category assignment, custom save location, Download Later, and Start/Cancel options.
 - Compact progress and transfer windows, duplicate active download prevention, and system tray integration with autostart support.

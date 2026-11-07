@@ -66,6 +66,22 @@ pub fn resolve_host_exe(integration_root: &Path) -> PathBuf {
         }
     }
 
+    let root_target_debug = integration_root
+        .join("target")
+        .join("debug")
+        .join(bin_name);
+    if root_target_debug.exists() {
+        return root_target_debug;
+    }
+
+    let root_target_release = integration_root
+        .join("target")
+        .join("release")
+        .join(bin_name);
+    if root_target_release.exists() {
+        return root_target_release;
+    }
+
     let target_debug = integration_root
         .join("src-tauri")
         .join("target")
