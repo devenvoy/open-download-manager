@@ -33,7 +33,10 @@ pub(crate) mod segmented;
 pub(crate) mod single_stream;
 pub(crate) mod validator;
 
-pub use client::create_http_client;
+pub use client::{
+    build_reqwest_proxy, create_http_client, sanitize_proxy_error, test_proxy_connection,
+    ReqwestProxyExt,
+};
 use policy::TEMPORARY_DOWNLOAD_PREFIX;
 use validator::SegmentValidator;
 

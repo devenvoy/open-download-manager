@@ -32,7 +32,10 @@ impl CompositeDownloadExecutor {
     pub fn new(http_executor: HttpDownloadExecutor, client: reqwest::Client) -> Self {
         let shared_client = Arc::new(RwLock::new(client));
         Self {
-            http_executor,
+            http_executor: HttpDownloadExecutor::with_shared_client_and_allocator(
+                shared_client.clone(),
+                http_executor.allocator(),
+            ),
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),

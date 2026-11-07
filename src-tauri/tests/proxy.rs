@@ -24,7 +24,7 @@ use open_download_manager_lib::{
     },
     infrastructure::{
         download_history_store::DownloadHistoryStore,
-        http_download_executor::{create_http_client, HttpDownloadExecutor},
+        http_download_executor::{create_http_client, HttpDownloadExecutor, ReqwestProxyExt},
         settings_store::SettingsStore,
     },
     presentation::commands::test_proxy_connection,

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::application::error::{AppError, AppResult};
 use super::validation_error::SettingsValidationError;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -114,34 +113,6 @@ impl ProxySettings {
             }
         }
         sanitized
-    }
-
-    pub fn to_reqwest_proxy(&self) -> AppResult<reqwest::Proxy> {
-        let clean = self.clean_host();
-        if clean.is_empty() {
-            return Err(AppError::invalid_settings("Proxy host cannot be empty."));
-        }
-        if self.port == 0 {
-            return Err(AppError::invalid_settings(
-                "Proxy port must be between 1 and 65535.",
-            ));
-        }
-
-        let proxy_url = format!("{}://{}:{}", self.protocol.as_str(), clean, self.port);
-        let mut proxy = reqwest::Proxy::all(&proxy_url).map_err(|err| {
-            let msg = format!("Invalid proxy configuration for {clean}:{}: {err}", self.port);
-            AppError::invalid_settings(self.sanitize_error(&msg))
-        })?;
-
-        if let Some(username) = &self.username {
-            let user = username.trim();
-            if !user.is_empty() {
-                let password = self.password.as_deref().unwrap_or("");
-                proxy = proxy.basic_auth(user, password);
-            }
-        }
-
-        Ok(proxy)
     }
 }
 
