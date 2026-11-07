@@ -183,7 +183,8 @@ pub(crate) async fn download_segments(
             notice: None,
             transfer_kind: Some("segmented_http".to_string()),
             effective_concurrency: Some(count),
-            etag: Some(validator.value.clone()),
+            etag: Some(validator.value().to_string()),
+            validator: Some(validator.validator.clone()),
         });
     }
 
@@ -343,7 +344,8 @@ async fn run_segment_worker(
                                 notice: Some(notice),
                                 transfer_kind: Some("segmented_http".to_string()),
                                 effective_concurrency: Some(worker_id as u8 + 1),
-                                etag: Some(validator.value.clone()),
+                                etag: Some(validator.value().to_string()),
+                                validator: Some(validator.validator.clone()),
                             });
 
                             Some(new_chunk_idx)
@@ -413,8 +415,7 @@ async fn download_chunk(
             index,
             downloaded_init,
             "complete",
-            validator.total,
-            Some(&validator.value),
+            &validator,
             progress_handler,
             meter,
             None,
@@ -430,7 +431,7 @@ async fn download_chunk(
             .get(url.clone())
             .header(reqwest::header::RANGE, format!("bytes={req_start}-{req_end}"))
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
-            .header(validator.header.clone(), &validator.value)
+            .header(validator.header(), validator.if_range_value())
     })
     .await?;
 
@@ -445,9 +446,9 @@ async fn download_chunk(
         || actual_total != Some(validator.total)
         || response
             .headers()
-            .get(&validator.entity_header)
+            .get(&validator.entity_header())
             .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value != validator.value)
+            .is_some_and(|value| value != validator.value())
         || response
             .headers()
             .get(reqwest::header::CONTENT_ENCODING)
@@ -474,8 +475,7 @@ async fn download_chunk(
         index,
         downloaded_init,
         "downloading",
-        validator.total,
-        Some(&validator.value),
+        &validator,
         progress_handler,
         meter,
         None,
@@ -504,8 +504,7 @@ async fn download_chunk(
                     index,
                     downloaded,
                     stop_status(reason),
-                    validator.total,
-                    Some(&validator.value),
+                    &validator,
                     progress_handler,
                     meter,
                     None,
@@ -553,7 +552,7 @@ async fn download_chunk(
                                     format!("bytes={start}-{cur_end}"),
                                 )
                                 .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                                .header(validator.header.clone(), &validator.value)
+                                .header(validator.header(), validator.if_range_value())
                         })
                         .await;
                         match next_resp {
@@ -562,9 +561,9 @@ async fn download_chunk(
                                     if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
                                         let entity_ok = new_resp
                                             .headers()
-                                            .get(&validator.entity_header)
+                                            .get(&validator.entity_header())
                                             .and_then(|v| v.to_str().ok())
-                                            .map_or(true, |v| v == validator.value);
+                                            .map_or(true, |v| v == validator.value());
                                         let encoding_ok = !new_resp
                                             .headers()
                                             .get(reqwest::header::CONTENT_ENCODING)
@@ -618,7 +617,7 @@ async fn download_chunk(
                                 format!("bytes={start}-{cur_end}"),
                             )
                             .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                            .header(validator.header.clone(), &validator.value)
+                            .header(validator.header(), validator.if_range_value())
                     })
                     .await;
                     match next_resp {
@@ -627,9 +626,9 @@ async fn download_chunk(
                                 if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
                                     let entity_ok = new_resp
                                         .headers()
-                                        .get(&validator.entity_header)
+                                        .get(&validator.entity_header())
                                         .and_then(|v| v.to_str().ok())
-                                        .map_or(true, |v| v == validator.value);
+                                        .map_or(true, |v| v == validator.value());
                                     let encoding_ok = !new_resp
                                         .headers()
                                         .get(reqwest::header::CONTENT_ENCODING)
@@ -688,8 +687,7 @@ async fn download_chunk(
                 index,
                 downloaded,
                 stop_status(reason),
-                validator.total,
-                Some(&validator.value),
+                &validator,
                 progress_handler,
                 meter,
                 None,
@@ -709,8 +707,7 @@ async fn download_chunk(
             index,
             downloaded,
             "downloading",
-            validator.total,
-            Some(&validator.value),
+            &validator,
             progress_handler,
             meter,
             None,
@@ -733,8 +730,7 @@ async fn download_chunk(
         index,
         downloaded,
         "complete",
-        validator.total,
-        Some(&validator.value),
+        &validator,
         progress_handler,
         meter,
         None,
@@ -753,8 +749,7 @@ fn update_segment_progress(
     index: usize,
     downloaded: u64,
     status: &str,
-    total: u64,
-    etag: Option<&str>,
+    validator: &SegmentValidator,
     progress_handler: &DownloadProgressHandler,
     meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
     notice: Option<String>,
@@ -782,13 +777,14 @@ fn update_segment_progress(
 
     progress_handler(DownloadProgress {
         downloaded: total_downloaded,
-        total: Some(total),
+        total: Some(validator.total),
         bytes_per_second,
         connections_progress,
         notice,
         transfer_kind: Some("segmented_http".to_string()),
         effective_concurrency: Some(count),
-        etag: etag.map(str::to_string),
+        etag: Some(validator.value().to_string()),
+        validator: Some(validator.validator.clone()),
     });
     Ok(())
 }

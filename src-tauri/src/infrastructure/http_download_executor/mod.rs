@@ -139,24 +139,25 @@ impl HttpDownloadExecutor {
                     .get(&download.id)
                     .cloned()
                     .or_else(|| {
-                        download.etag.as_ref().map(|etag| SegmentValidator {
-                            header: reqwest::header::IF_RANGE,
-                            entity_header: reqwest::header::ETAG,
-                            value: etag.clone(),
-                            total: validator.total,
-                        })
+                        download
+                            .resume_validator()
+                            .map(|v| SegmentValidator::new(v, validator.total))
                     });
                 let mut restart_notice = None;
-                if existing_parts && previous.as_ref() != Some(&validator) {
-                    assembler::remove_segment_parts(
-                        &directory,
-                        &download.id,
-                    )
-                    .await?;
-                    restart_notice = Some(
-                        "The remote file changed on the server; restarted download from the beginning."
-                            .to_owned(),
-                    );
+                if existing_parts {
+                    if previous.is_none() {
+                        assembler::remove_segment_parts(&directory, &download.id).await?;
+                        restart_notice = Some(
+                            "The download could not be verified with a saved validator; restarted download from the beginning."
+                                .to_owned(),
+                        );
+                    } else if previous.as_ref() != Some(&validator) {
+                        assembler::remove_segment_parts(&directory, &download.id).await?;
+                        restart_notice = Some(
+                            "The remote file changed on the server; restarted download from the beginning."
+                                .to_owned(),
+                        );
+                    }
                 }
                 self.segment_validators
                     .lock()
@@ -171,7 +172,8 @@ impl HttpDownloadExecutor {
                         notice: Some(notice),
                         transfer_kind: Some("segmented_http".to_string()),
                         effective_concurrency: Some(download.connections),
-                        etag: Some(validator.value.clone()),
+                        etag: Some(validator.value().to_string()),
+                        validator: Some(validator.validator.clone()),
                     });
                 }
                 let segments = segmented::segment_ranges(
@@ -261,6 +263,7 @@ impl HttpDownloadExecutor {
                             transfer_kind: Some("single_http".to_string()),
                             effective_concurrency: Some(1),
                             etag: None,
+                            validator: None,
                         });
                     }
                 }
@@ -280,12 +283,9 @@ impl HttpDownloadExecutor {
             .get(&download.id)
             .cloned()
             .or_else(|| {
-                download.etag.as_ref().map(|etag| SegmentValidator {
-                    header: reqwest::header::IF_RANGE,
-                    entity_header: reqwest::header::ETAG,
-                    value: etag.clone(),
-                    total: download.total.unwrap_or(0),
-                })
+                download
+                    .resume_validator()
+                    .map(|v| SegmentValidator::new(v, download.total.unwrap_or(0)))
             });
 
         let (result, new_val) = single_stream::download_single_stream(

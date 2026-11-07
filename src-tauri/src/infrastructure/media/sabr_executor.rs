@@ -289,6 +289,7 @@ impl SabrDownloadExecutor {
                 transfer_kind: Some("sabr".to_string()),
                 effective_concurrency: Some(2),
                 etag: None,
+                validator: None,
             });
         }
 
@@ -315,6 +316,7 @@ impl SabrDownloadExecutor {
                 transfer_kind: Some("sabr".to_string()),
                 effective_concurrency: Some(1),
                 etag: None,
+                validator: None,
             });
         }
 

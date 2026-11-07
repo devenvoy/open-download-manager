@@ -138,6 +138,7 @@ impl PairedDownloadExecutor {
             transfer_kind: Some("paired".to_string()),
             effective_concurrency: Some(2),
             etag: None,
+            validator: None,
         });
 
         let state = Arc::new(Mutex::new(PairedState {
@@ -277,6 +278,7 @@ impl PairedDownloadExecutor {
                             transfer_kind: Some("paired".to_string()),
                             effective_concurrency: Some(2),
                             etag: None,
+                            validator: None,
                         });
                     }
                 }
