@@ -230,6 +230,7 @@ impl DownloadTransferService {
                     youtube_format: request.youtube_format.clone(),
                     transfer_kind: None,
                     etag: None,
+                    validator: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -316,6 +317,7 @@ impl DownloadTransferService {
                     youtube_format: None,
                     transfer_kind: None,
                     etag: None,
+                    validator: None,
                 }
             })
             .collect();
@@ -660,7 +662,12 @@ impl DownloadTransferService {
                 if let Some(ec) = progress.effective_concurrency {
                     download.connections = ec;
                 }
-                if let Some(ref etag) = progress.etag {
+                if let Some(ref validator) = progress.validator {
+                    download.validator = Some(validator.clone());
+                    if let crate::domain::download::TransferValidator::ETag(ref etag) = validator {
+                        download.etag = Some(etag.clone());
+                    }
+                } else if let Some(ref etag) = progress.etag {
                     download.etag = Some(etag.clone());
                 }
             }) {
@@ -731,10 +738,22 @@ impl DownloadTransferService {
                     (None, false)
                 };
 
-                let etag = headers
+                let validator = headers
                     .get(reqwest::header::ETAG)
                     .and_then(|v| v.to_str().ok())
-                    .map(|s| s.to_owned());
+                    .filter(|v| !v.starts_with("W/") && v.starts_with('"') && v.ends_with('"'))
+                    .map(|s| crate::domain::download::TransferValidator::ETag(s.to_owned()))
+                    .or_else(|| {
+                        headers
+                            .get(reqwest::header::LAST_MODIFIED)
+                            .and_then(|v| v.to_str().ok())
+                            .filter(|v| !v.trim().is_empty())
+                            .map(|s| {
+                                crate::domain::download::TransferValidator::LastModified(
+                                    s.to_owned(),
+                                )
+                            })
+                    });
 
                 let _ = history.update_download(&id, |d| {
                     if d.needs_review {
@@ -742,8 +761,11 @@ impl DownloadTransferService {
                             d.total = Some(tot);
                         }
                         d.resumable = Some(resumable);
-                        if let Some(e) = etag {
-                            d.etag = Some(e);
+                        if let Some(ref val) = validator {
+                            d.validator = Some(val.clone());
+                            if let crate::domain::download::TransferValidator::ETag(ref e) = val {
+                                d.etag = Some(e.clone());
+                            }
                         }
                         if let Some(better_name) = cd_name {
                             let current_stem = std::path::Path::new(&d.filename)

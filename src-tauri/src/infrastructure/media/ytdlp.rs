@@ -306,6 +306,7 @@ impl YtDlpTools {
                                         transfer_kind: Some("ytdlp".to_string()),
                                         effective_concurrency: Some(8),
                                         etag: None,
+                                        validator: None,
                                     });
                                 }
                             }

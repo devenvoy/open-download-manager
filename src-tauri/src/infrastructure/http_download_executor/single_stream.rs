@@ -55,11 +55,26 @@ pub(crate) async fn download_single_stream(
     let initial_downloaded = downloaded;
 
     let mut restart_notice = None;
+    if downloaded > 0 && previous_validator.is_none() {
+        if let Err(err) = fs::remove_file(&temporary).await {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                return Err(AppError::download(format!(
+                    "Could not restart the partial download: {err}"
+                )));
+            }
+        }
+        downloaded = 0;
+        restart_notice = Some(
+            "The download could not be verified with a saved validator; restarted download from the beginning."
+                .to_owned(),
+        );
+    }
+
     let mut response = send_stream_request(
         &client,
         url.clone(),
         downloaded,
-        previous_validator.as_ref(),
+        if downloaded > 0 { previous_validator.as_ref() } else { None },
         control,
     )
     .await?;
@@ -95,14 +110,34 @@ pub(crate) async fn download_single_stream(
                 "The server returned an invalid byte range for the partial download.",
             ));
         }
-        total = range_total.or_else(|| {
-            response
-                .content_length()
-                .and_then(|length| downloaded.checked_add(length))
-        });
-        supports_range = true;
+        if let Some(ref prev) = previous_validator {
+            if let Some(resp_val) = response
+                .headers()
+                .get(&prev.entity_header())
+                .and_then(|v| v.to_str().ok())
+            {
+                if resp_val != prev.value() {
+                    let _ = fs::remove_file(&temporary).await;
+                    downloaded = 0;
+                    restart_notice = Some(
+                        "The remote file changed on the server; restarted download from the beginning."
+                            .to_owned(),
+                    );
+                    response = send_stream_request(&client, url.clone(), 0, None, control).await?;
+                }
+            }
+        }
+        if response.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+            total = range_total.or_else(|| {
+                response
+                    .content_length()
+                    .and_then(|length| downloaded.checked_add(length))
+            });
+            supports_range = true;
+        }
     } else if response.status().is_success() {
         if initial_downloaded > 0 {
+            let _ = fs::remove_file(&temporary).await;
             downloaded = 0;
             restart_notice = Some(
                 "The remote file changed or server does not support resuming; restarted download from the beginning."
@@ -172,7 +207,8 @@ pub(crate) async fn download_single_stream(
         notice: restart_notice,
         transfer_kind: Some("single_http".to_string()),
         effective_concurrency: Some(1),
-        etag: new_validator.as_ref().map(|v| v.value.clone()),
+        etag: new_validator.as_ref().map(|v| v.value().to_string()),
+        validator: new_validator.as_ref().map(|v| v.validator.clone()),
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -236,7 +272,16 @@ pub(crate) async fn download_single_stream(
                                     && new_response.status() == reqwest::StatusCode::PARTIAL_CONTENT
                                 {
                                     if let Ok((start, _, _)) = content_range(&new_response) {
-                                        if start == downloaded {
+                                        let entity_ok = if let Some(ref v) = new_validator {
+                                            new_response
+                                                .headers()
+                                                .get(&v.entity_header())
+                                                .and_then(|val| val.to_str().ok())
+                                                .map_or(true, |val| val == v.value())
+                                        } else {
+                                            true
+                                        };
+                                        if start == downloaded && entity_ok {
                                             response = new_response;
                                             continue 'stream;
                                         }
@@ -273,6 +318,7 @@ pub(crate) async fn download_single_stream(
                                     transfer_kind: Some("single_http".to_string()),
                                     effective_concurrency: Some(1),
                                     etag: None,
+                                    validator: None,
                                 });
                                 response = new_response;
                                 continue 'stream;
@@ -322,7 +368,16 @@ pub(crate) async fn download_single_stream(
                                 && new_response.status() == reqwest::StatusCode::PARTIAL_CONTENT
                             {
                                 if let Ok((start, _, _)) = content_range(&new_response) {
-                                    if start == downloaded {
+                                    let entity_ok = if let Some(ref v) = new_validator {
+                                        new_response
+                                            .headers()
+                                            .get(&v.entity_header())
+                                            .and_then(|val| val.to_str().ok())
+                                            .map_or(true, |val| val == v.value())
+                                    } else {
+                                        true
+                                    };
+                                    if start == downloaded && entity_ok {
                                         response = new_response;
                                         continue 'stream;
                                     }
@@ -359,6 +414,7 @@ pub(crate) async fn download_single_stream(
                                 transfer_kind: Some("single_http".to_string()),
                                 effective_concurrency: Some(1),
                                 etag: None,
+                                validator: None,
                             });
                             response = new_response;
                             continue 'stream;
@@ -413,7 +469,8 @@ pub(crate) async fn download_single_stream(
                 notice: None,
                 transfer_kind: Some("single_http".to_string()),
                 effective_concurrency: Some(1),
-                etag: new_validator.as_ref().map(|v| v.value.clone()),
+                etag: new_validator.as_ref().map(|v| v.value().to_string()),
+                validator: new_validator.as_ref().map(|v| v.validator.clone()),
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;
@@ -469,8 +526,8 @@ pub(crate) async fn send_stream_request(
     control: &mut DownloadControl,
 ) -> AppResult<reqwest::Response> {
     let client = client.clone();
-    let val_header = validator.map(|v| v.header.clone());
-    let val_value = validator.map(|v| v.value.clone());
+    let val_header = validator.map(|v| v.header());
+    let val_value = validator.map(|v| v.if_range_value().to_owned());
     send_with_retry(control, move || {
         let mut request = client.get(url.clone());
         if offset > 0 {

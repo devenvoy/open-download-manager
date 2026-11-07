@@ -68,6 +68,8 @@ pub struct DownloadRecord {
     pub transfer_kind: Option<String>,
     #[serde(default)]
     pub etag: Option<String>,
+    #[serde(default, deserialize_with = "super::validator::deserialize_optional_transfer_validator")]
+    pub validator: Option<super::validator::TransferValidator>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
 }
@@ -86,6 +88,18 @@ impl DownloadRecord {
     pub fn prepare_for_restart(&mut self) {
         self.status = self.status.clone().after_restart();
         self.speed = 0;
+    }
+
+    pub fn resume_validator(&self) -> Option<super::validator::TransferValidator> {
+        if let Some(ref val) = self.validator {
+            return Some(val.clone());
+        }
+        if let Some(ref etag) = self.etag {
+            if !etag.starts_with("W/") && etag.starts_with('"') && etag.ends_with('"') {
+                return Some(super::validator::TransferValidator::ETag(etag.clone()));
+            }
+        }
+        None
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -144,7 +158,11 @@ impl DownloadRecord {
             audio_url: self.audio_url.as_deref(),
             referer: self.referer.as_deref(),
             transfer_kind: self.transfer_kind.as_deref(),
-            etag: self.etag.as_deref(),
+            etag: self.etag.as_deref().or_else(|| match self.validator.as_ref() {
+                Some(super::validator::TransferValidator::ETag(e)) => Some(e.as_str()),
+                _ => None,
+            }),
+            validator: self.validator.as_ref(),
         }
     }
 }
@@ -179,4 +197,5 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub referer: Option<&'a str>,
     pub transfer_kind: Option<&'a str>,
     pub etag: Option<&'a str>,
+    pub validator: Option<&'a super::validator::TransferValidator>,
 }

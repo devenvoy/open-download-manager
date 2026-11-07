@@ -466,6 +466,7 @@ async fn download_hls_segment(
                     transfer_kind: Some("hls".to_string()),
                     effective_concurrency: Some(eff_conns),
                     etag: None,
+                    validator: None,
                 });
             }
         }
@@ -502,6 +503,7 @@ async fn download_hls_segment(
             transfer_kind: Some("hls".to_string()),
             effective_concurrency: Some(eff_conns),
             etag: None,
+            validator: None,
         });
     }
 

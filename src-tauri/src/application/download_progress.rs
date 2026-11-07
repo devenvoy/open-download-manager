@@ -1,4 +1,4 @@
-use crate::domain::download::DownloadSegmentProgress;
+use crate::domain::download::{DownloadSegmentProgress, TransferValidator};
 
 #[derive(Clone, Debug, Default)]
 pub struct DownloadProgress {
@@ -10,4 +10,5 @@ pub struct DownloadProgress {
     pub transfer_kind: Option<String>,
     pub effective_concurrency: Option<u8>,
     pub etag: Option<String>,
+    pub validator: Option<TransferValidator>,
 }

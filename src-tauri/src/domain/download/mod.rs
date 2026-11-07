@@ -8,6 +8,7 @@ mod request;
 mod review_request;
 mod status;
 mod validated_request;
+mod validator;
 
 pub use action::DownloadAction;
 pub use address::DownloadAddress;
@@ -21,3 +22,4 @@ pub use request::DownloadRequest;
 pub use review_request::ReviewDownloadRequest;
 pub use status::DownloadStatus;
 pub use validated_request::ValidatedDownloadRequest;
+pub use validator::{deserialize_optional_transfer_validator, TransferValidator};
