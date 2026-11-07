@@ -17,13 +17,12 @@ use crate::{
         download::{DownloadRecord, DownloadSegmentProgress},
         media::sabr::{build_sabr_request_body, parse_media_header_itag, SabrFormat},
     },
-    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
+    infrastructure::media::ffmpeg::FfmpegTools,
 };
 
 pub struct SabrDownloadExecutor {
     client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
-    ytdlp: Option<YtDlpTools>,
 }
 
 fn read_varint_from_slice(slice: &[u8]) -> Option<(u64, usize)> {
@@ -47,7 +46,6 @@ impl SabrDownloadExecutor {
         Self {
             client: Arc::new(std::sync::RwLock::new(client)),
             ffmpeg: FfmpegTools::new(),
-            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -55,7 +53,6 @@ impl SabrDownloadExecutor {
         Self {
             client,
             ffmpeg: FfmpegTools::new(),
-            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -79,51 +76,6 @@ impl SabrDownloadExecutor {
             .as_ref()
             .map(PathBuf::from)
             .ok_or_else(|| AppError::download("Download directory is not set."))?;
-
-        let is_real_youtube = session.server_abr_streaming_url.contains("googlevideo.com")
-            || download.url.contains("googlevideo.com")
-            || download.url.contains("youtube.com")
-            || download.url.contains("youtu.be");
-
-        if is_real_youtube {
-            let ytdlp_tool = self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new);
-            if let Some(ytdlp) = ytdlp_tool {
-                let canonical_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
-                let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
-                let destination_filename = if is_mp3 {
-                    download.filename.clone()
-                } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
-                    download.filename.clone()
-                } else {
-                    let base = Path::new(&download.filename)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or(&download.filename);
-                    format!("{base}.mp4")
-                };
-                let destination = directory.join(destination_filename);
-
-                let format_spec = if is_mp3 {
-                    session.audio_itag.to_string()
-                } else if let Some(v) = session.video_itag {
-                    format!("{v}+{}", session.audio_itag)
-                } else {
-                    session.audio_itag.to_string()
-                };
-
-                return ytdlp
-                    .download(
-                        &canonical_url,
-                        Some(&format_spec),
-                        download.referer.as_deref(),
-                        &destination,
-                        progress_handler,
-                        control,
-                        0,
-                    )
-                    .await;
-            }
-        }
 
         let has_video = session.video_itag.is_some();
         let parts_dir = directory.join(format!(".open-download-manager-sabr-{}", download.id));
@@ -336,6 +288,7 @@ impl SabrDownloadExecutor {
                 notice: None,
                 transfer_kind: Some("sabr".to_string()),
                 effective_concurrency: Some(2),
+                etag: None,
             });
         }
 
@@ -361,6 +314,7 @@ impl SabrDownloadExecutor {
                 notice: None,
                 transfer_kind: Some("sabr".to_string()),
                 effective_concurrency: Some(1),
+                etag: None,
             });
         }
 

@@ -9,4 +9,5 @@ pub struct DownloadProgress {
     pub notice: Option<String>,
     pub transfer_kind: Option<String>,
     pub effective_concurrency: Option<u8>,
+    pub etag: Option<String>,
 }

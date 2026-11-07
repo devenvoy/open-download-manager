@@ -291,12 +291,12 @@ async fn handle_bridge_connection(
                 Ok(items) => {
                     let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": items})).await;
                 }
-                Err(e) => {
-                    let _ = send_json_response(socket, 400, &serde_json::json!({"error": e.message})).await;
+                Err(_) => {
+                    let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
                 }
             }
         } else {
-            let _ = send_json_response(socket, 501, &serde_json::json!({"error": "yt-dlp is not available."})).await;
+            let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
         }
         return;
     }

@@ -731,6 +731,41 @@ async fn supported_byte_ranges_use_configured_segments_and_assemble_in_order() {
 }
 
 #[tokio::test]
+async fn segmented_download_dynamically_rebalances_chunks_and_assembles_in_order() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    // 5 MB file so initial chunks exceed the MIN_CHUNK_REASSIGN_BYTES (2 MB) threshold
+    let body = (0..5 * 1024 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let url = serve_segmented(body.clone(), 10);
+    let settings = settings(directory.clone(), 2);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let ids = service
+        .add(download_request(url, "rebalanced.bin"), &settings)
+        .expect("segmented download should start");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("rebalanced.bin")).unwrap(),
+        body,
+        "dynamically reassigned and assembled chunks must match original data bit-for-bit"
+    );
+    let record = history.downloads().unwrap().remove(0);
+    assert!(record
+        .connections_progress
+        .iter()
+        .all(|segment| segment.status == "complete"));
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
 async fn segmented_download_resumes_partial_ranges_after_pause() {
     let directory = temporary_directory();
     fs::create_dir_all(&directory).expect("temporary directory should be created");
@@ -1054,7 +1089,7 @@ async fn expired_media_link_can_be_refreshed_and_resumed_from_browser() {
     let service = DownloadTransferService::new(history.clone(), executor, 1);
 
     let ids = service
-        .add(download_request(expired_url, "video.mp4"), &settings)
+        .add(download_request(expired_url, "refreshed_clip.mp4"), &settings)
         .expect("download should be accepted");
 
     assert_eq!(
@@ -1072,7 +1107,7 @@ async fn expired_media_link_can_be_refreshed_and_resumed_from_browser() {
         DownloadStatus::Completed
     );
     assert_eq!(
-        fs::read(directory.join("video.mp4")).unwrap(),
+        fs::read(directory.join("refreshed_clip.mp4")).unwrap(),
         b"refreshed video stream content"
     );
 

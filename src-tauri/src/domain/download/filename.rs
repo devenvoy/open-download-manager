@@ -47,8 +47,13 @@ pub fn redact_download_url(value: &str) -> String {
 
 pub fn is_generic_filename(name: &str) -> bool {
     let lower = name.trim().to_ascii_lowercase();
+    // Strip extension to normalize: "video.mp4" -> "video"
+    let stem = std::path::Path::new(&lower)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&lower);
     matches!(
-        lower.as_str(),
+        stem,
         "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"
     )
 }

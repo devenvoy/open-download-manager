@@ -90,7 +90,7 @@ impl HttpDownloadExecutor {
         if filename.is_empty() {
             return Err(AppError::download("The download file name is invalid."));
         }
-        let destination = directory.join(filename);
+        let mut destination = directory.join(filename);
         fs::create_dir_all(&directory).await.map_err(|error| {
             AppError::download(format!("Could not create the download folder: {error}"))
         })?;
@@ -99,6 +99,13 @@ impl HttpDownloadExecutor {
         })? {
             return Err(AppError::download("A file with that name already exists."));
         }
+
+        let mut metrics = crate::infrastructure::metrics::TransferMetrics::new(
+            &download.id,
+            if download.connections > 1 { "segmented_http" } else { "single_http" },
+            download.connections,
+        );
+        metrics.record_first_request();
 
         let temporary = directory.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
         if download.connections > 1
@@ -109,24 +116,41 @@ impl HttpDownloadExecutor {
             let existing_parts = assembler::has_segment_parts(
                 &directory,
                 &download.id,
-                download.connections,
             )
             .await?;
             let range_info =
                 segmented::discover_ranges(&self.client(), url.clone(), &mut control).await?;
-            if let Some(validator) = range_info {
+            if let Some((validator, suggested_filename)) = range_info {
+                if let Some(better_name) = suggested_filename {
+                    let current_stem = destination
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
+                    if crate::domain::download::is_generic_filename(current_stem) {
+                        destination = destination.with_file_name(better_name);
+                    }
+                }
+                metrics.range_supported = true;
+                metrics.known_total = Some(validator.total);
                 let previous = self
                     .segment_validators
                     .lock()
                     .map_err(|_| AppError::storage("Download resume state is unavailable."))?
                     .get(&download.id)
-                    .cloned();
+                    .cloned()
+                    .or_else(|| {
+                        download.etag.as_ref().map(|etag| SegmentValidator {
+                            header: reqwest::header::IF_RANGE,
+                            entity_header: reqwest::header::ETAG,
+                            value: etag.clone(),
+                            total: validator.total,
+                        })
+                    });
                 let mut restart_notice = None;
                 if existing_parts && previous.as_ref() != Some(&validator) {
                     assembler::remove_segment_parts(
                         &directory,
                         &download.id,
-                        download.connections,
                     )
                     .await?;
                     restart_notice = Some(
@@ -147,6 +171,7 @@ impl HttpDownloadExecutor {
                         notice: Some(notice),
                         transfer_kind: Some("segmented_http".to_string()),
                         effective_concurrency: Some(download.connections),
+                        etag: Some(validator.value.clone()),
                     });
                 }
                 let segments = segmented::segment_ranges(
@@ -154,60 +179,95 @@ impl HttpDownloadExecutor {
                     download.connections,
                     &directory,
                     &download.id,
+                    if download.connections_progress.is_empty() {
+                        None
+                    } else {
+                        Some(&download.connections_progress)
+                    },
                 )
                 .await?;
-                let assembly_segments = segments.clone();
-                segmented::download_segments(
+                let download_res = segmented::download_segments(
                     self.client(),
                     &download.id,
                     url.clone(),
                     &validator,
                     segments,
+                    download.connections,
                     &directory,
                     &mut control,
                     rate_limiter.clone(),
                     &progress_handler,
                 )
-                .await?;
-                assembler::concat_segments(
-                    &download.id,
-                    &assembly_segments,
-                    &directory,
-                    &temporary,
-                    &mut control,
-                )
-                .await?;
-                self.segment_validators
-                    .lock()
-                    .map_err(|_| AppError::storage("Download resume state is unavailable."))?
-                    .remove(&download.id);
-                let result = assembler::finalize(
-                    &download.id,
-                    temporary,
-                    destination,
-                    validator.total,
-                    Some(validator.total),
-                )
-                .await?;
-                if let Err(error) = assembler::remove_segment_parts(
-                    &directory,
-                    &download.id,
-                    download.connections,
-                )
-                .await
-                {
-                    eprintln!(
-                        "Could not remove completed segment files for {}: {}",
-                        download.id, error.message
-                    );
+                .await;
+
+                match download_res {
+                    Ok(completed_segments) => {
+                        assembler::concat_segments(
+                            &download.id,
+                            &completed_segments,
+                            &directory,
+                            &temporary,
+                            &mut control,
+                        )
+                        .await?;
+                        self.segment_validators
+                            .lock()
+                            .map_err(|_| AppError::storage("Download resume state is unavailable."))?
+                            .remove(&download.id);
+                        let result = assembler::finalize(
+                            &download.id,
+                            temporary,
+                            destination,
+                            validator.total,
+                            Some(validator.total),
+                        )
+                        .await?;
+                        if let Err(error) = assembler::remove_segment_parts(
+                            &directory,
+                            &download.id,
+                        )
+                        .await
+                        {
+                            eprintln!(
+                                "Could not remove completed segment files for {}: {}",
+                                download.id, error.message
+                            );
+                        }
+                        metrics.record_completion(result.downloaded);
+                        return Ok(result);
+                    }
+                    Err(error) if matches!(error.code, "download_paused" | "download_cancelled") => {
+                        return Err(error);
+                    }
+                    Err(error) => {
+                        // Safe Segmented Fallback (IDM-style):
+                        // On range inconsistency or mid-stream segment failure, clean up
+                        // incomplete segment parts and seamlessly fall back to single stream from byte 0.
+                        metrics.set_fallback(format!("segmented_range_failed: {}", error.message));
+                        let _ = assembler::remove_segment_parts(
+                            &directory,
+                            &download.id,
+                        )
+                        .await;
+                        progress_handler(DownloadProgress {
+                            downloaded: 0,
+                            total: Some(validator.total),
+                            bytes_per_second: 0,
+                            connections_progress: Vec::new(),
+                            notice: Some(
+                                "Segmented range requests were not honored by the server; restarted as single stream."
+                                    .to_owned(),
+                            ),
+                            transfer_kind: Some("single_http".to_string()),
+                            effective_concurrency: Some(1),
+                            etag: None,
+                        });
+                    }
                 }
-                return Ok(result);
-            }
-            if existing_parts {
+            } else if existing_parts {
                 assembler::remove_segment_parts(
                     &directory,
                     &download.id,
-                    download.connections,
                 )
                 .await?;
             }
@@ -218,7 +278,15 @@ impl HttpDownloadExecutor {
             .lock()
             .map_err(|_| AppError::storage("Download resume state is unavailable."))?
             .get(&download.id)
-            .cloned();
+            .cloned()
+            .or_else(|| {
+                download.etag.as_ref().map(|etag| SegmentValidator {
+                    header: reqwest::header::IF_RANGE,
+                    entity_header: reqwest::header::ETAG,
+                    value: etag.clone(),
+                    total: download.total.unwrap_or(0),
+                })
+            });
 
         let (result, new_val) = single_stream::download_single_stream(
             self.client(),
@@ -238,6 +306,8 @@ impl HttpDownloadExecutor {
                 map.insert(download.id.clone(), validator);
             }
         }
+
+        metrics.record_completion(result.downloaded);
 
         Ok(result)
     }
@@ -271,13 +341,7 @@ impl DownloadExecutor for HttpDownloadExecutor {
         let temporary = PathBuf::from(directory)
             .join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
         assembler::remove_partial_file(&temporary)?;
-        for index in 0..download.connections.max(1) {
-            assembler::remove_partial_file(&assembler::segment_path(
-                &PathBuf::from(directory),
-                &download.id,
-                index,
-            ))?;
-        }
+        assembler::remove_all_segment_parts_sync(std::path::Path::new(directory), &download.id)?;
         self.segment_validators
             .lock()
             .map_err(|_| AppError::storage("Download resume state is unavailable."))?

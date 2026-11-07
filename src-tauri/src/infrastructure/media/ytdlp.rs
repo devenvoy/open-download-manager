@@ -304,7 +304,8 @@ impl YtDlpTools {
                                         connections_progress: Vec::new(),
                                         notice: None,
                                         transfer_kind: Some("ytdlp".to_string()),
-                                        effective_concurrency: Some(1),
+                                        effective_concurrency: Some(8),
+                                        etag: None,
                                     });
                                 }
                             }

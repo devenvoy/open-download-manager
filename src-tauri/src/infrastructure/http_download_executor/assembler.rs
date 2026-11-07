@@ -16,7 +16,7 @@ use crate::{
 
 use super::policy::{CONCAT_BUFFER_SIZE, TEMPORARY_DOWNLOAD_PREFIX};
 
-pub(crate) fn segment_path(directory: &Path, id: &str, index: u8) -> PathBuf {
+pub(crate) fn segment_path(directory: &Path, id: &str, index: usize) -> PathBuf {
     directory.join(format!(
         "{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-{index}.part"
     ))
@@ -33,30 +33,49 @@ pub(crate) fn remove_partial_file(path: &Path) -> AppResult<()> {
     }
 }
 
-pub(crate) async fn has_segment_parts(directory: &Path, id: &str, count: u8) -> AppResult<bool> {
-    for index in 0..count {
-        if fs::try_exists(segment_path(directory, id, index))
-            .await
-            .map_err(|error| {
-                AppError::download(format!("Could not check a partial segment: {error}"))
-            })?
-        {
+pub(crate) async fn has_segment_parts(directory: &Path, id: &str) -> AppResult<bool> {
+    let mut entries = match fs::read_dir(directory).await {
+        Ok(entries) => entries,
+        Err(_) => return Ok(false),
+    };
+    let prefix = format!("{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-");
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.starts_with(&prefix) && name_str.ends_with(".part") {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-pub(crate) async fn remove_segment_parts(directory: &Path, id: &str, count: u8) -> AppResult<()> {
-    for index in 0..count {
-        match fs::remove_file(segment_path(directory, id, index)).await {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(AppError::download(format!(
-                    "Could not remove a partial segment: {error}"
-                )));
-            }
+pub(crate) async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
+    let mut entries = match fs::read_dir(directory).await {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+    let prefix = format!("{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-");
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.starts_with(&prefix) && name_str.ends_with(".part") {
+            let _ = fs::remove_file(entry.path()).await;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppResult<()> {
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+    let prefix = format!("{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-");
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.starts_with(&prefix) && name_str.ends_with(".part") {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
     Ok(())
@@ -69,6 +88,21 @@ pub(crate) async fn concat_segments(
     temporary: &Path,
     control: &mut DownloadControl,
 ) -> AppResult<()> {
+    let mut sorted_chunks: Vec<(usize, &DownloadSegmentProgress)> =
+        segments.iter().enumerate().collect();
+    sorted_chunks.sort_by_key(|(_, s)| s.start);
+
+    let mut expected_start = 0_u64;
+    for (_, s) in &sorted_chunks {
+        if s.start != expected_start {
+            return Err(AppError::download(format!(
+                "Inconsistent chunk boundary during assembly: expected start {expected_start}, found {}",
+                s.start
+            )));
+        }
+        expected_start = s.end + 1;
+    }
+
     let mut output = OpenOptions::new()
         .write(true)
         .create(true)
@@ -80,9 +114,7 @@ pub(crate) async fn concat_segments(
         })?;
 
     let mut buffer = vec![0; CONCAT_BUFFER_SIZE];
-    for (index, _) in segments.iter().enumerate() {
-        let segment_index =
-            u8::try_from(index).map_err(|_| AppError::download("The segment index is invalid."))?;
+    for (segment_index, _) in sorted_chunks {
         let path = segment_path(directory, id, segment_index);
         let mut input = fs::File::open(path).await.map_err(|error| {
             AppError::download(format!("Could not read a completed segment: {error}"))

@@ -403,6 +403,19 @@ function numeric(value) {
 	const result = Number(value);
 	return Number.isFinite(result) && result > 0 ? result : 0;
 }
+function redactUrl(raw) {
+	if (!raw) return "";
+	try {
+		const u = new URL(raw);
+		u.username = "";
+		u.password = "";
+		u.search = "";
+		u.hash = "";
+		return u.href;
+	} catch {
+		return raw;
+	}
+}
 function statusOf(d) {
 	const value = String(d.status || "queued").toLowerCase();
 	return (
@@ -959,7 +972,7 @@ function renderDetails() {
 	$("#details-title").textContent =
 		`${percent !== null ? `${Math.floor(percent)}% ` : ""}${d.filename || "Download status"}`;
 	const isWatchPage = d.url && (d.url.includes("youtube.com/watch") || d.url.includes("youtu.be/"));
-	const sourceAddress = (!isWatchPage && d.url) ? d.url : (d.url || d.referer || "");
+	const sourceAddress = isWatchPage ? (d.referer || d.url || "") : (d.url || d.referer || "");
 	$("#transfer-source").textContent = sourceAddress;
 	$("#transfer-source").title = sourceAddress;
 	const names = {
@@ -1375,7 +1388,7 @@ function openErrorDialog(downloadId = null) {
 	const techPre = $("#error-dialog-tech-text");
 	const diagnosticData = [
 		`File: ${d.filename || "unknown"}`,
-		`URL: ${d.url || "unknown"}`,
+		`URL: ${redactUrl(d.url) || "unknown"}`,
 		`Kind: ${d.kind || "standard"}`,
 		`Downloaded: ${d.downloaded || 0} bytes`,
 		`Total: ${d.total || "unknown"} bytes`,
@@ -1952,7 +1965,17 @@ $("#video-formats-form")?.addEventListener("submit", (e) => {
 	if (choice) {
 		chosenYouTubeFormat = choice.youtubeFormat;
 		const ext = choice.outputFormat || (choice.format === "MP3" ? "mp3" : "mp4");
-		const title = choice.title || "video";
+		let title = choice.title;
+		if (!title || title.trim().toLowerCase() === "video") {
+			try {
+				const currentUrl = $("#download-url")?.value || "";
+				const u = new URL(currentUrl);
+				const host = u.hostname.replace(/^www\./, "").replace(/\./g, "_");
+				title = host ? `download_${host}` : "download";
+			} catch {
+				title = "download";
+			}
+		}
 		$("#download-filename").value = `${title}.${ext}`;
 		$("#download-category").value = ext === "mp3" ? "Audio" : "Video";
 		$("#video-banner-btn").textContent = `Selected: ${choice.quality || choice.format} (${ext.toUpperCase()})`;

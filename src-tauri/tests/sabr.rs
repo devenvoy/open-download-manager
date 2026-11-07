@@ -606,6 +606,7 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         sabr: Some(sabr_session),
         referer: None,
         youtube_format: None,
+        etag: None,
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -710,6 +711,7 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         sabr: Some(sabr_session),
         referer: None,
         youtube_format: None,
+        etag: None,
     };
 
     let (tx, rx) = watch::channel(None);

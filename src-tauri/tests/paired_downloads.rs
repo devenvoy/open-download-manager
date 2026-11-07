@@ -217,6 +217,7 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         sabr: None,
         referer: None,
         youtube_format: None,
+        etag: None,
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -319,6 +320,7 @@ async fn paired_download_converts_to_mp3() {
         sabr: None,
         referer: None,
         youtube_format: None,
+        etag: None,
     };
 
     let progress_handler: DownloadProgressHandler = Arc::new(|_| {});
@@ -371,6 +373,7 @@ fn paired_download_discard_partial_cleans_up_directory() {
         sabr: None,
         referer: None,
         youtube_format: None,
+        etag: None,
     };
 
     let parts_dir = dir.join(format!(".open-download-manager-paired-{}", download.id));

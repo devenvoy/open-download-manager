@@ -66,6 +66,8 @@ pub struct DownloadRecord {
     pub youtube_format: Option<String>,
     #[serde(default)]
     pub transfer_kind: Option<String>,
+    #[serde(default)]
+    pub etag: Option<String>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
 }
@@ -142,6 +144,7 @@ impl DownloadRecord {
             audio_url: self.audio_url.as_deref(),
             referer: self.referer.as_deref(),
             transfer_kind: self.transfer_kind.as_deref(),
+            etag: self.etag.as_deref(),
         }
     }
 }
@@ -175,4 +178,5 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub audio_url: Option<&'a str>,
     pub referer: Option<&'a str>,
     pub transfer_kind: Option<&'a str>,
+    pub etag: Option<&'a str>,
 }

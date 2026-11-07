@@ -20,6 +20,7 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
+    domain::download::{is_generic_filename, parse_content_disposition_filename},
 };
 
 use super::{
@@ -124,6 +125,32 @@ pub(crate) async fn download_single_stream(
 
     let new_validator = extract_validator(&response, total.unwrap_or(downloaded));
 
+    // Wire Content-Disposition filename: if the current destination has a
+    // generic stem, prefer a better name from the server's response header.
+    let destination = {
+        let current_stem = destination
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        if is_generic_filename(current_stem) {
+            if let Some(cd_value) = response
+                .headers()
+                .get(reqwest::header::CONTENT_DISPOSITION)
+                .and_then(|v| v.to_str().ok())
+            {
+                if let Some(better_name) = parse_content_disposition_filename(cd_value) {
+                    destination.with_file_name(better_name)
+                } else {
+                    destination
+                }
+            } else {
+                destination
+            }
+        } else {
+            destination
+        }
+    };
+
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -145,6 +172,7 @@ pub(crate) async fn download_single_stream(
         notice: restart_notice,
         transfer_kind: Some("single_http".to_string()),
         effective_concurrency: Some(1),
+        etag: new_validator.as_ref().map(|v| v.value.clone()),
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -244,6 +272,7 @@ pub(crate) async fn download_single_stream(
                                     ),
                                     transfer_kind: Some("single_http".to_string()),
                                     effective_concurrency: Some(1),
+                                    etag: None,
                                 });
                                 response = new_response;
                                 continue 'stream;
@@ -329,6 +358,7 @@ pub(crate) async fn download_single_stream(
                                 ),
                                 transfer_kind: Some("single_http".to_string()),
                                 effective_concurrency: Some(1),
+                                etag: None,
                             });
                             response = new_response;
                             continue 'stream;
@@ -383,6 +413,7 @@ pub(crate) async fn download_single_stream(
                 notice: None,
                 transfer_kind: Some("single_http".to_string()),
                 effective_concurrency: Some(1),
+                etag: new_validator.as_ref().map(|v| v.value.clone()),
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;

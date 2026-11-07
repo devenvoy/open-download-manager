@@ -7,23 +7,19 @@ use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 use crate::{
     application::{
-        download_executor::{stopped_error, DownloadControl, DownloadProgressHandler},
+        download_executor::{stopped_error, DownloadControl, DownloadProgressHandler, DownloadStopReason},
         download_progress::DownloadProgress,
         download_rate_limiter::DownloadRateLimiter,
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::{
-        download::{DownloadRecord, DownloadSegmentProgress},
-        media::youtube_url,
-    },
-    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
+    domain::download::{DownloadRecord, DownloadSegmentProgress},
+    infrastructure::media::ffmpeg::FfmpegTools,
 };
 
 pub struct PairedDownloadExecutor {
     client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
-    ytdlp: Option<YtDlpTools>,
 }
 
 struct PairedState {
@@ -39,7 +35,6 @@ impl PairedDownloadExecutor {
         Self {
             client: Arc::new(std::sync::RwLock::new(client)),
             ffmpeg: FfmpegTools::new(),
-            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -47,7 +42,6 @@ impl PairedDownloadExecutor {
         Self {
             client,
             ffmpeg: FfmpegTools::new(),
-            ytdlp: YtDlpTools::new(),
         }
     }
 
@@ -67,91 +61,15 @@ impl PairedDownloadExecutor {
         })?;
         let video_url = download.url.clone();
 
-        match self
-            .native_paired(
-                &download,
-                &video_url,
-                &audio_url,
-                progress_handler.clone(),
-                control.clone(),
-                rate_limiter.clone(),
-            )
-            .await
-        {
-            Ok(res) => Ok(res),
-            Err(err) => {
-                let canonical_url = download
-                    .referer
-                    .as_deref()
-                    .and_then(youtube_url)
-                    .or_else(|| youtube_url(&video_url))
-                    .or_else(|| {
-                        if let Ok(parsed) = url::Url::parse(&video_url) {
-                            if let Some((_, docid)) = parsed.query_pairs().find(|(k, _)| k == "docid" || k == "id") {
-                                let s = docid.to_string();
-                                if s.len() == 11 {
-                                    return Some(format!("https://www.youtube.com/watch?v={s}"));
-                                }
-                            }
-                        }
-                        None
-                    });
-
-                if let (Some(ytdlp), Some(target_url)) = (
-                    self.ytdlp.as_ref().cloned().or_else(YtDlpTools::new),
-                    canonical_url,
-                ) {
-                    let directory = download
-                        .directory
-                        .as_ref()
-                        .map(PathBuf::from)
-                        .ok_or_else(|| AppError::download("Download directory is not set."))?;
-
-                    let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
-                    let destination_filename = if is_mp3 {
-                        download.filename.clone()
-                    } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
-                        download.filename.clone()
-                    } else {
-                        let base = Path::new(&download.filename)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or(&download.filename);
-                        format!("{base}.mp4")
-                    };
-
-                    let destination = directory.join(destination_filename);
-                    let speed_limit = rate_limiter.limit_kbps() as u64;
-
-                    let format_spec = download.youtube_format.clone().or_else(|| {
-                        let v_itag = url::Url::parse(&video_url).ok().and_then(|u| {
-                            u.query_pairs().find(|(k, _)| k == "itag").map(|(_, v)| v.to_string())
-                        });
-                        let a_itag = url::Url::parse(&audio_url).ok().and_then(|u| {
-                            u.query_pairs().find(|(k, _)| k == "itag").map(|(_, v)| v.to_string())
-                        });
-                        match (v_itag, a_itag) {
-                            (Some(v), Some(a)) => Some(format!("{v}+{a}")),
-                            (Some(v), None) => Some(v),
-                            _ => None,
-                        }
-                    });
-
-                    return ytdlp
-                        .download(
-                            &target_url,
-                            format_spec.as_deref(),
-                            download.referer.as_deref(),
-                            &destination,
-                            progress_handler,
-                            control,
-                            speed_limit,
-                        )
-                        .await;
-                }
-                Err(err)
-            }
-        }
+        self.native_paired(
+            &download,
+            &video_url,
+            &audio_url,
+            progress_handler,
+            control,
+            rate_limiter,
+        )
+        .await
     }
 
     async fn native_paired(
@@ -177,7 +95,8 @@ impl PairedDownloadExecutor {
 
         let urls = [video_url.to_string(), audio_url.to_string()];
 
-        // Probe both URLs to discover Content-Length if available
+        // Fast zero-delay size discovery from query parameters (clen).
+        // Actual track sizes are verified directly when workers receive their GET responses.
         let mut totals: [Option<u64>; 2] = [None, None];
         for (i, url) in urls.iter().enumerate() {
             if let Ok(parsed) = url::Url::parse(url) {
@@ -187,19 +106,12 @@ impl PairedDownloadExecutor {
                     }
                 }
             }
-            if totals[i].is_none() {
-                if let Ok(resp) = self.client().head(url.clone()).send().await {
-                    if resp.status().is_success() {
-                        totals[i] = resp.content_length();
-                    }
-                }
-            }
         }
 
+        // Only report a combined total when both track sizes are known.
+        // A single track's size is not the total for the paired output.
         let initial_total = match (totals[0], totals[1]) {
-            (Some(v), Some(a)) => Some(v + a),
-            (Some(v), None) => Some(v),
-            (None, Some(a)) => Some(a),
+            (Some(v), Some(a)) => v.checked_add(a),
             _ => None,
         };
         progress_handler(DownloadProgress {
@@ -225,6 +137,7 @@ impl PairedDownloadExecutor {
             notice: None,
             transfer_kind: Some("paired".to_string()),
             effective_concurrency: Some(2),
+            etag: None,
         });
 
         let state = Arc::new(Mutex::new(PairedState {
@@ -249,13 +162,34 @@ impl PairedDownloadExecutor {
                 let temp_part = parts_dir.join(format!("{index}.receiving"));
                 let final_part = parts_dir.join(format!("{index}.part"));
 
-                let mut response = client
-                    .get(url)
+                // If this track was already completed in a prior attempt, skip downloading it.
+                if tokio::fs::try_exists(&final_part).await.unwrap_or(false) {
+                    let len = tokio::fs::metadata(&final_part).await.map(|m| m.len()).unwrap_or(0);
+                    if len > 0 {
+                        let mut st = state.lock().unwrap();
+                        st.downloaded[index] = len;
+                        st.totals[index] = Some(len);
+                        return Ok(());
+                    }
+                }
+
+                let mut downloaded = tokio::fs::metadata(&temp_part).await.map(|m| m.len()).unwrap_or(0);
+
+                let mut req = client.get(url);
+                if downloaded > 0 {
+                    req = req.header(reqwest::header::RANGE, format!("bytes={downloaded}-"));
+                }
+                let mut response = req
                     .send()
                     .await
                     .map_err(|e| AppError::download(format!("Could not connect to track {index}: {e}")))?;
 
-                if !response.status().is_success() {
+                let append_mode = downloaded > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+                if !append_mode && downloaded > 0 {
+                    downloaded = 0;
+                }
+
+                if !response.status().is_success() && response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
                     return Err(AppError::download(format!(
                         "Track {index} returned HTTP {}.",
                         response.status().as_u16()
@@ -264,13 +198,14 @@ impl PairedDownloadExecutor {
 
                 if let Some(cl) = response.content_length() {
                     let mut st = state.lock().unwrap();
-                    st.totals[index] = Some(cl);
+                    st.totals[index] = Some(if append_mode { downloaded + cl } else { cl });
                 }
 
                 let mut file = OpenOptions::new()
                     .write(true)
                     .create(true)
-                    .truncate(true)
+                    .append(append_mode)
+                    .truncate(!append_mode)
                     .open(&temp_part)
                     .await
                     .map_err(|e| AppError::download(format!("Could not create track file: {e}")))?;
@@ -278,7 +213,10 @@ impl PairedDownloadExecutor {
                 loop {
                     let chunk = tokio::select! {
                         reason = control.stopped() => {
-                            let _ = tokio::fs::remove_file(&temp_part).await;
+                            let _ = file.sync_all().await;
+                            if reason == DownloadStopReason::Cancel {
+                                let _ = tokio::fs::remove_file(&temp_part).await;
+                            }
                             return Err(stopped_error(reason));
                         }
                         res = response.chunk() => res.map_err(|e| AppError::download(format!("Could not read track chunk: {e}")))?,
@@ -338,6 +276,7 @@ impl PairedDownloadExecutor {
                             notice: None,
                             transfer_kind: Some("paired".to_string()),
                             effective_concurrency: Some(2),
+                            etag: None,
                         });
                     }
                 }
@@ -359,7 +298,9 @@ impl PairedDownloadExecutor {
             match res {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
-                    let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+                    if e.code == "download_cancelled" {
+                        let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+                    }
                     return Err(e);
                 }
                 Err(e) => {

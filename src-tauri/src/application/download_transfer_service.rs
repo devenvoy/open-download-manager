@@ -212,7 +212,7 @@ impl DownloadTransferService {
                             Some(HTTP_DOWNLOAD_KIND.to_owned())
                         }
                     }),
-                    resumable: if request.sabr.is_some() || request.audio_url.is_some() {
+                    resumable: if request.sabr.is_some() {
                         Some(false)
                     } else {
                         Some(NEW_DOWNLOAD_IS_RESUMABLE)
@@ -229,6 +229,7 @@ impl DownloadTransferService {
                     referer: request.referer.clone(),
                     youtube_format: request.youtube_format.clone(),
                     transfer_kind: None,
+                    etag: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -237,6 +238,14 @@ impl DownloadTransferService {
             .map(|record| record.id.clone())
             .collect::<Vec<_>>();
         self.history.add_records(records)?;
+
+        if request.review_only {
+            for (index, url) in request.urls.iter().enumerate() {
+                if let Some(id) = ids.get(index) {
+                    self.probe_unreviewed_download(id.clone(), url.url().as_str().to_owned(), request.referer.clone());
+                }
+            }
+        }
 
         if !request.queue_only && !request.review_only && !is_scheduled {
             self.pump_queue();
@@ -306,6 +315,7 @@ impl DownloadTransferService {
                     referer: None,
                     youtube_format: None,
                     transfer_kind: None,
+                    etag: None,
                 }
             })
             .collect();
@@ -650,6 +660,9 @@ impl DownloadTransferService {
                 if let Some(ec) = progress.effective_concurrency {
                     download.connections = ec;
                 }
+                if let Some(ref etag) = progress.etag {
+                    download.etag = Some(etag.clone());
+                }
             }) {
                 eprintln!(
                     "Could not update download progress for {download_id}: {}",
@@ -657,6 +670,7 @@ impl DownloadTransferService {
                 );
             }
         });
+        let initial_total_unknown = record.total.is_none();
         let result = self
             .executor
             .execute(record, progress_handler, control, self.rate_limiter.clone())
@@ -668,9 +682,95 @@ impl DownloadTransferService {
             download.total = result.total;
             download.speed = 0;
             download.path = Some(result.path.to_string_lossy().into_owned());
+            if initial_total_unknown && result.total.is_none() {
+                download.notice = Some("The file size was not supplied by the server. The file may be incomplete.".to_owned());
+            }
         })?;
         let _ = self.history.notify_complete(&id);
         Ok(())
+    }
+
+    fn probe_unreviewed_download(&self, id: String, url_str: String, referer: Option<String>) {
+        let history = self.history.clone();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build();
+        let Ok(client) = client else { return; };
+
+        let task = async move {
+            let Ok(url) = url::Url::parse(&url_str) else { return; };
+            let mut req = client.get(url).header(reqwest::header::RANGE, "bytes=0-0");
+            if let Some(ref r) = referer {
+                req = req.header(reqwest::header::REFERER, r);
+            }
+            if let Ok(resp) = req.send().await {
+                let status = resp.status();
+                let headers = resp.headers().clone();
+                let cd_name = headers
+                    .get(reqwest::header::CONTENT_DISPOSITION)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(crate::domain::download::parse_content_disposition_filename);
+
+                let (total, resumable) = if status == reqwest::StatusCode::PARTIAL_CONTENT {
+                    let total = headers
+                        .get(reqwest::header::CONTENT_RANGE)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|cr| cr.rsplit('/').next())
+                        .and_then(|s| s.parse::<u64>().ok());
+                    (total, true)
+                } else if status == reqwest::StatusCode::OK {
+                    let total = headers
+                        .get(reqwest::header::CONTENT_LENGTH)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok());
+                    let has_ranges = headers
+                        .get(reqwest::header::ACCEPT_RANGES)
+                        .is_some_and(|v| v.as_bytes() == b"bytes");
+                    (total, has_ranges)
+                } else {
+                    (None, false)
+                };
+
+                let etag = headers
+                    .get(reqwest::header::ETAG)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_owned());
+
+                let _ = history.update_download(&id, |d| {
+                    if d.needs_review {
+                        if let Some(tot) = total {
+                            d.total = Some(tot);
+                        }
+                        d.resumable = Some(resumable);
+                        if let Some(e) = etag {
+                            d.etag = Some(e);
+                        }
+                        if let Some(better_name) = cd_name {
+                            let current_stem = std::path::Path::new(&d.filename)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("");
+                            if crate::domain::download::is_generic_filename(current_stem) {
+                                d.filename = better_name;
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(task);
+        } else {
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    rt.block_on(task);
+                }
+            });
+        }
     }
 
     fn fail_download(&self, id: &str, message: String) {
