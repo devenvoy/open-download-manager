@@ -22,4 +22,5 @@ pub struct ValidatedDownloadRequest {
     pub reuse_active: bool,
     pub referer: Option<String>,
     pub youtube_format: Option<String>,
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
 }

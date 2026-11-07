@@ -10,10 +10,11 @@ use infrastructure::{
 use presentation::{
     app_state::AppState,
     commands::{
-        add_download, add_playlist_downloads, browser_setup_action, check_for_updates, download_action,
-        export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
-        get_video_formats, import_downloads_from_file, install_media_tool, register_browser, remove_completed,
-        review_download, show_about_dialog, snapshot, test_proxy_connection, update_settings,
+        add_download, add_playlist_downloads, browser_setup_action, check_destination_conflict,
+        check_for_updates, download_action, export_downloads_to_file, get_integration_info,
+        get_media_tools_status, get_playlist_info, get_video_formats, import_downloads_from_file,
+        install_media_tool, register_browser, remove_completed, review_download, show_about_dialog,
+        snapshot, test_proxy_connection, update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -67,15 +68,21 @@ pub fn run() {
             )
             .map_err(|error| std::io::Error::other(error.message))?;
             let shared_client = std::sync::Arc::new(std::sync::RwLock::new(initial_client));
-            let http_executor = HttpDownloadExecutor::with_shared_client(shared_client.clone());
+            let allocator = crate::domain::download::DestinationAllocator::new();
+            let http_executor = HttpDownloadExecutor::with_shared_client_and_allocator(
+                shared_client.clone(),
+                allocator.clone(),
+            );
             let download_executor = crate::infrastructure::media::CompositeDownloadExecutor::with_shared(
                 http_executor,
                 shared_client,
             );
-            let download_transfer = DownloadTransferService::new(
+            let download_transfer = DownloadTransferService::with_shell_and_allocator(
                 download_history.clone(),
                 download_executor,
                 max_concurrent,
+                crate::infrastructure::system_shell::SystemShellService::new(),
+                allocator,
             );
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
             download_transfer.start_scheduler();
@@ -211,6 +218,7 @@ pub fn run() {
             register_browser,
             browser_setup_action,
             review_download,
+            check_destination_conflict,
             open_options_window,
             open_add_window,
             open_scheduler_window,

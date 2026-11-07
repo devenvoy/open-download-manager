@@ -11,7 +11,8 @@ use crate::{
         error::{AppError, AppResult},
     },
     domain::download::{
-        sanitize_filename, DownloadRecord, DownloadStatus, ReviewDownloadRequest,
+        sanitize_filename, DownloadRecord, DownloadStatus, FileConflictPolicy,
+        ReviewDownloadRequest,
     },
 };
 
@@ -309,6 +310,46 @@ impl DownloadHistoryService {
             downloads[index].status = DownloadStatus::Scheduled;
         } else {
             downloads[index].status = DownloadStatus::Queued;
+        }
+
+        if let Some(policy) = request.conflict_policy {
+            downloads[index].conflict_policy = Some(policy);
+            match policy {
+                FileConflictPolicy::Skip => {
+                    downloads[index].status = DownloadStatus::Skipped;
+                    downloads[index].speed = 0;
+                    downloads[index].notice = Some(
+                        "Download skipped because destination file already exists.".to_owned(),
+                    );
+                }
+                FileConflictPolicy::Cancel => {
+                    downloads[index].status = DownloadStatus::Cancelled;
+                    downloads[index].speed = 0;
+                    downloads[index].downloaded = 0;
+                    downloads[index].notice = Some(
+                        "Download cancelled due to destination conflict.".to_owned(),
+                    );
+                }
+                FileConflictPolicy::Rename => {
+                    if let Some(dir) = &downloads[index].directory {
+                        let dir_path = std::path::Path::new(dir);
+                        if dir_path.join(&downloads[index].filename).exists() {
+                            for idx in 1..=10000 {
+                                let cand = crate::domain::download::generate_indexed_filename(
+                                    &downloads[index].filename,
+                                    idx,
+                                );
+                                if !dir_path.join(&cand).exists() {
+                                    downloads[index].filename = cand;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                FileConflictPolicy::Overwrite => {}
+                FileConflictPolicy::Ask => {}
+            }
         }
 
         if let Err(error) = self.repository.save(&downloads) {

@@ -35,6 +35,8 @@ pub struct DownloadRequest {
     pub reuse_active: Option<bool>,
     pub referer: Option<String>,
     pub youtube_format: Option<String>,
+    #[serde(default)]
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
 }
 
 impl DownloadRequest {
@@ -139,6 +141,7 @@ impl DownloadRequest {
             reuse_active: self.reuse_active.unwrap_or(false),
             referer: self.referer,
             youtube_format: self.youtube_format,
+            conflict_policy: self.conflict_policy,
         })
     }
 }

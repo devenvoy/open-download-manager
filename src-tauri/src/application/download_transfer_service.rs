@@ -25,7 +25,8 @@ use crate::{
     domain::{
         category::DownloadCategory,
         download::{
-            filename_from_url, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
+            filename_from_url, sanitize_filename, ConflictResolutionOutcome, DestinationAllocator,
+            DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus, FileConflictPolicy,
             ReviewDownloadRequest,
         },
         media::AddPlaylistDownloadsRequest,
@@ -43,6 +44,7 @@ pub struct DownloadTransferService {
     controls: Arc<Mutex<HashMap<String, watch::Sender<Option<DownloadStopReason>>>>>,
     shell: Arc<dyn ShellService>,
     queue_pump_lock: Arc<Mutex<()>>,
+    allocator: DestinationAllocator,
 }
 
 impl DownloadTransferService {
@@ -65,6 +67,22 @@ impl DownloadTransferService {
         max_concurrent: u8,
         shell: impl ShellService + 'static,
     ) -> Self {
+        Self::with_shell_and_allocator(
+            history,
+            executor,
+            max_concurrent,
+            shell,
+            DestinationAllocator::new(),
+        )
+    }
+
+    pub fn with_shell_and_allocator(
+        history: DownloadHistoryService,
+        executor: impl DownloadExecutor + 'static,
+        max_concurrent: u8,
+        shell: impl ShellService + 'static,
+        allocator: DestinationAllocator,
+    ) -> Self {
         Self {
             history,
             executor: Arc::new(executor),
@@ -73,6 +91,46 @@ impl DownloadTransferService {
             controls: Arc::new(Mutex::new(HashMap::new())),
             shell: Arc::new(shell),
             queue_pump_lock: Arc::new(Mutex::new(())),
+            allocator,
+        }
+    }
+
+    pub fn allocator(&self) -> DestinationAllocator {
+        self.allocator.clone()
+    }
+
+    pub fn check_destination_conflict(
+        &self,
+        directory: &str,
+        filename: &str,
+    ) -> AppResult<ConflictResolutionOutcome> {
+        let dir = Path::new(directory);
+        let sanitized = sanitize_filename(filename);
+        if sanitized.is_empty() {
+            return Err(AppError::invalid_download("Choose a valid file name."));
+        }
+        let target = dir.join(&sanitized);
+        if target.is_dir() {
+            return Err(AppError::conflict("The destination path is an existing directory."));
+        }
+        let exists = target.exists() || self.allocator.is_claimed(&target);
+        if exists {
+            let suggested = self.allocator.suggest_conflict_free_destination(dir, &sanitized);
+            Ok(ConflictResolutionOutcome::Conflict {
+                existing_path: target,
+                suggested_path: suggested,
+                candidates: vec![
+                    FileConflictPolicy::Overwrite,
+                    FileConflictPolicy::Rename,
+                    FileConflictPolicy::Skip,
+                    FileConflictPolicy::Cancel,
+                ],
+            })
+        } else {
+            Ok(ConflictResolutionOutcome::Resolved {
+                path: target,
+                policy: FileConflictPolicy::Overwrite,
+            })
         }
     }
 
@@ -231,6 +289,7 @@ impl DownloadTransferService {
                     transfer_kind: None,
                     etag: None,
                     validator: None,
+                    conflict_policy: request.conflict_policy,
                 }
             })
             .collect::<Vec<_>>();
@@ -318,6 +377,7 @@ impl DownloadTransferService {
                     transfer_kind: None,
                     etag: None,
                     validator: None,
+                    conflict_policy: None,
                 }
             })
             .collect();
@@ -595,6 +655,12 @@ impl DownloadTransferService {
                 match error.code {
                     "download_paused" => {}
                     "download_cancelled" => {
+                        let _ = service.history.update_active_download(&id, |d| {
+                            d.status = DownloadStatus::Cancelled;
+                            d.downloaded = 0;
+                            d.speed = 0;
+                            d.error = None;
+                        });
                         if let Err(cleanup_error) =
                             service.executor.discard_partial(&cleanup_record)
                         {
@@ -603,6 +669,28 @@ impl DownloadTransferService {
                                 cleanup_error.message
                             );
                         }
+                    }
+                    "download_skipped" => {
+                        let _ = service.history.update_active_download(&id, |d| {
+                            d.status = DownloadStatus::Skipped;
+                            d.speed = 0;
+                            d.notice = Some(
+                                "Download skipped because destination file already exists."
+                                    .to_owned(),
+                            );
+                        });
+                    }
+                    "destination_conflict" => {
+                        let _ = service.history.update_active_download(&id, |d| {
+                            d.status = DownloadStatus::Paused;
+                            d.needs_review = true;
+                            d.speed = 0;
+                            d.error = Some(error.message.clone());
+                            d.notice = Some(
+                                "A file with that name already exists. Please choose an action: overwrite, keep both, skip, or cancel."
+                                    .to_owned(),
+                            );
+                        });
                     }
                     _ => {
                         eprintln!("Download {id} failed: {}", error.message);
@@ -688,6 +776,11 @@ impl DownloadTransferService {
             download.downloaded = result.downloaded;
             download.total = result.total;
             download.speed = 0;
+            if let Some(new_name) = result.path.file_name().and_then(|n| n.to_str()) {
+                if download.filename != new_name {
+                    download.filename = new_name.to_owned();
+                }
+            }
             download.path = Some(result.path.to_string_lossy().into_owned());
             if initial_total_unknown && result.total.is_none() {
                 download.notice = Some("The file size was not supplied by the server. The file may be incomplete.".to_owned());

@@ -76,6 +76,7 @@ window.downloader = Object.freeze({
   action: request => invoke('download_action', request),
   removeCompleted: () => invoke('remove_completed'),
   review: request => invoke('review_download', { request }),
+  checkDestinationConflict: ({ directory, filename }) => invoke('check_destination_conflict', { directory, filename }),
   integration: () => invoke('get_integration_info'),
   browserSetup: ({ action, browser }) => invoke('browser_setup_action', { action, browser }),
   registerBrowser: ({ browser, extensionId }) => invoke('register_browser', { browser, extensionId }),

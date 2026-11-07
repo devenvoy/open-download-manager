@@ -161,20 +161,43 @@ pub(crate) async fn concat_segments(
 }
 
 pub(crate) async fn finalize(
-    id: &str,
+    _id: &str,
     temporary: PathBuf,
     destination: PathBuf,
     downloaded: u64,
     total: Option<u64>,
 ) -> AppResult<DownloadResult> {
-    fs::hard_link(&temporary, &destination)
+    if fs::metadata(&destination)
         .await
-        .map_err(|error| {
-            AppError::download(format!("Could not move the download into place: {error}"))
-        })?;
-    if let Err(error) = fs::remove_file(&temporary).await {
-        eprintln!("Could not remove temporary file for download {id}: {error}");
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
+    {
+        return Err(AppError::download(
+            "The destination path is an existing directory.",
+        ));
     }
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).await.map_err(|error| {
+            AppError::download(format!("Could not create the download folder: {error}"))
+        })?;
+    }
+
+    match fs::rename(&temporary, &destination).await {
+        Ok(()) => {}
+        Err(err) if err.raw_os_error() == Some(18) => {
+            fs::copy(&temporary, &destination).await.map_err(|error| {
+                AppError::download(format!("Could not move the download into place: {error}"))
+            })?;
+            let _ = fs::remove_file(&temporary).await;
+        }
+        Err(error) => {
+            return Err(AppError::download(format!(
+                "Could not move the download into place: {error}"
+            )));
+        }
+    }
+
     Ok(DownloadResult {
         downloaded,
         total: total.or(Some(downloaded)),

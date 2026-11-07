@@ -36,6 +36,13 @@ impl AppError {
         }
     }
 
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self {
+            code: "destination_conflict",
+            message: message.into(),
+        }
+    }
+
     pub fn not_migrated(message: impl Into<String>) -> Self {
         Self {
             code: "feature_not_migrated",

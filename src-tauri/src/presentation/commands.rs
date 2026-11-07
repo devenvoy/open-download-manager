@@ -7,7 +7,9 @@ use crate::{
         integration_service::BrowserSetupResult,
     },
     domain::{
-        download::{DownloadAction, DownloadRequest, ReviewDownloadRequest},
+        download::{
+            ConflictResolutionOutcome, DownloadAction, DownloadRequest, ReviewDownloadRequest,
+        },
         media::{AddPlaylistDownloadsRequest, PlaylistMetadata},
         settings::{ProxySettings, ProxyTestResult, SettingsPatch},
         snapshot::{DownloadSummary, IntegrationStatus, Snapshot},
@@ -71,6 +73,17 @@ pub fn review_download(
     request: ReviewDownloadRequest,
 ) -> AppResult<Vec<String>> {
     state.download_transfer.review_download(request)
+}
+
+#[tauri::command]
+pub fn check_destination_conflict(
+    state: State<'_, AppState>,
+    directory: String,
+    filename: String,
+) -> AppResult<ConflictResolutionOutcome> {
+    state
+        .download_transfer
+        .check_destination_conflict(&directory, &filename)
 }
 
 #[tauri::command]
