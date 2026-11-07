@@ -123,16 +123,28 @@ pub fn update_settings(
         .settings
         .lock()
         .map_err(|_| AppError::storage("Application settings are unavailable."))?;
-    let updated = settings.update(patch)?;
+
+    // 1. Validate and prepare candidate settings in memory without committing to disk
+    let candidate = settings.prepare_update(patch)?;
+
+    // 2. If proxy configuration changed, reconfigure runtime transfer executor FIRST
+    let proxy_changed = candidate.proxy != settings.settings().proxy;
+    if proxy_changed {
+        state.download_transfer.set_proxy(Some(&candidate.proxy))?;
+    }
+
+    // 3. Apply other runtime controls
     state
         .download_transfer
-        .set_max_concurrent(updated.max_concurrent);
+        .set_max_concurrent(candidate.max_concurrent);
     state
         .download_transfer
-        .set_speed_limit(updated.speed_limit_kbps);
-    let _ = state.download_transfer.set_proxy(Some(&updated.proxy));
-    let _ = crate::infrastructure::autostart::sync_autostart(updated.start_with_windows);
-    Ok(updated)
+        .set_speed_limit(candidate.speed_limit_kbps);
+    let _ = crate::infrastructure::autostart::sync_autostart(candidate.start_with_windows);
+
+    // 4. Only after runtime reconfiguration succeeds, persist settings to disk
+    let committed = settings.commit_update(candidate)?;
+    Ok(committed)
 }
 
 #[tauri::command]
@@ -158,7 +170,7 @@ pub async fn test_proxy_connection(
         Err(e) => {
             return Ok(ProxyTestResult {
                 success: false,
-                message: format!("Invalid proxy configuration: {}", e.message),
+                message: proxy.sanitize_error(&format!("Invalid proxy configuration: {}", e.message)),
             })
         }
     };
@@ -173,7 +185,7 @@ pub async fn test_proxy_connection(
         Err(e) => {
             return Ok(ProxyTestResult {
                 success: false,
-                message: format!("Could not initialize test client: {e}"),
+                message: proxy.sanitize_error(&format!("Could not initialize test client: {e}")),
             })
         }
     };
@@ -212,7 +224,7 @@ pub async fn test_proxy_connection(
             };
             Ok(ProxyTestResult {
                 success: false,
-                message,
+                message: proxy.sanitize_error(&message),
             })
         }
     }

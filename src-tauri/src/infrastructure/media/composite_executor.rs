@@ -117,8 +117,8 @@ impl DownloadExecutor for CompositeDownloadExecutor {
     }
 
     fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
-        self.http_executor.set_proxy(proxy)?;
         let new_client = create_http_client(proxy)?;
+        self.http_executor.set_proxy(proxy)?;
         *self.client.write().unwrap() = new_client;
         Ok(())
     }

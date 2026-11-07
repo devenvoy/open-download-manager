@@ -82,14 +82,38 @@ impl ProxySettings {
             if clean.is_empty() {
                 return Err(SettingsValidationError::new("Proxy host cannot be empty."));
             }
-            if clean.chars().any(|c| c.is_whitespace() || c == '/') {
+            if clean.chars().any(|c| c.is_whitespace() || c == '/' || c == '@') {
                 return Err(SettingsValidationError::new(
-                    "Proxy host must be a valid hostname or IP address without slashes or spaces.",
+                    "Proxy host must be a valid hostname or IP address without credentials, slashes, or spaces.",
                 ));
             }
         }
 
         Ok(())
+    }
+
+    pub fn sanitize_error(&self, msg: &str) -> String {
+        let mut sanitized = msg.to_string();
+        if let Some(ref pass) = self.password {
+            if !pass.is_empty() {
+                sanitized = sanitized.replace(pass, "******");
+            }
+        }
+        if let Some(ref user) = self.username {
+            let trimmed = user.trim();
+            if !trimmed.is_empty() {
+                sanitized = sanitized.replace(trimmed, "******");
+            }
+        }
+        if let Some(at_pos) = sanitized.find('@') {
+            if let Some(proto_pos) = sanitized[..at_pos].rfind("://") {
+                let cred_start = proto_pos + 3;
+                if cred_start < at_pos {
+                    sanitized.replace_range(cred_start..at_pos, "******:******");
+                }
+            }
+        }
+        sanitized
     }
 
     pub fn to_reqwest_proxy(&self) -> AppResult<reqwest::Proxy> {
@@ -105,7 +129,8 @@ impl ProxySettings {
 
         let proxy_url = format!("{}://{}:{}", self.protocol.as_str(), clean, self.port);
         let mut proxy = reqwest::Proxy::all(&proxy_url).map_err(|err| {
-            AppError::invalid_settings(format!("Invalid proxy configuration '{proxy_url}': {err}"))
+            let msg = format!("Invalid proxy configuration for {clean}:{}: {err}", self.port);
+            AppError::invalid_settings(self.sanitize_error(&msg))
         })?;
 
         if let Some(username) = &self.username {
