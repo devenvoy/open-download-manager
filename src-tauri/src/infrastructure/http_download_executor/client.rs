@@ -22,6 +22,12 @@ pub fn create_http_client(proxy: Option<&ProxySettings>) -> AppResult<reqwest::C
     }
 
     builder.build().map_err(|error| {
-        AppError::download(format!("Could not initialize HTTP client: {error}"))
+        let msg = format!("Could not initialize HTTP client: {error}");
+        let sanitized = if let Some(p) = proxy {
+            p.sanitize_error(&msg)
+        } else {
+            msg
+        };
+        AppError::network(sanitized)
     })
 }
