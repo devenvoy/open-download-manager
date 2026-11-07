@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use open_download_manager_lib::domain::download::{
+    filename_from_url, is_generic_filename, parse_content_disposition_filename,
     redact_download_url, sanitize_filename, DownloadProtocol, DownloadRequest,
 };
 
@@ -124,4 +125,46 @@ fn malformed_url_is_not_exposed_in_a_snapshot() {
         redact_download_url("https://user:password@bad host/file?token=private"),
         "Invalid URL"
     );
+}
+
+#[test]
+fn generic_filenames_are_identified_and_rejected() {
+    assert!(is_generic_filename("watch"));
+    assert!(is_generic_filename("video"));
+    assert!(is_generic_filename("videoplayback"));
+    assert!(is_generic_filename("stream"));
+    assert!(is_generic_filename("download"));
+    assert!(is_generic_filename("file"));
+    assert!(is_generic_filename(""));
+    assert!(!is_generic_filename("my_document.pdf"));
+    assert!(!is_generic_filename("my_video.mp4"));
+}
+
+#[test]
+fn content_disposition_header_parsing_extracts_and_sanitizes() {
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename=\"report_2026.pdf\""),
+        Some("report_2026.pdf".to_string())
+    );
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename*=UTF-8''my%20archive%2Ezip"),
+        Some("my archive.zip".to_string())
+    );
+    // Generic names in content-disposition are discarded
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename=\"video\""),
+        None
+    );
+}
+
+#[test]
+fn filename_from_url_derives_meaningful_names_and_avoids_watch_or_empty() {
+    let yt_url = url::Url::parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ").unwrap();
+    assert_eq!(filename_from_url(&yt_url), "YouTube Video dQw4w9WgXcQ.mp4");
+
+    let query_url = url::Url::parse("https://example.com/download?filename=archive_v1.zip").unwrap();
+    assert_eq!(filename_from_url(&query_url), "archive_v1.zip");
+
+    let generic_url = url::Url::parse("https://files.example.com/download").unwrap();
+    assert_eq!(filename_from_url(&generic_url), "download_files_example_com");
 }

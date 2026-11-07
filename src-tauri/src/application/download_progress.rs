@@ -7,4 +7,6 @@ pub struct DownloadProgress {
     pub bytes_per_second: u64,
     pub connections_progress: Vec<DownloadSegmentProgress>,
     pub notice: Option<String>,
+    pub transfer_kind: Option<String>,
+    pub effective_concurrency: Option<u8>,
 }

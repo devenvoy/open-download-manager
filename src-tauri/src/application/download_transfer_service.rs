@@ -170,6 +170,7 @@ impl DownloadTransferService {
                 let filename = request
                     .filename
                     .clone()
+                    .filter(|f| !crate::domain::download::is_generic_filename(f))
                     .unwrap_or_else(|| filename_from_url(url.url()));
                 let category = request.category.or_else(|| {
                     Some(DownloadCategory::from_path(std::path::Path::new(&filename)))
@@ -227,6 +228,7 @@ impl DownloadTransferService {
                     sabr: request.sabr.clone(),
                     referer: request.referer.clone(),
                     youtube_format: request.youtube_format.clone(),
+                    transfer_kind: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -303,6 +305,7 @@ impl DownloadTransferService {
                     sabr: None,
                     referer: None,
                     youtube_format: None,
+                    transfer_kind: None,
                 }
             })
             .collect();
@@ -640,6 +643,12 @@ impl DownloadTransferService {
                 download.connections_progress = progress.connections_progress;
                 if progress.notice.is_some() {
                     download.notice = progress.notice;
+                }
+                if let Some(ref tk) = progress.transfer_kind {
+                    download.transfer_kind = Some(tk.clone());
+                }
+                if let Some(ec) = progress.effective_concurrency {
+                    download.connections = ec;
                 }
             }) {
                 eprintln!(

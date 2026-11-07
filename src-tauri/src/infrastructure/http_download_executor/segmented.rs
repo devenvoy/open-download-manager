@@ -122,18 +122,22 @@ pub(crate) async fn download_segments(
     progress_handler: &DownloadProgressHandler,
 ) -> AppResult<()> {
     let segments = Arc::new(Mutex::new(segments));
+    let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
     let mut jobs = tokio::task::JoinSet::new();
     {
         let current = segments
             .lock()
             .map_err(|_| AppError::storage("Download progress is unavailable."))?
             .clone();
+        let count = current.len() as u8;
         progress_handler(DownloadProgress {
             downloaded: current.iter().map(|segment| segment.downloaded).sum(),
             total: Some(validator.total),
             bytes_per_second: 0,
             connections_progress: current,
             notice: None,
+            transfer_kind: Some("segmented_http".to_string()),
+            effective_concurrency: Some(count),
         });
     }
     let segment_count = segments
@@ -157,6 +161,7 @@ pub(crate) async fn download_segments(
         let validator = validator.clone();
         let rate_limiter = rate_limiter.clone();
         let progress_handler = progress_handler.clone();
+        let meter = meter.clone();
         let url = url.clone();
         jobs.spawn(async move {
             download_segment(
@@ -170,6 +175,7 @@ pub(crate) async fn download_segments(
                 control,
                 rate_limiter,
                 progress_handler,
+                meter,
             )
             .await
         });
@@ -209,6 +215,7 @@ async fn download_segment(
     mut control: DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: DownloadProgressHandler,
+    meter: Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
 ) -> AppResult<()> {
     let start = segment
         .start
@@ -274,6 +281,7 @@ async fn download_segment(
         "downloading",
         validator.total,
         &progress_handler,
+        &meter,
     )?;
     let mut downloaded = segment.downloaded;
     let mut midstream_retries = 0_u8;
@@ -290,6 +298,7 @@ async fn download_segment(
                     stop_status(reason),
                     validator.total,
                     &progress_handler,
+                    &meter,
                 )?;
                 return Err(stopped_error(reason));
             }
@@ -428,6 +437,7 @@ async fn download_segment(
                 stop_status(reason),
                 validator.total,
                 &progress_handler,
+                &meter,
             )?;
             return Err(error);
         }
@@ -442,6 +452,7 @@ async fn download_segment(
             "downloading",
             validator.total,
             &progress_handler,
+            &meter,
         )?;
     }
     file.flush().await.map_err(|error| {
@@ -462,6 +473,7 @@ async fn download_segment(
         "complete",
         validator.total,
         &progress_handler,
+        &meter,
     )
 }
 
@@ -479,27 +491,38 @@ fn update_segment_progress(
     status: &str,
     total: u64,
     progress_handler: &DownloadProgressHandler,
+    meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
 ) -> AppResult<()> {
-    let mut segments = segments
+    let mut segments_guard = segments
         .lock()
         .map_err(|_| AppError::storage("Download progress is unavailable."))?;
-    let segment = segments
+    let segment = segments_guard
         .get_mut(index)
         .ok_or_else(|| AppError::download("The segment no longer exists."))?;
     segment.downloaded = downloaded;
     segment.status = status.to_owned();
-    let downloaded = segments
+    let total_downloaded = segments_guard
         .iter()
         .map(|segment| segment.downloaded)
         .fold(0_u64, u64::saturating_add);
-    let connections_progress = segments.clone();
-    drop(segments);
+    let connections_progress = segments_guard.clone();
+    drop(segments_guard);
+
+    let bytes_per_second = meter
+        .lock()
+        .ok()
+        .and_then(|mut m| m.update(total_downloaded))
+        .unwrap_or(0);
+    let count = u8::try_from(connections_progress.len()).unwrap_or(1);
+
     progress_handler(DownloadProgress {
-        downloaded,
+        downloaded: total_downloaded,
         total: Some(total),
-        bytes_per_second: 0,
+        bytes_per_second,
         connections_progress,
         notice: None,
+        transfer_kind: Some("segmented_http".to_string()),
+        effective_concurrency: Some(count),
     });
     Ok(())
 }

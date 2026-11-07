@@ -958,9 +958,10 @@ function renderDetails() {
 		content = $("#details-content");
 	$("#details-title").textContent =
 		`${percent !== null ? `${Math.floor(percent)}% ` : ""}${d.filename || "Download status"}`;
-	const sourceAddress = d.referer || d.url || "";
+	const isWatchPage = d.url && (d.url.includes("youtube.com/watch") || d.url.includes("youtu.be/"));
+	const sourceAddress = (!isWatchPage && d.url) ? d.url : (d.url || d.referer || "");
 	$("#transfer-source").textContent = sourceAddress;
-	$("#transfer-source").title = d.url || sourceAddress;
+	$("#transfer-source").title = sourceAddress;
 	const names = {
 		completed: "Complete",
 		downloading: "Receiving data…",
@@ -996,6 +997,22 @@ function renderDetails() {
 					: "Checking…",
 		],
 	];
+	if (d.referer && d.referer !== d.url) {
+		rows.push(["Referrer", d.referer]);
+	}
+	if (d.transferKind) {
+		const transferKindLabels = {
+			segmented_http: `Segmented HTTP (${d.connections || 1} connections)`,
+			single_http: "Single HTTP stream",
+			paired: "Paired audio & video streams",
+			sabr: "YouTube SABR streaming",
+			ytdlp: "yt-dlp fragment stream",
+			hls: "HLS segment stream",
+		};
+		if (transferKindLabels[d.transferKind]) {
+			rows.push(["Transfer type", transferKindLabels[d.transferKind]]);
+		}
+	}
 	if (numeric(d.duration))
 		rows.splice(1, 0, [
 			"Video duration",
@@ -1024,13 +1041,34 @@ function renderDetails() {
 		caption = document.querySelector(".connection-caption");
 	bars.replaceChildren();
 	map.replaceChildren();
-	if (segments.length <= 1) {
-		map.style.display = "none";
-		if (caption) caption.style.display = "none";
-	} else {
+
+	const isSegmented = d.transferKind === "segmented_http";
+	const isPaired = d.transferKind === "paired" || d.kind === "paired";
+	const isHls = d.transferKind === "hls" || d.kind === "hls";
+
+	// Show per-range map bar ONLY for segmented HTTP downloads with multiple connections.
+	// Never display a duplicate overall bar for single stream, paired media, or SABR.
+	if (isSegmented && segments.length > 1) {
 		map.style.display = "flex";
-		if (caption) caption.style.display = "";
+		if (caption) {
+			caption.style.display = "";
+			caption.textContent = "Start positions and download progress by connections";
+		}
+	} else {
+		map.style.display = "none";
+		if (caption) {
+			if (isPaired && segments.length > 0) {
+				caption.style.display = "";
+				caption.textContent = "Media tracks";
+			} else if (isHls && segments.length > 0) {
+				caption.style.display = "";
+				caption.textContent = "HLS download streams";
+			} else {
+				caption.style.display = "none";
+			}
+		}
 	}
+
 	for (let index = 0; index < segments.length; index++) {
 		const segment = segments[index];
 		const row = element("tr");
@@ -1041,27 +1079,36 @@ function renderDetails() {
 					(status === "downloading"
 						? "Receiving data…"
 						: names[status] || status);
+		const trackLabel = isPaired
+			? (index === 0 ? "Video" : index === 1 ? "Audio" : String(index + 1))
+			: String(index + 1);
 		row.append(
-			element("td", "", String(index + 1)),
+			element("td", "", trackLabel),
 			element("td", "", bytes(segment.downloaded)),
 			element("td", "", segmentStatus),
 		);
 		bars.append(row);
-		const bar = element("progress");
-		bar.max = 100;
-		const total = numeric(segment.total);
-		bar.value = total
-			? Math.min(100, (numeric(segment.downloaded) / total) * 100)
-			: 0;
-		bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
-		if (!total && status === "downloading") bar.removeAttribute("value");
-		map.append(bar);
+
+		if (isSegmented && segments.length > 1) {
+			const bar = element("progress");
+			bar.max = 100;
+			const total = numeric(segment.total);
+			bar.value = total
+				? Math.min(100, (numeric(segment.downloaded) / total) * 100)
+				: 0;
+			bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
+			if (!total && status === "downloading") bar.removeAttribute("value");
+			map.append(bar);
+		}
 	}
-	$("#segment-note").textContent = segments.length
-		? `${segments.length} connection(s)`
-		: status === "completed"
-			? "Download completed."
-			: "Connection progress appears when the transfer starts.";
+	const noteText = isPaired
+		? (segments.length === 2 ? "2 tracks (Video + Audio)" : `${segments.length} track(s)`)
+		: isSegmented
+			? `${segments.length} connection(s)`
+			: segments.length > 1
+				? `${segments.length} connection(s)`
+				: "";
+	$("#segment-note").textContent = noteText;
 	const isError = (status === "error" || status === "failed");
 	const errorCard = $("#detail-error-card");
 	if (errorCard) {

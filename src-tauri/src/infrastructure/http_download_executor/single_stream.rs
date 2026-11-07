@@ -143,6 +143,8 @@ pub(crate) async fn download_single_stream(
         bytes_per_second: 0,
         connections_progress: Vec::new(),
         notice: restart_notice,
+        transfer_kind: Some("single_http".to_string()),
+        effective_concurrency: Some(1),
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -240,6 +242,8 @@ pub(crate) async fn download_single_stream(
                                         "The remote file changed during transfer; restarted download from the beginning."
                                             .to_owned(),
                                     ),
+                                    transfer_kind: Some("single_http".to_string()),
+                                    effective_concurrency: Some(1),
                                 });
                                 response = new_response;
                                 continue 'stream;
@@ -323,6 +327,8 @@ pub(crate) async fn download_single_stream(
                                     "The remote file changed during transfer; restarted download from the beginning."
                                         .to_owned(),
                                 ),
+                                transfer_kind: Some("single_http".to_string()),
+                                effective_concurrency: Some(1),
                             });
                             response = new_response;
                             continue 'stream;
@@ -375,6 +381,8 @@ pub(crate) async fn download_single_stream(
                 bytes_per_second: speed,
                 connections_progress: Vec::new(),
                 notice: None,
+                transfer_kind: Some("single_http".to_string()),
+                effective_concurrency: Some(1),
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;

@@ -42,6 +42,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             error: None,
             notice: None,
             estimated: false,
+            transfer_kind: None,
             kind: None,
             resumable: Some(true),
             duration: Some(120.0),

@@ -454,6 +454,7 @@ async fn download_hls_segment(
             if let Some(speed) = st.meter.update(total_now) {
                 let stream_prog = calculate_stream_progress(&st.segments);
                 let conns = st.build_connections_progress(segment_count);
+                let eff_conns = st.worker_progress.len() as u8;
                 drop(st);
 
                 progress_handler(DownloadProgress {
@@ -462,6 +463,8 @@ async fn download_hls_segment(
                     bytes_per_second: speed,
                     connections_progress: conns,
                     notice: None,
+                    transfer_kind: Some("hls".to_string()),
+                    effective_concurrency: Some(eff_conns),
                 });
             }
         }
@@ -486,6 +489,7 @@ async fn download_hls_segment(
         let stream_prog = calculate_stream_progress(&st.segments);
         let speed = st.meter.current_throughput();
         let conns = st.build_connections_progress(segment_count);
+        let eff_conns = st.worker_progress.len() as u8;
         drop(st);
 
         progress_handler(DownloadProgress {
@@ -494,6 +498,8 @@ async fn download_hls_segment(
             bytes_per_second: speed,
             connections_progress: conns,
             notice: None,
+            transfer_kind: Some("hls".to_string()),
+            effective_concurrency: Some(eff_conns),
         });
     }
 

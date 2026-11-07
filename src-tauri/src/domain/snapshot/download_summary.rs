@@ -31,6 +31,8 @@ pub struct DownloadSummary {
     pub duration: Option<f64>,
     pub connections: u8,
     pub connections_progress: Vec<DownloadSegmentProgress>,
+    pub transfer_kind: Option<String>,
+    pub referer: Option<String>,
 }
 
 impl From<&DownloadRecord> for DownloadSummary {
@@ -59,6 +61,8 @@ impl From<&DownloadRecord> for DownloadSummary {
             duration: download.duration,
             connections: download.connections,
             connections_progress: download.connections_progress.clone(),
+            transfer_kind: download.transfer_kind.clone(),
+            referer: download.referer.clone(),
         }
     }
 }
@@ -89,6 +93,8 @@ impl From<DownloadRecord> for DownloadSummary {
             duration: download.duration,
             connections: download.connections,
             connections_progress: download.connections_progress,
+            transfer_kind: download.transfer_kind,
+            referer: download.referer,
         }
     }
 }

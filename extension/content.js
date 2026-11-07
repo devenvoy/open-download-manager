@@ -86,12 +86,18 @@
       }
       if (typeof document !== 'undefined' && document.title) {
         const cleanedDocTitle = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube$/i, '').trim();
-        if (cleanedDocTitle && cleanedDocTitle.length > 1 && cleanedDocTitle.toLowerCase() !== 'youtube') {
+        const lower = cleanedDocTitle.toLowerCase();
+        if (cleanedDocTitle && cleanedDocTitle.length > 1 && lower !== 'youtube' && lower !== 'watch' && lower !== 'video') {
           return cleanedDocTitle;
         }
       }
     } catch {}
-    return (typeof document !== 'undefined' && document.title) || 'Video';
+    const docTitle = typeof document !== 'undefined' && document.title ? document.title.replace(/\s*-\s*YouTube$/i, '').trim() : '';
+    const docLower = docTitle.toLowerCase();
+    if (docTitle && docTitle.length > 1 && docLower !== 'youtube' && docLower !== 'watch' && docLower !== 'video') {
+      return docTitle;
+    }
+    return '';
   }
 
   function isFeedPreview(video, card) {

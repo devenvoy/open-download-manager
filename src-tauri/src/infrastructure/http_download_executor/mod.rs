@@ -145,6 +145,8 @@ impl HttpDownloadExecutor {
                         bytes_per_second: 0,
                         connections_progress: Vec::new(),
                         notice: Some(notice),
+                        transfer_kind: Some("segmented_http".to_string()),
+                        effective_concurrency: Some(download.connections),
                     });
                 }
                 let segments = segmented::segment_ranges(

@@ -334,6 +334,8 @@ impl SabrDownloadExecutor {
                 bytes_per_second: speed,
                 connections_progress: segs,
                 notice: None,
+                transfer_kind: Some("sabr".to_string()),
+                effective_concurrency: Some(2),
             });
         }
 
@@ -357,6 +359,8 @@ impl SabrDownloadExecutor {
                 bytes_per_second: 0,
                 connections_progress: Vec::new(),
                 notice: None,
+                transfer_kind: Some("sabr".to_string()),
+                effective_concurrency: Some(1),
             });
         }
 

@@ -7,6 +7,7 @@ pub mod download_history_store;
 pub mod file_icons;
 pub mod http_download_executor;
 pub mod media;
+pub mod metrics;
 pub mod settings_store;
 pub mod system_shell;
 pub mod updater;
