@@ -1,11 +1,15 @@
 // Created: 2026-11-08
 // Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
-// Description: Frontend tests verifying theme selection, dynamic system tracking, and data-theme attributes.
+// Last updated: 2026-11-08
+// Reason: fix(theme): verify dark theme CSS overrides for main downloads table and auxiliary windows (Refs #4)
+// Description: Frontend tests verifying theme selection, dynamic system tracking, data-theme attributes, and CSS rules.
 
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 test('theme helper resolves system, light, and dark modes correctly', () => {
   let isOsDark = false;
@@ -77,4 +81,28 @@ test('theme applies attributes to documentElement correctly', () => {
   assert.equal(docElement.getAttribute('data-theme'), 'dark');
   assert.equal(docElement.getAttribute('data-theme-setting'), 'dark');
   assert.equal(docElement.style.colorScheme, 'dark');
+});
+
+test('styles.css contains high-contrast dark theme overrides for main table and auxiliary windows', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
+
+  // Verify main download pane, table scroll, and cell overrides
+  assert.match(css, /\[data-theme="dark"\]\s+\.main-pane/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.table-scroll/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.downloads-table tbody td/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.downloads-table thead th/);
+
+  // Verify auxiliary window modes have dark backgrounds
+  assert.match(css, /\[data-theme="dark"\]\s+body\.options-window/);
+  assert.match(css, /\[data-theme="dark"\]\s+body\.add-window/);
+  assert.match(css, /\[data-theme="dark"\]\s+body\.scheduler-window/);
+  assert.match(css, /\[data-theme="dark"\]\s+body\.integration-window/);
+  assert.match(css, /\[data-theme="dark"\]\s+body\.progress-window/);
+
+  // Verify auxiliary dialog footers and bodies
+  assert.match(css, /\[data-theme="dark"\]\s+\.options-window #settings-dialog/);
+  assert.match(css, /\[data-theme="dark"\]\s+#integration-dialog \.dialog-body/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.browser-card/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.playlist-items-list/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.site-overrides-list/);
 });
