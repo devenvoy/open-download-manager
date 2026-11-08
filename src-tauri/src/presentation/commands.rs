@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Description: Tauri IPC command handlers processing frontend requests for downloads, settings, and media.
 
 use std::sync::Arc;
@@ -183,6 +184,57 @@ pub async fn get_playlist_info(
     state: State<'_, AppState>,
     url: String,
 ) -> AppResult<PlaylistMetadata> {
+    if crate::domain::protocol::mms::MmsProtocolDetector::is_playlist_wrapper(&url) {
+        let content = if url.starts_with("http://") || url.starts_with("https://") {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+            let resp = client.get(&url).send().await.map_err(|e| {
+                AppError::download(format!("Could not fetch ASX playlist: {e}"))
+            })?;
+            let bytes = resp.bytes().await.map_err(|e| {
+                AppError::download(format!("Could not read ASX playlist response: {e}"))
+            })?;
+            crate::domain::protocol::mms::AsxPlaylistParser::parse_bytes(&bytes)
+                .map_err(AppError::download)?
+        } else if std::path::Path::new(&url).exists() {
+            let bytes = std::fs::read(&url).map_err(|e| {
+                AppError::download(format!("Could not read ASX playlist file: {e}"))
+            })?;
+            crate::domain::protocol::mms::AsxPlaylistParser::parse_bytes(&bytes)
+                .map_err(AppError::download)?
+        } else {
+            crate::domain::protocol::mms::AsxPlaylistParser::parse_str(&url)
+                .map_err(AppError::download)?
+        };
+
+        let entries = content
+            .entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, entry)| crate::domain::media::playlist::PlaylistEntry {
+                id: format!("asx_{idx}"),
+                title: entry.title.unwrap_or_else(|| format!("Media Track {}", idx + 1)),
+                duration: None,
+                url: entry.href,
+                thumbnail: None,
+                channel: None,
+                index: idx,
+            })
+            .collect::<Vec<_>>();
+
+        return Ok(PlaylistMetadata {
+            id: "asx_playlist".to_string(),
+            title: content.title.unwrap_or_else(|| "Windows Media Playlist".to_string()),
+            description: Some("Extracted from ASX/WVX stream redirector.".to_string()),
+            uploader: None,
+            webpage_url: url,
+            entry_count: entries.len(),
+            entries,
+        });
+    }
+
     let ytdlp = state
         .ytdlp
         .clone()
@@ -193,6 +245,35 @@ pub async fn get_playlist_info(
             )
         })?;
     ytdlp.fetch_playlist_info(&url).await
+}
+
+#[tauri::command]
+pub async fn resolve_asx_playlist(
+    url_or_content: String,
+) -> AppResult<crate::domain::protocol::mms::AsxPlaylist> {
+    if url_or_content.starts_with("http://") || url_or_content.starts_with("https://") {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        let resp = client.get(&url_or_content).send().await.map_err(|e| {
+            AppError::download(format!("Could not fetch ASX playlist: {e}"))
+        })?;
+        let bytes = resp.bytes().await.map_err(|e| {
+            AppError::download(format!("Could not read ASX playlist response: {e}"))
+        })?;
+        crate::domain::protocol::mms::AsxPlaylistParser::parse_bytes(&bytes)
+            .map_err(AppError::download)
+    } else if std::path::Path::new(&url_or_content).exists() {
+        let bytes = std::fs::read(&url_or_content).map_err(|e| {
+            AppError::download(format!("Could not read ASX playlist file: {e}"))
+        })?;
+        crate::domain::protocol::mms::AsxPlaylistParser::parse_bytes(&bytes)
+            .map_err(AppError::download)
+    } else {
+        crate::domain::protocol::mms::AsxPlaylistParser::parse_str(&url_or_content)
+            .map_err(AppError::download)
+    }
 }
 
 #[tauri::command]

@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
 
 'use strict';
@@ -344,6 +345,9 @@ test('playlist methods invoke get_playlist_info and add_playlist_downloads', asy
         if (args[0] === 'get_playlist_info') {
           return { id: 'PL12345', title: 'Test Playlist', entries: [] };
         }
+        if (args[0] === 'resolve_asx_playlist') {
+          return { title: 'ASX Playlist', entries: [{ href: 'http://example.com/stream.wmv' }] };
+        }
         if (args[0] === 'add_playlist_downloads') {
           return 5;
         }
@@ -357,14 +361,19 @@ test('playlist methods invoke get_playlist_info and add_playlist_downloads', asy
   assert.equal(calls[0][0], 'get_playlist_info');
   assert.deepEqual(calls[0][1], { url: 'https://www.youtube.com/playlist?list=PL12345' });
 
+  const asx = await api.resolveAsxPlaylist('http://example.com/playlist.asx');
+  assert.equal(asx.title, 'ASX Playlist');
+  assert.equal(calls[1][0], 'resolve_asx_playlist');
+  assert.deepEqual(calls[1][1], { urlOrContent: 'http://example.com/playlist.asx' });
+
   const added = await api.addPlaylistDownloads({
     playlistId: 'PL12345',
     playlistTitle: 'Test Playlist',
     items: [{ id: 'abc', url: 'https://youtube.com/watch?v=abc', title: 'Video', selected: true }]
   });
   assert.equal(added, 5);
-  assert.equal(calls[1][0], 'add_playlist_downloads');
-  assert.deepEqual(calls[1][1], {
+  assert.equal(calls[2][0], 'add_playlist_downloads');
+  assert.deepEqual(calls[2][1], {
     request: {
       playlistId: 'PL12345',
       playlistTitle: 'Test Playlist',

@@ -3,7 +3,8 @@
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
-// Description: Composite download executor routing transfers to HTTP, FTP, HLS, or YouTube executors.
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Description: Composite download executor routing transfers to HTTP, FTP, MMS, HLS, or YouTube executors.
 
 use std::sync::{Arc, RwLock};
 
@@ -23,6 +24,7 @@ use crate::{
             hls_executor::HlsDownloadExecutor, paired_executor::PairedDownloadExecutor,
             sabr_executor::SabrDownloadExecutor, youtube_executor::YoutubeDownloadExecutor,
         },
+        mms::MmsDownloadExecutor,
     },
 };
 
@@ -30,6 +32,7 @@ use crate::{
 pub struct CompositeDownloadExecutor {
     http_executor: HttpDownloadExecutor,
     ftp_executor: Arc<FtpDownloadExecutor>,
+    mms_executor: Arc<MmsDownloadExecutor>,
     hls_executor: Arc<HlsDownloadExecutor>,
     paired_executor: Arc<PairedDownloadExecutor>,
     sabr_executor: Arc<SabrDownloadExecutor>,
@@ -46,7 +49,8 @@ impl CompositeDownloadExecutor {
                 shared_client.clone(),
                 allocator.clone(),
             ),
-            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator)),
+            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator.clone())),
+            mms_executor: Arc::new(MmsDownloadExecutor::new(allocator)),
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
@@ -62,7 +66,8 @@ impl CompositeDownloadExecutor {
         let allocator = http_executor.allocator();
         Self {
             http_executor,
-            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator)),
+            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator.clone())),
+            mms_executor: Arc::new(MmsDownloadExecutor::new(allocator)),
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
@@ -105,8 +110,15 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         let is_ftp = download.url.starts_with("ftp://")
             || download.kind.as_deref() == Some("ftp");
 
+        let is_mms = download.url.starts_with("mms://")
+            || download.url.starts_with("mmsh://")
+            || download.kind.as_deref() == Some("mms");
+
         if is_ftp {
             self.ftp_executor
+                .execute(download, progress_handler, control, rate_limiter)
+        } else if is_mms {
+            self.mms_executor
                 .execute(download, progress_handler, control, rate_limiter)
         } else if is_sabr {
             let sabr = self.sabr_executor.clone();
@@ -142,6 +154,7 @@ impl DownloadExecutor for CompositeDownloadExecutor {
 
     fn discard_partial(&self, download: &DownloadRecord) -> AppResult<()> {
         let _ = self.ftp_executor.discard_partial(download);
+        let _ = self.mms_executor.discard_partial(download);
         let _ = self.sabr_executor.discard_partial(download);
         let _ = self.paired_executor.discard_partial(download);
         let _ = self.hls_executor.discard_partial(download);
@@ -152,6 +165,7 @@ impl DownloadExecutor for CompositeDownloadExecutor {
     fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
         let new_client = create_http_client(proxy)?;
         self.http_executor.set_proxy(proxy)?;
+        let _ = self.mms_executor.set_proxy(proxy);
         *self.client.write().unwrap() = new_client;
         Ok(())
     }

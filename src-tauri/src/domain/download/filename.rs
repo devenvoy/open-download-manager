@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Description: Filename sanitization, reserved Windows name guards, and generic name detection helpers.
 
 use url::Url;
@@ -70,7 +71,14 @@ pub fn sanitize_diagnostic_text(text: &str) -> String {
             result.push(' ');
         }
         first = false;
-        if word.starts_with("http://") || word.starts_with("https://") || word.starts_with("ftp://") {
+        if word.starts_with("http://")
+            || word.starts_with("https://")
+            || word.starts_with("ftp://")
+            || word.starts_with("mms://")
+            || word.starts_with("mmsh://")
+            || word.starts_with("mmst://")
+            || word.starts_with("mmsu://")
+        {
             let trailing_punct_len = word
                 .chars()
                 .rev()

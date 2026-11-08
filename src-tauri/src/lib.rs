@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -23,7 +24,7 @@ use presentation::{
         check_for_updates, delete_credential_rule, dismiss_clipboard_candidate, download_action,
         export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
         get_video_formats, import_downloads_from_file, install_media_tool, list_credential_rules,
-        register_browser, remove_completed, retry_download_actions, review_download,
+        register_browser, remove_completed, resolve_asx_playlist, retry_download_actions, review_download,
         save_credential_rule, show_about_dialog, snapshot, test_proxy_connection,
         update_download_completion_actions, update_settings, validate_directory,
         get_advanced_integration_capability, enable_advanced_integration,
@@ -281,6 +282,7 @@ pub fn run() {
             show_about_dialog,
             check_for_updates,
             get_playlist_info,
+            resolve_asx_playlist,
             get_video_formats,
             add_playlist_downloads,
             get_media_tools_status,

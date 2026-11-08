@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -96,6 +97,7 @@ window.downloader = Object.freeze({
   importDownloads: () => invoke('import_downloads_from_file'),
   showAbout: () => invoke('show_about_dialog'),
   getPlaylistInfo: url => invoke('get_playlist_info', { url }),
+  resolveAsxPlaylist: urlOrContent => invoke('resolve_asx_playlist', { urlOrContent }),
   getVideoFormats: url => invoke('get_video_formats', { url }),
   addPlaylistDownloads: request => invoke('add_playlist_downloads', { request }),
   getMediaToolsStatus: () => invoke('get_media_tools_status'),
