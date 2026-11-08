@@ -31,6 +31,7 @@ impl LegacySettings {
             start_with_windows: self.start_with_windows,
             hide_completion_dialog: self.hide_completion_dialog,
             proxy: None,
+            capture_policy: None,
         }
     }
 }

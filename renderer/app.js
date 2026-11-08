@@ -1238,6 +1238,13 @@ function openSettings() {
 	$("#proxy-username").value = proxy.username || "";
 	$("#proxy-password").value = proxy.password || "";
 
+	const capturePolicy = settings.capturePolicy || {};
+	$("#capture-enabled").checked = capturePolicy.enabled !== false;
+	$("#capture-mode").value = capturePolicy.confirmationMode || "askForUnknown";
+	$("#capture-file-types").value = Array.isArray(capturePolicy.fileTypes) ? capturePolicy.fileTypes.join(" ").toUpperCase() : "";
+	$("#capture-excluded-hosts").value = Array.isArray(capturePolicy.excludedHosts) ? capturePolicy.excludedHosts.join(", ") : "";
+	$("#capture-excluded-addresses").value = Array.isArray(capturePolicy.excludedAddresses) ? capturePolicy.excludedAddresses.join(", ") : "";
+
 	updateProxyFieldsState();
 	resetProxyTestStatus();
 
@@ -2252,6 +2259,13 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			username: $("#proxy-username").value.trim() || null,
 			password: $("#proxy-password").value || null,
 		};
+		const capturePolicy = {
+			enabled: $("#capture-enabled").checked,
+			confirmationMode: $("#capture-mode").value,
+			fileTypes: $("#capture-file-types").value.split(/[\s,]+/).map(s => s.trim().toLowerCase().replace(/^\./, "")).filter(Boolean),
+			excludedHosts: $("#capture-excluded-hosts").value.split(",").map(s => s.trim()).filter(Boolean),
+			excludedAddresses: $("#capture-excluded-addresses").value.split(",").map(s => s.trim()).filter(Boolean),
+		};
 		await call("settings", {
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
@@ -2259,6 +2273,7 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			connections: Number($("#connections").value),
 			speedLimitKbps: Number($("#speed-limit").value),
 			proxy,
+			capturePolicy,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");

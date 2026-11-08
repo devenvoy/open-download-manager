@@ -1,10 +1,31 @@
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
-if(typeof importScripts==='function') importScripts('hls.js','youtube-media.js');
+if(typeof importScripts==='function') importScripts('hls.js','youtube-media.js','capture-evaluator.js');
 const api = globalThis.browser || chrome;
 const HOST = 'com.open.downloadmanager';
 const CACHE_KEY = 'mediaByTab';
 const SABR_KEY = 'sabrByTab';
 let serial = Promise.resolve();
+let cachedCapturePolicy = null;
+async function getCapturePolicy() {
+  if (cachedCapturePolicy) return cachedCapturePolicy;
+  try {
+    const data = await api.storage.local.get('capturePolicy');
+    if (data?.capturePolicy) {
+      cachedCapturePolicy = data.capturePolicy;
+      return cachedCapturePolicy;
+    }
+  } catch {}
+  return null;
+}
+async function refreshCapturePolicy() {
+  try {
+    const res = await nativeSend({ action: 'policy' });
+    if (res?.policy) {
+      cachedCapturePolicy = res.policy;
+      await api.storage.local.set({ capturePolicy: res.policy });
+    }
+  } catch {}
+}
 // Credentials stay in worker memory and are used only for the selected observed URL.
 const requestContext = new Map();
 const youtubePlayers=new Map(), youtubePlayersByVideo=new Map(), youtubeObserved=new Map(), youtubeSabrObserved=new Map(), youtubeSabrSeed=new Map();
@@ -105,6 +126,17 @@ async function enqueue(item, tabId) {
   const url = httpUrl(sabr?.serverAbrStreamingUrl||item.url);
   if (!url) throw new Error('Only direct HTTP and HTTPS links are supported.');
   if (unsupported(url, item.mime) || item.unsupported) throw new Error(item.reason || 'DASH streams are unsupported.');
+  const policy = await getCapturePolicy();
+  let startNow = item.startNow === true;
+  if (globalThis.captureEvaluator && policy) {
+    const outcome = globalThis.captureEvaluator.evaluateCapture(policy, url, item.filename);
+    if (outcome.decision === 'excluded-host' || outcome.decision === 'excluded-address') {
+      throw new Error(outcome.reason);
+    }
+    if (outcome.decision === 'confirmation-required') {
+      startNow = false;
+    }
+  }
   const requestHeaders=requestContext.get(tabId)?.get(url);
   const effectiveReferer = item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null) || item.referer || requestHeaders?.referer;
   return nativeSend({
@@ -112,7 +144,7 @@ async function enqueue(item, tabId) {
     url,
     youtubeFormat: item.youtubeFormat,
     sabr,
-    startNow: item.startNow === true,
+    startNow,
     audioUrl: httpUrl(item.audioUrl) || undefined,
     outputFormat: item.outputFormat,
     filename: item.filename,
@@ -183,11 +215,24 @@ api.runtime.onInstalled.addListener(async () => {
     api.contextMenus.create({id: 'odm-link', title: 'Download with Open Download Manager', contexts: ['link', 'video', 'audio']});
     api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
   } catch (error) { await api.storage.local.set({lastError: error.message}); }
+  refreshCapturePolicy().catch(() => {});
 });
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     if (info.menuItemId === 'odm-page') { await api.tabs.sendMessage(tab.id, {action: 'collectLinks'}); await api.action.setBadgeText({tabId: tab.id, text: 'LINK'}); return; }
-    await enqueue({url: info.linkUrl || info.srcUrl, referer: tab?.url},tab?.id);
+    const targetUrl = info.linkUrl || info.srcUrl;
+    const policy = await getCapturePolicy();
+    let startNow = true;
+    if (globalThis.captureEvaluator && policy) {
+      const outcome = globalThis.captureEvaluator.evaluateCapture(policy, targetUrl);
+      if (outcome.decision === 'excluded-host' || outcome.decision === 'excluded-address') {
+        throw new Error(outcome.reason);
+      }
+      if (outcome.decision === 'confirmation-required') {
+        startNow = false;
+      }
+    }
+    await enqueue({url: targetUrl, referer: tab?.url, startNow}, tab?.id);
     await api.action.setBadgeText({tabId: tab.id, text: 'OK'});
   } catch (e) {
     await api.storage.local.set({lastError: e.message});

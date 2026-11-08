@@ -53,7 +53,16 @@ test('settings passes a typed patch to the Rust command', async () => {
       }
     }
   });
-  const patch = { maxConcurrent: 4 };
+  const patch = {
+    maxConcurrent: 4,
+    capturePolicy: {
+      enabled: true,
+      confirmationMode: 'askForUnknown',
+      fileTypes: ['zip', 'exe'],
+      excludedHosts: ['example.com'],
+      excludedAddresses: ['192.168.1.1']
+    }
+  };
 
   const updated = await api.settings(patch);
 

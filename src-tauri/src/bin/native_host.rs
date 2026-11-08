@@ -34,6 +34,7 @@ async fn run() -> Result<(), String> {
         "formats" => "/formats",
         "download" => "/downloads",
         "refresh" => "/downloads/refresh",
+        "policy" | "capturePolicy" => "/policy",
         _ => return Err("Unsupported native action.".to_owned()),
     };
 
