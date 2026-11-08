@@ -10,6 +10,7 @@ use crate::{
     },
     domain::{download::DownloadRecord, settings::ProxySettings},
     infrastructure::{
+        ftp::FtpDownloadExecutor,
         http_download_executor::{create_http_client, HttpDownloadExecutor},
         media::{
             hls_executor::HlsDownloadExecutor, paired_executor::PairedDownloadExecutor,
@@ -21,6 +22,7 @@ use crate::{
 #[derive(Clone)]
 pub struct CompositeDownloadExecutor {
     http_executor: HttpDownloadExecutor,
+    ftp_executor: Arc<FtpDownloadExecutor>,
     hls_executor: Arc<HlsDownloadExecutor>,
     paired_executor: Arc<PairedDownloadExecutor>,
     sabr_executor: Arc<SabrDownloadExecutor>,
@@ -31,11 +33,13 @@ pub struct CompositeDownloadExecutor {
 impl CompositeDownloadExecutor {
     pub fn new(http_executor: HttpDownloadExecutor, client: reqwest::Client) -> Self {
         let shared_client = Arc::new(RwLock::new(client));
+        let allocator = http_executor.allocator();
         Self {
             http_executor: HttpDownloadExecutor::with_shared_client_and_allocator(
                 shared_client.clone(),
-                http_executor.allocator(),
+                allocator.clone(),
             ),
+            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator)),
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
@@ -48,8 +52,10 @@ impl CompositeDownloadExecutor {
         http_executor: HttpDownloadExecutor,
         shared_client: Arc<RwLock<reqwest::Client>>,
     ) -> Self {
+        let allocator = http_executor.allocator();
         Self {
             http_executor,
+            ftp_executor: Arc::new(FtpDownloadExecutor::new(allocator)),
             hls_executor: Arc::new(HlsDownloadExecutor::new_shared(shared_client.clone())),
             paired_executor: Arc::new(PairedDownloadExecutor::new_shared(shared_client.clone())),
             sabr_executor: Arc::new(SabrDownloadExecutor::new_shared(shared_client.clone())),
@@ -79,7 +85,13 @@ impl DownloadExecutor for CompositeDownloadExecutor {
                 || crate::domain::media::youtube_url(&download.url).is_some()
                 || download.youtube_format.is_some());
 
-        if is_sabr {
+        let is_ftp = download.url.starts_with("ftp://")
+            || download.kind.as_deref() == Some("ftp");
+
+        if is_ftp {
+            self.ftp_executor
+                .execute(download, progress_handler, control, rate_limiter)
+        } else if is_sabr {
             let sabr = self.sabr_executor.clone();
             Box::pin(async move {
                 sabr.transfer(download, progress_handler, control, rate_limiter)
@@ -112,6 +124,7 @@ impl DownloadExecutor for CompositeDownloadExecutor {
     }
 
     fn discard_partial(&self, download: &DownloadRecord) -> AppResult<()> {
+        let _ = self.ftp_executor.discard_partial(download);
         let _ = self.sabr_executor.discard_partial(download);
         let _ = self.paired_executor.discard_partial(download);
         let _ = self.hls_executor.discard_partial(download);

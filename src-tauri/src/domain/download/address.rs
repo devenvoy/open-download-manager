@@ -19,13 +19,13 @@ impl DownloadAddress {
             return Err("A download address exceeds the allowed length.".to_owned());
         }
         let url =
-            Url::parse(value).map_err(|_| "Enter a valid HTTP or HTTPS address.".to_owned())?;
+            Url::parse(value).map_err(|_| "Enter a valid HTTP, HTTPS, or FTP address.".to_owned())?;
         let protocol = DownloadProtocol::parse(url.scheme())
-            .ok_or_else(|| "Downloads must use HTTP or HTTPS.".to_owned())?;
+            .ok_or_else(|| "Downloads must use HTTP, HTTPS, or FTP.".to_owned())?;
         if url.host_str().is_none() {
-            return Err("Downloads must use an HTTP or HTTPS address.".to_owned());
+            return Err("Downloads must use a valid host address.".to_owned());
         }
-        if !url.username().is_empty() || url.password().is_some() {
+        if protocol != DownloadProtocol::Ftp && (!url.username().is_empty() || url.password().is_some()) {
             return Err(
                 "Downloads must use HTTP or HTTPS without embedded credentials.".to_owned(),
             );

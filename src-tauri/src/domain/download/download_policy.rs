@@ -6,6 +6,7 @@ pub(super) const MAX_DOWNLOAD_ID_CHARACTERS: usize = 128;
 pub(super) const MAX_DOWNLOAD_CONNECTIONS: u8 = 32;
 pub(super) const HTTP_PROTOCOL: &str = "http";
 pub(super) const HTTPS_PROTOCOL: &str = "https";
+pub(super) const FTP_PROTOCOL: &str = "ftp";
 pub(super) const DASH_MANIFEST_EXTENSION: &str = ".mpd";
 pub(super) const WINDOWS_RESERVED_BASENAMES: [&str; 22] = [
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",

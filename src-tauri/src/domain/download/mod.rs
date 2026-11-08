@@ -18,7 +18,7 @@ pub use conflict::{
     DestinationAllocator, FileConflictPolicy,
 };
 pub use filename::{
-    filename_from_url, is_generic_filename, parse_content_disposition_filename,
+    filename_from_url, is_generic_filename, parse_content_disposition_filename, percent_decode,
     redact_download_url, sanitize_filename,
 };
 pub use protocol::DownloadProtocol;

@@ -407,6 +407,10 @@ function redactUrl(raw) {
 	if (!raw) return "";
 	try {
 		const u = new URL(raw);
+		if (u.protocol === "ftp:" && (u.username || u.password)) {
+			const port = u.port && u.port !== "21" ? `:${u.port}` : "";
+			return `ftp://******:******@${u.hostname}${port}${u.pathname}`;
+		}
 		u.username = "";
 		u.password = "";
 		u.search = "";

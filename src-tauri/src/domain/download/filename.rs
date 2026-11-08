@@ -38,6 +38,15 @@ pub fn redact_download_url(value: &str) -> String {
     let Ok(mut url) = Url::parse(value) else {
         return INVALID_URL_DISPLAY_TEXT.to_owned();
     };
+    if url.scheme() == "ftp" && (!url.username().is_empty() || url.password().is_some()) {
+        let host = url.host_str().unwrap_or_default();
+        let port_part = match url.port() {
+            Some(port) if port != 21 => format!(":{port}"),
+            _ => String::new(),
+        };
+        let path = url.path();
+        return format!("ftp://******:******@{host}{port_part}{path}");
+    }
     let _ = url.set_username("");
     let _ = url.set_password(None);
     url.set_query(None);
@@ -56,6 +65,10 @@ pub fn is_generic_filename(name: &str) -> bool {
         stem,
         "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"
     )
+}
+
+pub fn percent_decode(input: &str) -> String {
+    percent_encoding_decode(input).unwrap_or_else(|_| input.to_string())
 }
 
 fn percent_encoding_decode(input: &str) -> Result<String, ()> {
