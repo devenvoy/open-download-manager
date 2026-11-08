@@ -250,3 +250,22 @@ pub fn delete_credential_rule(
 ) -> AppResult<()> {
     state.credentials.delete(&id)
 }
+
+#[tauri::command]
+pub fn update_download_completion_actions(
+    state: State<'_, AppState>,
+    id: String,
+    actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+) -> AppResult<()> {
+    state
+        .download_transfer
+        .update_download_completion_actions(&id, actions)
+}
+
+#[tauri::command]
+pub async fn retry_download_actions(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<()> {
+    state.download_transfer.retry_completion_actions(&id).await
+}

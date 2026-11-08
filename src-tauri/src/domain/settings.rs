@@ -37,6 +37,8 @@ pub struct Settings {
     pub proxy: ProxySettings,
     #[serde(default)]
     pub capture_policy: crate::domain::browser::CapturePolicy,
+    #[serde(default)]
+    pub completion_actions: Vec<crate::domain::completion::CompletionAction>,
 }
 
 impl Settings {
@@ -54,6 +56,7 @@ impl Settings {
             hide_completion_dialog: DEFAULT_HIDE_COMPLETION_DIALOG,
             proxy: ProxySettings::default(),
             capture_policy: crate::domain::browser::CapturePolicy::default(),
+            completion_actions: Vec::new(),
         }
     }
 
@@ -92,6 +95,7 @@ impl Settings {
         );
         apply_if_some(&mut next.proxy, patch.proxy);
         apply_if_some(&mut next.capture_policy, patch.capture_policy);
+        apply_if_some(&mut next.completion_actions, patch.completion_actions);
 
         next.validate()?;
         Ok(next)
@@ -128,6 +132,11 @@ impl Settings {
             ));
         }
         self.proxy.validate()?;
+        for action in &self.completion_actions {
+            if let Err(msg) = action.validate() {
+                return Err(SettingsValidationError::new(msg));
+            }
+        }
         Ok(())
     }
 }

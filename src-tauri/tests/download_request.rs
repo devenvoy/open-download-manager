@@ -23,6 +23,7 @@ fn request(url: &str) -> DownloadRequest {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     }
 }
 

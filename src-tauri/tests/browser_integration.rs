@@ -332,6 +332,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(request, &settings).unwrap();
@@ -466,6 +467,7 @@ async fn browser_review_cancellation_and_download_later() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
     let ids1 = service.add(req1, &settings).unwrap();
     let id1 = &ids1[0];
@@ -493,6 +495,7 @@ async fn browser_review_cancellation_and_download_later() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
     let ids2 = service.add(req2, &settings).unwrap();
     let id2 = &ids2[0];

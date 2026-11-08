@@ -413,6 +413,7 @@ async fn handle_bridge_connection(
             youtube_format: valid_browser.youtube_format,
             conflict_policy: None,
             credentials: None,
+            completion_actions: None,
         };
 
         match transfer_service.add(download_req, &active_settings) {

@@ -756,6 +756,61 @@
 							Media tools are managed automatically by Open Download Manager to combine video and audio streams.
 						</p>
 					</fieldset>
+					<fieldset>
+						<legend>Post-Download Actions</legend>
+						<label class="checkbox-label" for="settings-play-sound">
+							<input type="checkbox" id="settings-play-sound" />
+							Play sound on download completion
+						</label>
+						<div class="form-line" id="sound-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<label for="settings-sound-file">Custom sound file (optional):</label>
+							<input type="text" id="settings-sound-file" placeholder="Default chime" />
+						</div>
+
+						<label class="checkbox-label" for="settings-scan-antivirus">
+							<input type="checkbox" id="settings-scan-antivirus" />
+							Scan completed downloads with antivirus
+						</label>
+						<div id="antivirus-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<div class="form-line">
+								<label for="settings-scanner-executable">Scanner executable:</label>
+								<input type="text" id="settings-scanner-executable" placeholder="e.g. /usr/bin/clamscan or MpCmdRun.exe" />
+							</div>
+							<div class="form-line">
+								<label for="settings-scanner-args">Arguments (use {file} for path):</label>
+								<input type="text" id="settings-scanner-args" placeholder="--scan {file}" />
+							</div>
+						</div>
+
+						<label class="checkbox-label" for="settings-post-command">
+							<input type="checkbox" id="settings-post-command" />
+							Execute custom command after completion
+						</label>
+						<div id="post-command-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<div class="form-line">
+								<label for="settings-command-executable">Command executable:</label>
+								<input type="text" id="settings-command-executable" placeholder="e.g. /usr/local/bin/script.sh" />
+							</div>
+							<div class="form-line">
+								<label for="settings-command-args">Arguments (use {file} for path):</label>
+								<input type="text" id="settings-command-args" placeholder="{file}" />
+							</div>
+						</div>
+
+						<div class="form-line" style="margin-top: 8px;">
+							<label for="settings-power-action">When all downloads finish:</label>
+							<select id="settings-power-action">
+								<option value="none">Do nothing</option>
+								<option value="sleep">Sleep</option>
+								<option value="hibernate">Hibernate</option>
+								<option value="shutdown">Shut down computer</option>
+							</select>
+						</div>
+						<label class="checkbox-label" for="settings-power-confirm" style="margin-left: 20px;">
+							<input type="checkbox" id="settings-power-confirm" />
+							Require explicit confirmation for power action
+						</label>
+					</fieldset>
 					<p
 						class="form-error"
 						id="settings-error"
@@ -947,7 +1002,20 @@
 							id="completion-result"
 							role="status"></span>
 					</form>
-					<p>
+					<hr style="margin: 12px 0; border: none; border-top: 1px solid var(--border-color, #e5e5e5);" />
+					<div class="completion-history-section">
+						<strong>Post-Download Action History</strong>
+						<div id="completion-action-history" style="margin-top: 6px;"></div>
+						<button
+							type="button"
+							class="button small-button"
+							id="detail-retry-actions"
+							style="margin-top: 6px;"
+							hidden>
+							Re-run completion actions
+						</button>
+					</div>
+					<p style="margin-top: 12px;">
 						<button
 							class="button"
 							id="detail-open">

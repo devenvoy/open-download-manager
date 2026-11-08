@@ -24,4 +24,5 @@ pub struct ValidatedDownloadRequest {
     pub youtube_format: Option<String>,
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     pub credentials: Option<super::request::DownloadCredentials>,
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
 }

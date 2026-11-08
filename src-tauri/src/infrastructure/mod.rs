@@ -1,3 +1,4 @@
+pub mod action;
 pub mod atomic_file;
 pub mod autostart;
 pub mod bridge;

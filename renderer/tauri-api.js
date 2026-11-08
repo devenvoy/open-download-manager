@@ -95,5 +95,7 @@ window.downloader = Object.freeze({
   testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null }),
   listCredentialRules: () => invoke('list_credential_rules'),
   saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
-  deleteCredentialRule: id => invoke('delete_credential_rule', { id })
+  deleteCredentialRule: id => invoke('delete_credential_rule', { id }),
+  updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
+  retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id })
 });

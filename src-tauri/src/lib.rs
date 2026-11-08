@@ -14,8 +14,9 @@ use presentation::{
         check_for_updates, delete_credential_rule, download_action, export_downloads_to_file,
         get_integration_info, get_media_tools_status, get_playlist_info, get_video_formats,
         import_downloads_from_file, install_media_tool, list_credential_rules, register_browser,
-        remove_completed, review_download, save_credential_rule, show_about_dialog, snapshot,
-        test_proxy_connection, update_settings,
+        remove_completed, retry_download_actions, review_download, save_credential_rule,
+        show_about_dialog, snapshot, test_proxy_connection, update_download_completion_actions,
+        update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -93,6 +94,7 @@ pub fn run() {
                 crate::infrastructure::system_shell::SystemShellService::new(),
                 allocator,
             );
+            download_transfer.set_settings(settings.settings().clone());
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
             download_transfer.start_scheduler();
 
@@ -245,7 +247,9 @@ pub fn run() {
             test_proxy_connection,
             list_credential_rules,
             save_credential_rule,
-            delete_credential_rule
+            delete_credential_rule,
+            update_download_completion_actions,
+            retry_download_actions
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

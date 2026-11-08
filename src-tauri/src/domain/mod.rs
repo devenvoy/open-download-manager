@@ -1,5 +1,6 @@
 pub mod browser;
 pub mod category;
+pub mod completion;
 pub mod credentials;
 pub mod download;
 pub mod file_type;

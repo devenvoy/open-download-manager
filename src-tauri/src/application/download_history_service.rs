@@ -177,6 +177,9 @@ impl DownloadHistoryService {
         downloads[index].last_try = Some(last_try);
         downloads[index].error = None;
         downloads[index].speed = 0;
+        if retry {
+            downloads[index].action_ledger.clear();
+        }
         if let Err(error) = self.repository.save(&downloads) {
             downloads[index] = previous;
             return Err(error);

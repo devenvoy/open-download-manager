@@ -152,6 +152,7 @@ async fn human_scenario_authenticated_http_download_with_stored_rule() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();
@@ -248,6 +249,7 @@ async fn human_scenario_path_boundary_enforcement_prevents_credential_leak() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();
@@ -371,6 +373,7 @@ async fn human_scenario_redirect_cross_domain_strips_authorization_header() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();
@@ -488,6 +491,7 @@ async fn human_scenario_redirect_to_destination_with_its_own_rule_attaches_new_c
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();
@@ -576,6 +580,7 @@ async fn human_scenario_in_memory_override_takes_precedence_and_is_not_persisted
             username: "session_user".to_owned(),
             password: Some("one_time_token".to_owned()),
         }),
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();
@@ -738,6 +743,7 @@ async fn human_scenario_ftp_download_with_stored_rule_authenticates_clean_url() 
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = service.add(req, &settings).unwrap();

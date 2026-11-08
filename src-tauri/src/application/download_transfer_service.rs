@@ -32,7 +32,10 @@ use crate::{
         media::AddPlaylistDownloadsRequest,
         settings::Settings,
     },
-    infrastructure::system_shell::SystemShellService,
+    infrastructure::{
+        action::{ActionExecutor, SystemActionExecutor},
+        system_shell::SystemShellService,
+    },
 };
 
 #[derive(Clone)]
@@ -45,6 +48,8 @@ pub struct DownloadTransferService {
     shell: Arc<dyn ShellService>,
     queue_pump_lock: Arc<Mutex<()>>,
     allocator: DestinationAllocator,
+    action_executor: Arc<dyn ActionExecutor>,
+    settings: Arc<std::sync::RwLock<Option<Settings>>>,
 }
 
 impl DownloadTransferService {
@@ -83,6 +88,24 @@ impl DownloadTransferService {
         shell: impl ShellService + 'static,
         allocator: DestinationAllocator,
     ) -> Self {
+        Self::with_all(
+            history,
+            executor,
+            max_concurrent,
+            shell,
+            allocator,
+            SystemActionExecutor::new(),
+        )
+    }
+
+    pub fn with_all(
+        history: DownloadHistoryService,
+        executor: impl DownloadExecutor + 'static,
+        max_concurrent: u8,
+        shell: impl ShellService + 'static,
+        allocator: DestinationAllocator,
+        action_executor: impl ActionExecutor + 'static,
+    ) -> Self {
         Self {
             history,
             executor: Arc::new(executor),
@@ -92,7 +115,27 @@ impl DownloadTransferService {
             shell: Arc::new(shell),
             queue_pump_lock: Arc::new(Mutex::new(())),
             allocator,
+            action_executor: Arc::new(action_executor),
+            settings: Arc::new(std::sync::RwLock::new(None)),
         }
+    }
+
+    pub fn with_action_executor(
+        mut self,
+        action_executor: impl ActionExecutor + 'static,
+    ) -> Self {
+        self.action_executor = Arc::new(action_executor);
+        self
+    }
+
+    pub fn set_settings(&self, settings: Settings) {
+        if let Ok(mut lock) = self.settings.write() {
+            *lock = Some(settings);
+        }
+    }
+
+    pub fn settings(&self) -> Option<Settings> {
+        self.settings.read().ok().and_then(|lock| lock.clone())
     }
 
     pub fn allocator(&self) -> DestinationAllocator {
@@ -135,6 +178,7 @@ impl DownloadTransferService {
     }
 
     pub fn add(&self, request: DownloadRequest, settings: &Settings) -> AppResult<Vec<String>> {
+        self.set_settings(settings.clone());
         let detected_category = request.category.or_else(|| {
             if let Some(ref filename) = request.filename {
                 return Some(DownloadCategory::from_path(std::path::Path::new(filename)));
@@ -293,6 +337,8 @@ impl DownloadTransferService {
                     credentials_override: request.credentials.as_ref().map(|c| {
                         (c.username.clone(), c.password.clone().unwrap_or_default())
                     }),
+                    completion_actions: request.completion_actions.clone(),
+                    action_ledger: Vec::new(),
                 }
             })
             .collect::<Vec<_>>();
@@ -382,6 +428,8 @@ impl DownloadTransferService {
                     validator: None,
                     conflict_policy: None,
                     credentials_override: None,
+                    completion_actions: None,
+                    action_ledger: Vec::new(),
                 }
             })
             .collect();
@@ -790,8 +838,228 @@ impl DownloadTransferService {
                 download.notice = Some("The file size was not supplied by the server. The file may be incomplete.".to_owned());
             }
         })?;
-        let _ = self.history.notify_complete(&id);
+        self.run_completion_actions(&id, &result.path).await;
         Ok(())
+    }
+
+    pub async fn retry_completion_actions(&self, id: &str) -> AppResult<()> {
+        let record = self.history.download(id)?;
+        if record.status != DownloadStatus::Completed {
+            return Err(AppError::download(
+                "Actions can only be run on completed downloads.",
+            ));
+        }
+        let path_str = record
+            .path
+            .ok_or_else(|| AppError::download("Download file path is missing."))?;
+        let path = std::path::PathBuf::from(path_str);
+        if !path.is_file() {
+            return Err(AppError::download(
+                "Downloaded file does not exist at final destination.",
+            ));
+        }
+        self.history.update_download(id, |d| {
+            d.action_ledger.clear();
+            d.notice = None;
+        })?;
+        self.run_completion_actions(id, &path).await;
+        Ok(())
+    }
+
+    pub fn update_download_completion_actions(
+        &self,
+        id: &str,
+        actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    ) -> AppResult<()> {
+        if let Some(ref actions) = actions {
+            for action in actions {
+                if let Err(msg) = action.validate() {
+                    return Err(AppError::invalid_download(msg));
+                }
+            }
+        }
+        self.history.update_download(id, |d| {
+            d.completion_actions = actions;
+        })
+    }
+
+    pub async fn run_completion_actions(&self, id: &str, final_path: &Path) {
+        if !final_path.is_file() {
+            eprintln!(
+                "Skipping completion actions for {id}: destination file does not exist or is not a file."
+            );
+            return;
+        }
+
+        let record = match self.history.download(id) {
+            Ok(record) => record,
+            Err(error) => {
+                eprintln!(
+                    "Could not retrieve download record for {id} to run completion actions: {}",
+                    error.message
+                );
+                return;
+            }
+        };
+
+        if record.status != DownloadStatus::Completed {
+            return;
+        }
+
+        let current_settings = self.settings();
+        let effective_actions = if let Some(ref actions) = record.completion_actions {
+            actions.clone()
+        } else if let Some(ref settings) = current_settings {
+            if !settings.completion_actions.is_empty() {
+                settings.completion_actions.clone()
+            } else {
+                let mut legacy = Vec::new();
+                if settings.notify_on_complete {
+                    legacy.push(crate::domain::completion::CompletionAction::Notification);
+                }
+                if settings.reveal_on_complete {
+                    legacy.push(crate::domain::completion::CompletionAction::OpenFolder);
+                }
+                legacy
+            }
+        } else {
+            Vec::new()
+        };
+
+        if effective_actions.is_empty() {
+            return;
+        }
+
+        let timeout_duration = std::time::Duration::from_secs(60);
+
+        for action in effective_actions {
+            let already_run = self
+                .history
+                .with_downloads(|downloads| {
+                    downloads.iter().find(|d| d.id == id).is_some_and(|d| {
+                        d.action_ledger
+                            .iter()
+                            .any(|entry| entry.action_key == action.action_key())
+                    })
+                })
+                .unwrap_or(false);
+
+            if already_run {
+                continue;
+            }
+
+            let entry = match &action {
+                crate::domain::completion::CompletionAction::Notification => {
+                    let _ = self.history.notify_complete(id);
+                    crate::domain::completion::ActionLedgerEntry::success(&action, None)
+                }
+                crate::domain::completion::CompletionAction::PlaySound { sound_file } => {
+                    match self.action_executor.play_sound(sound_file.as_deref()).await {
+                        Ok(()) => {
+                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
+                        }
+                        Err(err) => {
+                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                        }
+                    }
+                }
+                crate::domain::completion::CompletionAction::OpenFile => {
+                    match self.action_executor.open_file(final_path) {
+                        Ok(()) => {
+                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
+                        }
+                        Err(err) => {
+                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                        }
+                    }
+                }
+                crate::domain::completion::CompletionAction::OpenFolder => {
+                    match self.action_executor.open_folder(final_path) {
+                        Ok(()) => {
+                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
+                        }
+                        Err(err) => {
+                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                        }
+                    }
+                }
+                crate::domain::completion::CompletionAction::AntivirusScan { executable, .. } => {
+                    let safe_args = action.resolve_arguments(final_path);
+                    match self
+                        .action_executor
+                        .execute_process(executable, &safe_args, timeout_duration)
+                        .await
+                    {
+                        Ok(output) => {
+                            let msg = if output.is_empty() {
+                                None
+                            } else {
+                                Some(output)
+                            };
+                            crate::domain::completion::ActionLedgerEntry::success(&action, msg)
+                        }
+                        Err(err) => {
+                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                        }
+                    }
+                }
+                crate::domain::completion::CompletionAction::ExecuteCommand {
+                    executable, ..
+                } => {
+                    let safe_args = action.resolve_arguments(final_path);
+                    match self
+                        .action_executor
+                        .execute_process(executable, &safe_args, timeout_duration)
+                        .await
+                    {
+                        Ok(output) => {
+                            let msg = if output.is_empty() {
+                                None
+                            } else {
+                                Some(output)
+                            };
+                            crate::domain::completion::ActionLedgerEntry::success(&action, msg)
+                        }
+                        Err(err) => {
+                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                        }
+                    }
+                }
+                crate::domain::completion::CompletionAction::PowerAction {
+                    kind,
+                    confirmed,
+                } => {
+                    if !*confirmed {
+                        crate::domain::completion::ActionLedgerEntry::skipped(
+                            &action,
+                            "Power action requires explicit confirmation.",
+                        )
+                    } else {
+                        match self.action_executor.power_action(*kind).await {
+                            Ok(()) => crate::domain::completion::ActionLedgerEntry::success(
+                                &action, None,
+                            ),
+                            Err(err) => {
+                                crate::domain::completion::ActionLedgerEntry::failed(&action, err)
+                            }
+                        }
+                    }
+                }
+            };
+
+            let is_failure = entry.status == crate::domain::completion::ActionStatus::Failed;
+            let failure_message = entry.message.clone();
+            let action_type = entry.action_type.clone();
+
+            let _ = self.history.update_download(id, |d| {
+                d.action_ledger.push(entry);
+                if is_failure {
+                    if let Some(msg) = failure_message {
+                        d.notice = Some(format!("Action '{action_type}' failed: {msg}"));
+                    }
+                }
+            });
+        }
     }
 
     fn probe_unreviewed_download(&self, id: String, url_str: String, referer: Option<String>) {

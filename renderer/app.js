@@ -1178,6 +1178,37 @@ function renderDetails() {
 		"is-complete",
 		status === "completed",
 	);
+	renderActionLedger(d);
+}
+function renderActionLedger(d) {
+	const container = $("#completion-action-history");
+	const retryBtn = $("#detail-retry-actions");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!d || !Array.isArray(d.actionLedger) || d.actionLedger.length === 0) {
+		container.innerHTML = "<p class='field-help' style='margin: 4px 0;'>No post-download actions recorded yet.</p>";
+		if (retryBtn) retryBtn.hidden = true;
+		return;
+	}
+	const list = document.createElement("ul");
+	list.style.listStyle = "none";
+	list.style.padding = "0";
+	list.style.margin = "4px 0";
+	for (const entry of d.actionLedger) {
+		const li = document.createElement("li");
+		li.style.padding = "3px 0";
+		li.style.fontSize = "12px";
+		const isSuccess = entry.status === "success";
+		const isFailed = entry.status === "failed";
+		const icon = isSuccess ? "✓" : isFailed ? "⚠️" : "ℹ️";
+		const color = isSuccess ? "#166534" : isFailed ? "#991b1b" : "#4b5563";
+		li.innerHTML = `<span style="color: ${color}; font-weight: bold;">${icon} ${entry.actionType}</span>: <span>${entry.status}</span> ${entry.message ? `— <em>${entry.message}</em>` : ""}`;
+		list.appendChild(li);
+	}
+	container.appendChild(list);
+	if (retryBtn) {
+		retryBtn.hidden = statusOf(d) !== "completed";
+	}
 }
 function setDetailTab(name) {
 	for (const tab of ["status", "speed", "completion"]) {
@@ -1244,6 +1275,25 @@ function openSettings() {
 	$("#capture-file-types").value = Array.isArray(capturePolicy.fileTypes) ? capturePolicy.fileTypes.join(" ").toUpperCase() : "";
 	$("#capture-excluded-hosts").value = Array.isArray(capturePolicy.excludedHosts) ? capturePolicy.excludedHosts.join(", ") : "";
 	$("#capture-excluded-addresses").value = Array.isArray(capturePolicy.excludedAddresses) ? capturePolicy.excludedAddresses.join(", ") : "";
+
+	const actions = Array.isArray(settings.completionActions) ? settings.completionActions : [];
+	const soundAction = actions.find((a) => a.type === "playSound");
+	$("#settings-play-sound").checked = Boolean(soundAction);
+	$("#settings-sound-file").value = soundAction?.soundFile || "";
+
+	const scanAction = actions.find((a) => a.type === "antivirusScan");
+	$("#settings-scan-antivirus").checked = Boolean(scanAction);
+	$("#settings-scanner-executable").value = scanAction?.executable || "";
+	$("#settings-scanner-args").value = Array.isArray(scanAction?.arguments) ? scanAction.arguments.join(" ") : "";
+
+	const cmdAction = actions.find((a) => a.type === "executeCommand");
+	$("#settings-post-command").checked = Boolean(cmdAction);
+	$("#settings-command-executable").value = cmdAction?.executable || "";
+	$("#settings-command-args").value = Array.isArray(cmdAction?.arguments) ? cmdAction.arguments.join(" ") : "";
+
+	const powerAction = actions.find((a) => a.type === "powerAction");
+	$("#settings-power-action").value = powerAction?.kind || "none";
+	$("#settings-power-confirm").checked = powerAction ? powerAction.confirmed !== false : true;
 
 	updateProxyFieldsState();
 	resetProxyTestStatus();
@@ -1597,6 +1647,20 @@ $("#detail-open").addEventListener("click", () =>
 $("#detail-folder").addEventListener("click", () =>
 	performAction(detailDownload(), "reveal"),
 );
+$("#detail-retry-actions")?.addEventListener("click", async () => {
+	if (!detailId) return;
+	try {
+		$("#detail-retry-actions").disabled = true;
+		await call("retryDownloadActions", { id: detailId });
+		await refresh();
+		renderDetails();
+		notify("Post-download actions re-executed.");
+	} catch (e) {
+		notify(messageOf(e), true);
+	} finally {
+		$("#detail-retry-actions").disabled = false;
+	}
+});
 $("#detail-stop").addEventListener("click", () =>
 	performAction(detailDownload(), "pause"),
 );
@@ -2338,6 +2402,33 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			excludedHosts: $("#capture-excluded-hosts").value.split(",").map(s => s.trim()).filter(Boolean),
 			excludedAddresses: $("#capture-excluded-addresses").value.split(",").map(s => s.trim()).filter(Boolean),
 		};
+		const completionActions = [];
+		if ($("#settings-play-sound").checked) {
+			const soundFile = $("#settings-sound-file").value.trim() || null;
+			completionActions.push({ type: "playSound", soundFile });
+		}
+		if ($("#settings-scan-antivirus").checked) {
+			const executable = $("#settings-scanner-executable").value.trim();
+			if (executable) {
+				const args = $("#settings-scanner-args").value.trim().split(/\s+/).filter(Boolean);
+				completionActions.push({ type: "antivirusScan", executable, arguments: args });
+			}
+		}
+		if ($("#settings-post-command").checked) {
+			const executable = $("#settings-command-executable").value.trim();
+			if (executable) {
+				const args = $("#settings-command-args").value.trim().split(/\s+/).filter(Boolean);
+				completionActions.push({ type: "executeCommand", executable, arguments: args });
+			}
+		}
+		const powerKind = $("#settings-power-action").value;
+		if (powerKind && powerKind !== "none") {
+			completionActions.push({
+				type: "powerAction",
+				kind: powerKind,
+				confirmed: $("#settings-power-confirm").checked,
+			});
+		}
 		await call("settings", {
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
@@ -2346,6 +2437,7 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			speedLimitKbps: Number($("#speed-limit").value),
 			proxy,
 			capturePolicy,
+			completionActions,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");

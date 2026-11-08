@@ -72,6 +72,10 @@ pub struct DownloadRecord {
     pub validator: Option<super::validator::TransferValidator>,
     #[serde(default)]
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(default)]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    #[serde(default)]
+    pub action_ledger: Vec<crate::domain::completion::ActionLedgerEntry>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
     #[serde(skip)]
@@ -168,6 +172,8 @@ impl DownloadRecord {
             }),
             validator: self.validator.as_ref(),
             conflict_policy: self.conflict_policy,
+            completion_actions: self.completion_actions.as_deref(),
+            action_ledger: &self.action_ledger,
         }
     }
 }
@@ -204,4 +210,8 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub etag: Option<&'a str>,
     pub validator: Option<&'a super::validator::TransferValidator>,
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_actions: Option<&'a [crate::domain::completion::CompletionAction]>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub action_ledger: &'a [crate::domain::completion::ActionLedgerEntry],
 }

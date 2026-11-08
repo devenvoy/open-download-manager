@@ -19,4 +19,5 @@ pub struct SettingsPatch {
     pub hide_completion_dialog: Option<bool>,
     pub proxy: Option<ProxySettings>,
     pub capture_policy: Option<crate::domain::browser::CapturePolicy>,
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
 }

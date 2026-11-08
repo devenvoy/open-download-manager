@@ -1267,6 +1267,8 @@ fn typed_validator_survives_serialization_and_migrates_safely() {
         validator: Some(lm_val.clone()),
         conflict_policy: None,
         credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
     let serialized_rec = serde_json::to_string(&record).unwrap();
     let de_rec: DownloadRecord = serde_json::from_str(&serialized_rec).unwrap();

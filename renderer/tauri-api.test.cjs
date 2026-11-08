@@ -437,3 +437,27 @@ test('credential rules methods invoke corresponding Rust commands', async () => 
   assert.equal(calls[2][0], 'delete_credential_rule');
   assert.deepEqual(calls[2][1], { id: 'rule-1' });
 });
+
+test('completion action methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  const actions = [
+    { type: 'antivirusScan', executable: '/usr/bin/scanner', arguments: ['--scan', '{file}'] }
+  ];
+
+  await api.updateDownloadCompletionActions({ id: 'dl-1', actions });
+  assert.equal(calls[0][0], 'update_download_completion_actions');
+  assert.deepEqual(calls[0][1], { id: 'dl-1', actions });
+
+  await api.retryDownloadActions({ id: 'dl-1' });
+  assert.equal(calls[1][0], 'retry_download_actions');
+  assert.deepEqual(calls[1][1], { id: 'dl-1' });
+});

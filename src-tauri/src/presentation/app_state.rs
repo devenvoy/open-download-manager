@@ -74,6 +74,7 @@ impl AppState {
             .set_max_concurrent(candidate.max_concurrent);
         self.download_transfer
             .set_speed_limit(candidate.speed_limit_kbps);
+        self.download_transfer.set_settings(candidate.clone());
         let _ = crate::infrastructure::autostart::sync_autostart(candidate.start_with_windows);
 
         // 4. Only after runtime reconfiguration succeeds, persist settings to disk

@@ -39,6 +39,8 @@ pub struct DownloadRequest {
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     #[serde(default)]
     pub credentials: Option<DownloadCredentials>,
+    #[serde(default)]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -135,6 +137,14 @@ impl DownloadRequest {
             }
         });
 
+        if let Some(ref actions) = self.completion_actions {
+            for action in actions {
+                if let Err(msg) = action.validate() {
+                    return Err(msg.to_string());
+                }
+            }
+        }
+
         Ok(ValidatedDownloadRequest {
             urls,
             filename,
@@ -152,6 +162,7 @@ impl DownloadRequest {
             youtube_format: self.youtube_format,
             conflict_policy: self.conflict_policy,
             credentials: self.credentials,
+            completion_actions: self.completion_actions,
         })
     }
 }

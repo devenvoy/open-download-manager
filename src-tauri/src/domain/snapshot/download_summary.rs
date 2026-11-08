@@ -33,6 +33,10 @@ pub struct DownloadSummary {
     pub connections_progress: Vec<DownloadSegmentProgress>,
     pub transfer_kind: Option<String>,
     pub referer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub action_ledger: Vec<crate::domain::completion::ActionLedgerEntry>,
 }
 
 impl From<&DownloadRecord> for DownloadSummary {
@@ -63,6 +67,8 @@ impl From<&DownloadRecord> for DownloadSummary {
             connections_progress: download.connections_progress.clone(),
             transfer_kind: download.transfer_kind.clone(),
             referer: download.referer.clone(),
+            completion_actions: download.completion_actions.clone(),
+            action_ledger: download.action_ledger.clone(),
         }
     }
 }
@@ -95,6 +101,8 @@ impl From<DownloadRecord> for DownloadSummary {
             connections_progress: download.connections_progress,
             transfer_kind: download.transfer_kind,
             referer: download.referer,
+            completion_actions: download.completion_actions,
+            action_ledger: download.action_ledger,
         }
     }
 }

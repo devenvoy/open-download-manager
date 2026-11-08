@@ -32,6 +32,7 @@ impl LegacySettings {
             hide_completion_dialog: self.hide_completion_dialog,
             proxy: None,
             capture_policy: None,
+            completion_actions: None,
         }
     }
 }

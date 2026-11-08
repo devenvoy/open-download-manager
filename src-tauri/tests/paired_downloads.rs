@@ -133,6 +133,7 @@ fn paired_request_validation_and_record_mapping() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        completion_actions: None,
     };
 
     let ids = transfer.add(req, settings.settings()).expect("add download");
@@ -223,6 +224,8 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -329,6 +332,8 @@ async fn paired_download_converts_to_mp3() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let progress_handler: DownloadProgressHandler = Arc::new(|_| {});
@@ -385,6 +390,8 @@ fn paired_download_discard_partial_cleans_up_directory() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let parts_dir = dir.join(format!(".open-download-manager-paired-{}", download.id));
