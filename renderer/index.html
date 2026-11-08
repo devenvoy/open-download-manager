@@ -1421,6 +1421,25 @@
 					id="browser-grid"
 					role="list"
 					aria-label="Installed supported browsers"></div>
+				<section class="advanced-integration-section" id="advanced-integration-section">
+					<div class="advanced-integration-heading">
+						<div>
+							<h3 id="advanced-integration-title">Enhanced Media Integration (Opt-in)</h3>
+							<p class="field-help">
+								Deep player stream detection for media requests. A bounded non-destructive health check runs automatically, with instant rollback if conflicts occur.
+							</p>
+						</div>
+						<span class="advanced-integration-badge" id="advanced-integration-badge">Disabled</span>
+					</div>
+					<div class="advanced-integration-banner" id="advanced-integration-banner" hidden>
+						<p id="advanced-integration-message" role="status"></p>
+					</div>
+					<div class="advanced-integration-controls" id="advanced-integration-controls">
+						<button type="button" class="button" id="advanced-enable-button">Enable Enhanced Mode…</button>
+						<button type="button" class="button secondary" id="advanced-repair-button" hidden>Repair &amp; Verify</button>
+						<button type="button" class="button secondary" id="advanced-disable-button" hidden>Disable</button>
+					</div>
+				</section>
 				<section
 					class="browser-detail"
 					id="browser-detail"

@@ -4,8 +4,10 @@
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Module definitions and exports for the application service orchestration layer.
 
+pub mod advanced_integration_service;
 pub mod clipboard_service;
 pub mod credential_service;
 mod download_concurrency_limiter;

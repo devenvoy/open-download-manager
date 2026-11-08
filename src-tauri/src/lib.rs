@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -25,6 +26,8 @@ use presentation::{
         register_browser, remove_completed, retry_download_actions, review_download,
         save_credential_rule, show_about_dialog, snapshot, test_proxy_connection,
         update_download_completion_actions, update_settings, validate_directory,
+        get_advanced_integration_capability, enable_advanced_integration,
+        disable_advanced_integration, repair_advanced_integration,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -230,15 +233,28 @@ pub fn run() {
             );
             clipboard_service.set_settings(settings.settings().clipboard_monitoring.clone());
 
-            app.manage(AppState::new(
-                settings,
-                download_history,
-                download_transfer,
-                credential_service,
-                integration_service,
-                file_icons,
-                update_service,
-            ).with_clipboard(clipboard_service));
+            let advanced_adapter = std::sync::Arc::new(
+                crate::infrastructure::browser::PlatformAdvancedAdapter::new(data_directory.clone()),
+            );
+            let advanced_service = std::sync::Arc::new(
+                crate::application::advanced_integration_service::AdvancedIntegrationService::new(
+                    advanced_adapter,
+                ),
+            );
+
+            app.manage(
+                AppState::new(
+                    settings,
+                    download_history,
+                    download_transfer,
+                    credential_service,
+                    integration_service,
+                    file_icons,
+                    update_service,
+                )
+                .with_clipboard(clipboard_service)
+                .with_advanced_integration(advanced_service),
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -275,7 +291,11 @@ pub fn run() {
             delete_credential_rule,
             update_download_completion_actions,
             retry_download_actions,
-            dismiss_clipboard_candidate
+            dismiss_clipboard_candidate,
+            get_advanced_integration_capability,
+            enable_advanced_integration,
+            disable_advanced_integration,
+            repair_advanced_integration
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -188,6 +189,61 @@ function renderBrowserGrid(info) {
 	)
 		showBrowserDetail(selectedBrowserName);
 }
+function renderAdvancedIntegration(cap) {
+	if (!cap) return;
+	const badge = $("#advanced-integration-badge");
+	const banner = $("#advanced-integration-banner");
+	const msg = $("#advanced-integration-message");
+	const enableBtn = $("#advanced-enable-button");
+	const repairBtn = $("#advanced-repair-button");
+	const disableBtn = $("#advanced-disable-button");
+
+	if (!badge || !enableBtn) return;
+
+	const stateObj = cap.state || {};
+	const stateKind = typeof stateObj === "string" ? stateObj : stateObj.state;
+
+	badge.className = "advanced-integration-badge";
+	banner.hidden = true;
+	msg.textContent = "";
+
+	enableBtn.hidden = true;
+	enableBtn.disabled = false;
+	repairBtn.hidden = true;
+	disableBtn.hidden = true;
+
+	if (stateKind === "active") {
+		badge.textContent = "Active (Protected)";
+		badge.classList.add("active");
+		disableBtn.hidden = false;
+	} else if (stateKind === "degraded") {
+		badge.textContent = "Degraded (Rolled Back)";
+		badge.classList.add("degraded");
+		banner.hidden = false;
+		msg.textContent = `Health check or conflict occurred: ${stateObj.reason || "Operation degraded"}. Standard browser integration remains active.`;
+		repairBtn.hidden = false;
+		disableBtn.hidden = false;
+	} else if (stateKind === "unsupported") {
+		badge.textContent = "Unsupported";
+		badge.classList.add("unsupported");
+		banner.hidden = false;
+		msg.textContent = `Enhanced media integration is not supported on this platform: ${stateObj.reason || "Platform capability unavailable."}`;
+		enableBtn.hidden = false;
+		enableBtn.disabled = true;
+		enableBtn.title = "Enhanced media integration is not supported on this platform.";
+	} else {
+		badge.textContent = "Disabled";
+		enableBtn.hidden = false;
+	}
+}
+async function refreshAdvancedIntegration() {
+	try {
+		const cap = await api.getAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (e) {
+		console.warn("Could not load advanced integration capability:", e);
+	}
+}
 function showBrowserDetail(name) {
 	const browser = integrationBrowsers.find((item) => item.name === name);
 	if (!browser) return;
@@ -324,6 +380,7 @@ async function refreshIntegrationInfo(showErrors = false) {
 		const info = (await call("integration")) || state.integration;
 		state.integration = info;
 		renderBrowserGrid(info);
+		await refreshAdvancedIntegration();
 	} catch (problem) {
 		if (showErrors) {
 			$("#browser-setup-error").textContent = messageOf(problem);
@@ -333,6 +390,40 @@ async function refreshIntegrationInfo(showErrors = false) {
 		setupPolling = false;
 	}
 }
+
+$("#advanced-enable-button")?.addEventListener("click", async () => {
+	const confirmed = confirm(
+		"Enable Enhanced Media Integration?\n\nThis installs an opt-in platform adapter to observe player streams. Only selected and approved media requests are captured; unrelated web browsing traffic is never collected or persisted. A non-destructive health verification check will run automatically."
+	);
+	if (!confirmed) return;
+	try {
+		const cap = await api.enableAdvancedIntegration({ consent: true });
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
+
+$("#advanced-repair-button")?.addEventListener("click", async () => {
+	try {
+		const cap = await api.repairAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
+
+$("#advanced-disable-button")?.addEventListener("click", async () => {
+	try {
+		const cap = await api.disableAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
 const setupPoll = setInterval(() => {
 	if (integrationMode) refreshIntegrationInfo();
 }, 3000);

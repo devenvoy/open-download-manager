@@ -2,6 +2,7 @@
 // Reason: feat: implement Phase A download context actions and filesystem parity
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Integration tests verifying commands instrumentation functionality, edge cases, and error recovery.
 
 use std::{
@@ -30,8 +31,10 @@ use open_download_manager_lib::{
     presentation::{
         app_state::AppState,
         commands::{
-            add_download, browser_setup_action, download_action, get_integration_info,
-            get_media_tools_status, register_browser, remove_completed, review_download, snapshot,
+            add_download, browser_setup_action, disable_advanced_integration, download_action,
+            enable_advanced_integration, get_advanced_integration_capability, get_integration_info,
+            get_media_tools_status, register_browser, remove_completed, repair_advanced_integration,
+            review_download, snapshot,
         },
     },
 };
@@ -467,5 +470,45 @@ async fn commands_media_tools_status() {
     assert_eq!(
         statuses[1].tool_type,
         open_download_manager_lib::domain::media_tools::MediaToolType::YtDlp
+    );
+}
+
+#[tokio::test]
+async fn commands_advanced_integration_lifecycle() {
+    let dir = temporary_directory();
+    let shell = RecordingShellService::default();
+    let app = create_test_app(&dir, shell);
+    let state = app.state::<AppState>();
+
+    // 1. Initial capability is disabled
+    let cap = get_advanced_integration_capability(state.clone()).expect("get capability succeeds");
+    assert_eq!(
+        cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Disabled
+    );
+
+    // 2. Enable without consent fails
+    let no_consent = enable_advanced_integration(state.clone(), false);
+    assert!(no_consent.is_err());
+
+    // 3. Enable with consent succeeds
+    let active_cap = enable_advanced_integration(state.clone(), true).expect("enable succeeds");
+    assert_eq!(
+        active_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Active
+    );
+
+    // 4. Disable returns to disabled
+    let disabled_cap = disable_advanced_integration(state.clone()).expect("disable succeeds");
+    assert_eq!(
+        disabled_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Disabled
+    );
+
+    // 5. Repair works
+    let repaired_cap = repair_advanced_integration(state.clone()).expect("repair succeeds");
+    assert_eq!(
+        repaired_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Active
     );
 }

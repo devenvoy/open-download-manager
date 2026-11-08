@@ -4,12 +4,14 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Shared application state holding services, transfer handles, and runtime settings.
 
 use std::sync::{Arc, Mutex};
 
 use crate::{
     application::{
+        advanced_integration_service::AdvancedIntegrationService,
         clipboard_service::ClipboardMonitoringService,
         credential_service::CredentialService,
         download_history_service::DownloadHistoryService,
@@ -20,7 +22,9 @@ use crate::{
         updater_service::UpdateService,
     },
     domain::settings::{Settings, SettingsPatch},
-    infrastructure::{file_icons::FileIconProvider, media::ytdlp::YtDlpTools},
+    infrastructure::{
+        browser::PlatformAdvancedAdapter, file_icons::FileIconProvider, media::ytdlp::YtDlpTools,
+    },
 };
 
 pub struct AppState {
@@ -33,6 +37,7 @@ pub struct AppState {
     pub(super) update_service: UpdateService,
     pub(super) ytdlp: Option<Arc<YtDlpTools>>,
     pub(super) clipboard: Option<Arc<ClipboardMonitoringService>>,
+    pub(super) advanced_integration: Arc<AdvancedIntegrationService>,
 }
 
 impl AppState {
@@ -45,6 +50,8 @@ impl AppState {
         file_icons: FileIconProvider,
         update_service: UpdateService,
     ) -> Self {
+        let advanced_adapter = Arc::new(PlatformAdvancedAdapter::new(std::env::temp_dir()));
+        let advanced_integration = Arc::new(AdvancedIntegrationService::new(advanced_adapter));
         Self {
             settings: Mutex::new(settings),
             download_history,
@@ -55,6 +62,7 @@ impl AppState {
             update_service,
             ytdlp: YtDlpTools::new().map(Arc::new),
             clipboard: None,
+            advanced_integration,
         }
     }
 
@@ -65,6 +73,14 @@ impl AppState {
 
     pub fn with_clipboard(mut self, clipboard: Arc<ClipboardMonitoringService>) -> Self {
         self.clipboard = Some(clipboard);
+        self
+    }
+
+    pub fn with_advanced_integration(
+        mut self,
+        advanced_integration: Arc<AdvancedIntegrationService>,
+    ) -> Self {
+        self.advanced_integration = advanced_integration;
         self
     }
 

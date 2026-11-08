@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -106,5 +107,9 @@ window.downloader = Object.freeze({
   updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
   retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id }),
   validateDirectory: path => invoke('validate_directory', { path }),
-  dismissClipboardCandidate: url => invoke('dismiss_clipboard_candidate', { url })
+  dismissClipboardCandidate: url => invoke('dismiss_clipboard_candidate', { url }),
+  getAdvancedIntegration: () => invoke('get_advanced_integration_capability'),
+  enableAdvancedIntegration: ({ consent }) => invoke('enable_advanced_integration', { consent }),
+  disableAdvancedIntegration: () => invoke('disable_advanced_integration'),
+  repairAdvancedIntegration: () => invoke('repair_advanced_integration')
 });

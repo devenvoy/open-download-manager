@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Tauri IPC command handlers processing frontend requests for downloads, settings, and media.
 
 use std::sync::Arc;
@@ -292,4 +293,33 @@ pub fn dismiss_clipboard_candidate(
         clipboard.dismiss(&url);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_advanced_integration_capability(
+    state: State<'_, AppState>,
+) -> AppResult<crate::domain::browser::AdvancedIntegrationCapability> {
+    Ok(state.advanced_integration.capability())
+}
+
+#[tauri::command]
+pub fn enable_advanced_integration(
+    state: State<'_, AppState>,
+    consent: bool,
+) -> AppResult<crate::domain::browser::AdvancedIntegrationCapability> {
+    state.advanced_integration.enable(consent)
+}
+
+#[tauri::command]
+pub fn disable_advanced_integration(
+    state: State<'_, AppState>,
+) -> AppResult<crate::domain::browser::AdvancedIntegrationCapability> {
+    state.advanced_integration.disable()
+}
+
+#[tauri::command]
+pub fn repair_advanced_integration(
+    state: State<'_, AppState>,
+) -> AppResult<crate::domain::browser::AdvancedIntegrationCapability> {
+    state.advanced_integration.repair()
 }

@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
 
 'use strict';
@@ -499,4 +500,28 @@ test('dismissClipboardCandidate invokes the Rust dismiss_clipboard_candidate com
   await api.dismissClipboardCandidate('https://example.com/file.zip');
   assert.equal(calls[0][0], 'dismiss_clipboard_candidate');
   assert.deepEqual(calls[0][1], { url: 'https://example.com/file.zip' });
+});
+
+test('advanced integration methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { state: { state: 'disabled' } };
+      }
+    }
+  });
+
+  await api.getAdvancedIntegration();
+  await api.enableAdvancedIntegration({ consent: true });
+  await api.disableAdvancedIntegration();
+  await api.repairAdvancedIntegration();
+
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0][0], 'get_advanced_integration_capability');
+  assert.equal(calls[1][0], 'enable_advanced_integration');
+  assert.deepEqual(calls[1][1], { consent: true });
+  assert.equal(calls[2][0], 'disable_advanced_integration');
+  assert.equal(calls[3][0], 'repair_advanced_integration');
 });
