@@ -5,7 +5,7 @@
   "description": "Send links and detected direct video downloads to Open Download Manager.",
   "permissions": ["nativeMessaging", "storage", "contextMenus", "webRequest", "downloads"],
   "host_permissions": ["http://*/*", "https://*/*"],
-  "background": {"scripts": ["hls.js", "youtube-media.js", "background.js"]},
+  "background": {"scripts": ["hls.js", "youtube-media.js", "capture-evaluator.js", "background.js"]},
   "icons": {"16":"icons/icon16.png","32":"icons/icon32.png","48":"icons/icon48.png","128":"icons/icon128.png"},
   "action": {"default_popup": "popup.html", "default_title": "Open Download Manager", "default_icon":{"16":"icons/icon16.png","32":"icons/icon32.png"}},
   "browser_specific_settings": {"gecko": {"id": "open-download-manager@opendownloadmanager.local", "strict_min_version": "128.0", "data_collection_permissions": {"required": ["none"]}}},

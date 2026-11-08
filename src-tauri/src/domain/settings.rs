@@ -35,6 +35,8 @@ pub struct Settings {
     pub hide_completion_dialog: bool,
     #[serde(default)]
     pub proxy: ProxySettings,
+    #[serde(default)]
+    pub capture_policy: crate::domain::browser::CapturePolicy,
 }
 
 impl Settings {
@@ -51,6 +53,7 @@ impl Settings {
             start_with_windows: DEFAULT_START_WITH_WINDOWS,
             hide_completion_dialog: DEFAULT_HIDE_COMPLETION_DIALOG,
             proxy: ProxySettings::default(),
+            capture_policy: crate::domain::browser::CapturePolicy::default(),
         }
     }
 
@@ -88,6 +91,7 @@ impl Settings {
             patch.hide_completion_dialog,
         );
         apply_if_some(&mut next.proxy, patch.proxy);
+        apply_if_some(&mut next.capture_policy, patch.capture_policy);
 
         next.validate()?;
         Ok(next)

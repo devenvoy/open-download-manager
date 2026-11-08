@@ -10,10 +10,11 @@ use open_download_manager_lib::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
         integration_service::IntegrationService,
+        settings_service::SettingsRepository,
         shell_service::ShellService,
     },
     domain::{
-        browser::{sanitize_browser_request, BrowserIncomingMessage},
+        browser::{sanitize_browser_request, BrowserIncomingMessage, CapturePolicy, ConfirmationMode},
         category::DownloadCategory,
         download::{DownloadAction, DownloadRequest, DownloadStatus, ReviewDownloadRequest},
         settings::Settings,
@@ -30,6 +31,7 @@ use open_download_manager_lib::{
         },
         download_history_store::DownloadHistoryStore,
         http_download_executor::HttpDownloadExecutor,
+        settings_store::SettingsStore,
     },
 };
 
@@ -852,6 +854,357 @@ async fn real_user_scenario_browser_link_expired_and_refreshed_through_bridge() 
     let record = history.download(&download_id).unwrap();
     assert!(record.notice.as_deref().unwrap_or("").contains("refreshed"));
 
+    bridge.stop().await;
+    fs::remove_dir_all(directory).expect("cleanup directory");
+}
+
+#[tokio::test]
+async fn loopback_bridge_capture_policy_and_exclusions() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("create directory");
+
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service");
+    let executor = HttpDownloadExecutor::new().expect("http executor");
+    let service = DownloadTransferService::new(history.clone(), executor, 2);
+    let mut settings = Settings::new(directory.clone());
+    settings.confirm_browser_downloads = false;
+    settings.capture_policy = CapturePolicy {
+        file_types: vec!["zip".to_owned(), "tar.gz".to_owned()],
+        excluded_hosts: vec!["blocked.com".to_owned(), "*.internal.corp".to_owned()],
+        excluded_addresses: vec!["192.168.1.100".to_owned(), "10.0.0.0/8".to_owned()],
+        confirmation_mode: ConfirmationMode::AskForUnknown,
+        enabled: true,
+    };
+
+    let bridge = LoopbackBridge::start(directory.clone(), service, settings, None)
+        .await
+        .expect("bridge start");
+
+    let port = bridge.config.port;
+    let token = bridge.config.token.clone();
+    let client = reqwest::Client::new();
+    let bridge_url = format!("http://127.0.0.1:{port}");
+
+    // 1. GET /policy returns the active policy
+    let policy_resp = client
+        .get(format!("{bridge_url}/policy"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(policy_resp.status().as_u16(), 200);
+    let policy_json: serde_json::Value = policy_resp.json().await.unwrap();
+    assert_eq!(policy_json["ok"], true);
+    assert_eq!(
+        policy_json["policy"]["excludedHosts"][0].as_str().unwrap(),
+        "blocked.com"
+    );
+    assert_eq!(
+        policy_json["policy"]["confirmationMode"].as_str().unwrap(),
+        "askForUnknown"
+    );
+
+    // 2. Excluded host returns 403 Forbidden with decision excluded-host
+    let blocked_host_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": "https://blocked.com/somefile.zip",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blocked_host_resp.status().as_u16(), 403);
+    let blocked_host_json: serde_json::Value = blocked_host_resp.json().await.unwrap();
+    assert_eq!(blocked_host_json["decision"], "excluded-host");
+    assert!(blocked_host_json["error"].as_str().unwrap().contains("blocked.com"));
+
+    // 3. Excluded address (CIDR / IP) returns 403 Forbidden with decision excluded-address
+    let blocked_addr_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": "https://192.168.1.100/package.zip",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blocked_addr_resp.status().as_u16(), 403);
+    let blocked_addr_json: serde_json::Value = blocked_addr_resp.json().await.unwrap();
+    assert_eq!(blocked_addr_json["decision"], "excluded-address");
+
+    // 4. Unknown extension in AskForUnknown mode requires confirmation (needs_review = true)
+    let unknown_ext_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": "https://allowed.example.com/installer.dmg",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unknown_ext_resp.status().as_u16(), 201);
+    let unknown_json: serde_json::Value = unknown_ext_resp.json().await.unwrap();
+    let unk_id = unknown_json["ids"][0].as_str().unwrap();
+    let unk_rec = history.download(unk_id).unwrap();
+    assert!(unk_rec.needs_review, "Unknown extension in AskForUnknown mode must require review");
+
+    // 5. Allowed extension in AskForUnknown mode does NOT require review when confirm_browser_downloads is false
+    let allowed_ext_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": "https://allowed.example.com/archive.zip",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(allowed_ext_resp.status().as_u16(), 201);
+    let allowed_json: serde_json::Value = allowed_ext_resp.json().await.unwrap();
+    let allowed_id = allowed_json["ids"][0].as_str().unwrap();
+    let allowed_rec = history.download(allowed_id).unwrap();
+    assert!(!allowed_rec.needs_review, "Included extension should not force review");
+
+    bridge.stop().await;
+    fs::remove_dir_all(directory).expect("cleanup directory");
+}
+
+fn serve_test_static_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicBool>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("fixture listener bind");
+    let address = listener.local_addr().expect("fixture address");
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_clone = running.clone();
+    std::thread::spawn(move || {
+        listener.set_nonblocking(true).unwrap();
+        while running_clone.load(std::sync::atomic::Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let mut buf = [0u8; 1024];
+                    let _ = stream.read(&mut buf);
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(&body);
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    (format!("http://{address}"), running)
+}
+
+#[tokio::test]
+async fn real_user_scenario_browser_capture_rules_workflow_with_intranet_and_review() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("create directory");
+
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service");
+    let executor = HttpDownloadExecutor::new().expect("http executor");
+    let service = DownloadTransferService::new(history.clone(), executor, 2);
+    let mut settings = Settings::new(directory.clone());
+    settings.confirm_browser_downloads = false;
+    settings.capture_policy = CapturePolicy {
+        file_types: vec!["zip".to_owned(), "iso".to_owned()],
+        excluded_hosts: vec!["*.internal.corp".to_owned(), "secret.bank.com".to_owned()],
+        excluded_addresses: vec!["10.0.0.0/8".to_owned(), "/restricted/".to_owned()],
+        confirmation_mode: ConfirmationMode::AskForUnknown,
+        enabled: true,
+    };
+
+    // Save initial settings to store
+    let settings_store = SettingsStore::new(&directory);
+    settings_store.save(&settings).expect("save initial settings");
+
+    let bridge = LoopbackBridge::start(directory.clone(), service.clone(), settings.clone(), None)
+        .await
+        .expect("bridge start");
+
+    let port = bridge.config.port;
+    let token = bridge.config.token.clone();
+    let client = reqwest::Client::new();
+    let bridge_url = format!("http://127.0.0.1:{port}");
+
+    // Mock web server serving downloadable software files
+    let sample_payload = b"GENUINE_USER_DOWNLOAD_PAYLOAD".to_vec();
+    let (server_base, server_running) = serve_test_static_file(sample_payload.clone());
+
+    // 1. Real human user visits a site and triggers an allowed file (e.g. tool.zip)
+    let allowed_url = format!("{server_base}/tool.zip");
+    let resp1 = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": allowed_url,
+            "filename": "tool.zip",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp1.status().as_u16(), 201);
+    let json1: serde_json::Value = resp1.json().await.unwrap();
+    let id1 = json1["ids"][0].as_str().unwrap().to_string();
+
+    // Verify it downloads and completes automatically without needing manual confirmation
+    let mut completed1 = false;
+    for _ in 0..100 {
+        if let Ok(rec) = history.download(&id1) {
+            if rec.status == DownloadStatus::Completed {
+                completed1 = true;
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(completed1, "Allowed standard file must complete automatically");
+    let rec1 = history.download(&id1).unwrap();
+    assert!(!rec1.needs_review);
+
+    // 2. Real user encounters a company intranet link matching excluded_hosts
+    let intranet_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": "https://dev.internal.corp/firmware.zip",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(intranet_resp.status().as_u16(), 403);
+    let intranet_json: serde_json::Value = intranet_resp.json().await.unwrap();
+    assert_eq!(intranet_json["decision"], "excluded-host");
+    assert!(intranet_json["error"].as_str().unwrap().contains("dev.internal.corp"));
+
+    // 3. Real user encounters a restricted path on an address exclusion list
+    let restricted_resp = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": format!("{server_base}/restricted/export.zip"),
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(restricted_resp.status().as_u16(), 403);
+    let restricted_json: serde_json::Value = restricted_resp.json().await.unwrap();
+    assert_eq!(restricted_json["decision"], "excluded-address");
+
+    // 4. Real user encounters an unrecognized file format (.xyz) in AskForUnknown mode
+    let unknown_url = format!("{server_base}/installer.xyz");
+    let resp_unk = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": unknown_url,
+            "filename": "installer.xyz",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp_unk.status().as_u16(), 201);
+    let json_unk: serde_json::Value = resp_unk.json().await.unwrap();
+    let id_unk = json_unk["ids"][0].as_str().unwrap().to_string();
+
+    // Verify it is paused in needs_review state
+    let rec_unk = history.download(&id_unk).unwrap();
+    assert!(rec_unk.needs_review, "Unknown extension must trigger review dialog");
+    assert_eq!(rec_unk.status, DownloadStatus::Paused);
+
+    // User reviews the unknown file and explicitly clicks "Start Download"
+    service
+        .review_download(ReviewDownloadRequest {
+            id: id_unk.clone(),
+            filename: Some("installer.xyz".to_owned()),
+            directory: Some(directory.to_string_lossy().into_owned()),
+            category: None,
+            description: Some("User confirmed unknown file".to_owned()),
+            queue_only: Some(false),
+            scheduled_at: None,
+            conflict_policy: None,
+        })
+        .expect("user review approval");
+
+    // The download proceeds and finishes
+    let mut completed_unk = false;
+    for _ in 0..100 {
+        if let Ok(rec) = history.download(&id_unk) {
+            if rec.status == DownloadStatus::Completed {
+                completed_unk = true;
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(completed_unk, "User-approved unknown download must complete successfully");
+
+    // 5. User reconfigures settings dynamically: adds "xyz" to allowed file_types
+    let mut updated_settings = settings.clone();
+    updated_settings.capture_policy.file_types.push("xyz".to_owned());
+    settings_store.save(&updated_settings).expect("save updated settings");
+
+    // Extension refreshes policy from /policy endpoint
+    let policy_poll = client
+        .get(format!("{bridge_url}/policy"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .unwrap();
+    let pol_json: serde_json::Value = policy_poll.json().await.unwrap();
+    let types = pol_json["policy"]["fileTypes"].as_array().unwrap();
+    assert!(types.iter().any(|t| t.as_str() == Some("xyz")), "Bridge must serve updated policy dynamically");
+
+    // User now downloads another .xyz file -> now accepted directly without manual review
+    let resp_xyz2 = client
+        .post(format!("{bridge_url}/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_vec(&serde_json::json!({
+            "action": "download",
+            "url": format!("{server_base}/package2.xyz"),
+            "filename": "package2.xyz",
+            "startNow": true
+        })).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp_xyz2.status().as_u16(), 201);
+    let json_xyz2: serde_json::Value = resp_xyz2.json().await.unwrap();
+    let id_xyz2 = json_xyz2["ids"][0].as_str().unwrap().to_string();
+
+    let rec_xyz2 = history.download(&id_xyz2).unwrap();
+    assert!(!rec_xyz2.needs_review, "Newly whitelisted extension must not require review");
+
+    server_running.store(false, std::sync::atomic::Ordering::Relaxed);
     bridge.stop().await;
     fs::remove_dir_all(directory).expect("cleanup directory");
 }

@@ -648,6 +648,46 @@
 						</div>
 					</fieldset>
 					<fieldset>
+						<legend>File Types &amp; Browser Capture</legend>
+						<label
+							class="checkbox-label"
+							for="capture-enabled"
+							><input
+								type="checkbox"
+								id="capture-enabled" />
+							Automatically capture downloads from browser</label
+						>
+						<div class="form-line">
+							<label for="capture-mode">Confirmation mode:</label>
+							<select id="capture-mode">
+								<option value="askForUnknown">Ask confirmation for unknown types</option>
+								<option value="automatic">Automatic (allow recognized types only)</option>
+								<option value="alwaysAsk">Always show confirmation dialog</option>
+							</select>
+						</div>
+						<div class="form-line">
+							<label for="capture-file-types">Automatically capture following file types:</label>
+							<input
+								type="text"
+								id="capture-file-types"
+								placeholder="3GP 7Z APK AVI DMG EXE ISO MKV MP4 PDF ZIP ..." />
+						</div>
+						<div class="form-line">
+							<label for="capture-excluded-hosts">Don't capture from the following sites (comma-separated):</label>
+							<input
+								type="text"
+								id="capture-excluded-hosts"
+								placeholder="blocked.com, *.internal.corp" />
+						</div>
+						<div class="form-line">
+							<label for="capture-excluded-addresses">Don't capture from the following addresses/prefixes:</label>
+							<input
+								type="text"
+								id="capture-excluded-addresses"
+								placeholder="192.168.1.100, /sensitive/, https://internal..." />
+						</div>
+					</fieldset>
+					<fieldset>
 						<legend>Media Tools</legend>
 						<div class="media-tool-line">
 							<div class="media-tool-meta">

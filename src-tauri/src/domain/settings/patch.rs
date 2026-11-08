@@ -18,4 +18,5 @@ pub struct SettingsPatch {
     pub start_with_windows: Option<bool>,
     pub hide_completion_dialog: Option<bool>,
     pub proxy: Option<ProxySettings>,
+    pub capture_policy: Option<crate::domain::browser::CapturePolicy>,
 }

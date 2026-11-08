@@ -13,13 +13,14 @@ use crate::{
     application::{
         download_transfer_service::DownloadTransferService,
         error::{AppError, AppResult},
+        settings_service::SettingsRepository,
     },
     domain::{
         browser::{sanitize_browser_request, BrowserIncomingMessage},
         download::DownloadRequest,
         settings::Settings,
     },
-    infrastructure::media::ytdlp::YtDlpTools,
+    infrastructure::{media::ytdlp::YtDlpTools, settings_store::SettingsStore},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -78,8 +79,10 @@ impl LoopbackBridge {
         let transfer_service = Arc::new(transfer_service);
         let settings = Arc::new(settings);
         let ytdlp = YtDlpTools::new().map(Arc::new);
+        let data_dir_arc = Arc::new(data_directory.clone());
 
         tokio::spawn(run_bridge_server(
+            data_dir_arc,
             listener,
             port,
             token,
@@ -105,6 +108,7 @@ impl LoopbackBridge {
 }
 
 async fn run_bridge_server(
+    data_directory: Arc<PathBuf>,
     listener: TcpListener,
     port: u16,
     expected_token: String,
@@ -125,6 +129,7 @@ async fn run_bridge_server(
             }
         };
 
+        let data_directory = data_directory.clone();
         let expected_token = expected_token.clone();
         let transfer_service = transfer_service.clone();
         let settings = settings.clone();
@@ -134,6 +139,7 @@ async fn run_bridge_server(
         tokio::spawn(async move {
             handle_bridge_connection(
                 &mut socket,
+                data_directory,
                 port,
                 &expected_token,
                 transfer_service,
@@ -148,6 +154,7 @@ async fn run_bridge_server(
 
 async fn handle_bridge_connection(
     socket: &mut tokio::net::TcpStream,
+    data_directory: Arc<PathBuf>,
     port: u16,
     expected_token: &str,
     transfer_service: Arc<DownloadTransferService>,
@@ -232,6 +239,22 @@ async fn handle_bridge_connection(
 
     if method == "GET" && path == "/health" {
         let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "version": "0.1.0"})).await;
+        return;
+    }
+
+    let active_settings = if data_directory.join("settings.json").exists() {
+        SettingsStore::new(&*data_directory)
+            .load(settings.default_directory.clone())
+            .unwrap_or_else(|_| (*settings).clone())
+    } else {
+        (*settings).clone()
+    };
+
+    if (method == "GET" || method == "POST") && path == "/policy" {
+        let _ = send_json_response(socket, 200, &serde_json::json!({
+            "ok": true,
+            "policy": active_settings.capture_policy,
+        })).await;
         return;
     }
 
@@ -338,9 +361,28 @@ async fn handle_bridge_connection(
             }
         }
 
-        let confirm = settings.confirm_browser_downloads;
-        let review_only = !valid_browser.start_now && confirm;
-        let queue_only = !valid_browser.start_now && confirm;
+        let decision = active_settings.capture_policy.evaluate(&valid_browser.url, valid_browser.filename.as_deref());
+        match &decision {
+            crate::domain::browser::CaptureDecision::ExcludedHost(reason)
+            | crate::domain::browser::CaptureDecision::ExcludedAddress(reason) => {
+                let _ = send_json_response(
+                    socket,
+                    403,
+                    &serde_json::json!({
+                        "error": format!("Download excluded by browser capture policy: {reason}"),
+                        "decision": decision.decision_str(),
+                    }),
+                )
+                .await;
+                return;
+            }
+            _ => {}
+        }
+
+        let is_confirmation_required = matches!(decision, crate::domain::browser::CaptureDecision::ConfirmationRequired(_));
+        let confirm = active_settings.confirm_browser_downloads || is_confirmation_required;
+        let review_only = (!valid_browser.start_now || is_confirmation_required) && confirm;
+        let queue_only = review_only;
         let is_paired = valid_browser.audio_url.is_some();
         let is_raw_youtube_page = crate::domain::media::youtube_url(&valid_browser.url).is_some();
         let primary_url = valid_browser.url.clone();
@@ -372,7 +414,7 @@ async fn handle_bridge_connection(
             conflict_policy: None,
         };
 
-        match transfer_service.add(download_req, &settings) {
+        match transfer_service.add(download_req, &active_settings) {
             Ok(ids) => {
                 if let Some(ref cb) = on_download {
                     if let Some(first_id) = ids.first() {
