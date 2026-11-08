@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Tauri IPC command handlers processing frontend requests for downloads, settings, and media.
 
 use std::sync::Arc;
@@ -280,4 +281,15 @@ pub async fn retry_download_actions(
     id: String,
 ) -> AppResult<()> {
     state.download_transfer.retry_completion_actions(&id).await
+}
+
+#[tauri::command]
+pub fn dismiss_clipboard_candidate(
+    state: State<'_, AppState>,
+    url: String,
+) -> AppResult<()> {
+    if let Some(ref clipboard) = state.clipboard {
+        clipboard.dismiss(&url);
+    }
+    Ok(())
 }

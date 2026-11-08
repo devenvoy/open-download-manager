@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
 
 'use strict';
@@ -482,4 +483,20 @@ test('validateDirectory invokes the Rust validate_directory command', async () =
   await api.validateDirectory('/path/to/downloads');
   assert.equal(calls[0][0], 'validate_directory');
   assert.deepEqual(calls[0][1], { path: '/path/to/downloads' });
+});
+
+test('dismissClipboardCandidate invokes the Rust dismiss_clipboard_candidate command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.dismissClipboardCandidate('https://example.com/file.zip');
+  assert.equal(calls[0][0], 'dismiss_clipboard_candidate');
+  assert.deepEqual(calls[0][1], { url: 'https://example.com/file.zip' });
 });

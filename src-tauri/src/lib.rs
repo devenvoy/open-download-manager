@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -17,12 +18,12 @@ use presentation::{
     app_state::AppState,
     commands::{
         add_download, add_playlist_downloads, browser_setup_action, check_destination_conflict,
-        check_for_updates, delete_credential_rule, download_action, export_downloads_to_file,
-        get_integration_info, get_media_tools_status, get_playlist_info, get_video_formats,
-        import_downloads_from_file, install_media_tool, list_credential_rules, register_browser,
-        remove_completed, retry_download_actions, review_download, save_credential_rule,
-        show_about_dialog, snapshot, test_proxy_connection, update_download_completion_actions,
-        update_settings, validate_directory,
+        check_for_updates, delete_credential_rule, dismiss_clipboard_candidate, download_action,
+        export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
+        get_video_formats, import_downloads_from_file, install_media_tool, list_credential_rules,
+        register_browser, remove_completed, retry_download_actions, review_download,
+        save_credential_rule, show_about_dialog, snapshot, test_proxy_connection,
+        update_download_completion_actions, update_settings, validate_directory,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -212,6 +213,20 @@ pub fn run() {
                 }
             });
 
+            let clipboard_reader = std::sync::Arc::new(
+                crate::infrastructure::clipboard::TauriClipboardReader::new(app.handle().clone()),
+            );
+            let clipboard_publisher = std::sync::Arc::new(
+                crate::presentation::download_event_publisher::TauriClipboardEventPublisher::new(app.handle().clone()),
+            );
+            let clipboard_service = std::sync::Arc::new(
+                crate::application::clipboard_service::ClipboardMonitoringService::new(
+                    clipboard_reader,
+                    Some(clipboard_publisher),
+                ),
+            );
+            clipboard_service.set_settings(settings.settings().clipboard_monitoring.clone());
+
             app.manage(AppState::new(
                 settings,
                 download_history,
@@ -220,7 +235,7 @@ pub fn run() {
                 integration_service,
                 file_icons,
                 update_service,
-            ));
+            ).with_clipboard(clipboard_service));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -256,7 +271,8 @@ pub fn run() {
             save_credential_rule,
             delete_credential_rule,
             update_download_completion_actions,
-            retry_download_actions
+            retry_download_actions,
+            dismiss_clipboard_candidate
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

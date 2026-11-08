@@ -2,20 +2,22 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Tauri IPC event publisher pushing real-time download updates to frontend windows.
 
 use tauri::{AppHandle, Emitter, LogicalSize, Manager};
 
 use crate::{
     application::{
+        clipboard_service::ClipboardEventPublisher,
         download_event_publisher::DownloadEventPublisher,
         error::{AppError, AppResult},
     },
-    domain::download::DownloadStatus,
+    domain::{clipboard::ClipboardCandidate, download::DownloadStatus},
     presentation::{app_state::AppState, window_manager::PROGRESS_WINDOW_PREFIX},
 };
 
-use super::event_policy::DOWNLOAD_CHANGE_EVENT;
+use super::event_policy::{CLIPBOARD_CANDIDATE_EVENT, DOWNLOAD_CHANGE_EVENT};
 
 pub struct TauriDownloadEventPublisher {
     app: AppHandle,
@@ -24,6 +26,24 @@ pub struct TauriDownloadEventPublisher {
 impl TauriDownloadEventPublisher {
     pub fn new(app: AppHandle) -> Self {
         Self { app }
+    }
+}
+
+pub struct TauriClipboardEventPublisher {
+    app: AppHandle,
+}
+
+impl TauriClipboardEventPublisher {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl ClipboardEventPublisher for TauriClipboardEventPublisher {
+    fn publish_candidate(&self, candidate: &ClipboardCandidate) -> Result<(), String> {
+        self.app
+            .emit(CLIPBOARD_CANDIDATE_EVENT, candidate)
+            .map_err(|error| format!("Could not notify renderer of clipboard candidate: {error}"))
     }
 }
 

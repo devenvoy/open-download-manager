@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Domain settings entity defining download directories, category mappings, and connection limits.
 
 mod patch;
@@ -46,6 +47,8 @@ pub struct Settings {
     pub capture_policy: crate::domain::browser::CapturePolicy,
     #[serde(default)]
     pub completion_actions: Vec<crate::domain::completion::CompletionAction>,
+    #[serde(default)]
+    pub clipboard_monitoring: crate::domain::clipboard::ClipboardMonitoringSettings,
 }
 
 impl Settings {
@@ -65,6 +68,7 @@ impl Settings {
             proxy: ProxySettings::default(),
             capture_policy: crate::domain::browser::CapturePolicy::default(),
             completion_actions: Vec::new(),
+            clipboard_monitoring: crate::domain::clipboard::ClipboardMonitoringSettings::default(),
         }
     }
 
@@ -113,6 +117,7 @@ impl Settings {
         apply_if_some(&mut next.proxy, patch.proxy);
         apply_if_some(&mut next.capture_policy, patch.capture_policy);
         apply_if_some(&mut next.completion_actions, patch.completion_actions);
+        apply_if_some(&mut next.clipboard_monitoring, patch.clipboard_monitoring);
 
         next.validate()?;
         Ok(next)

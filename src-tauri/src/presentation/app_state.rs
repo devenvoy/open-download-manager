@@ -2,12 +2,14 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Shared application state holding services, transfer handles, and runtime settings.
 
 use std::sync::{Arc, Mutex};
 
 use crate::{
     application::{
+        clipboard_service::ClipboardMonitoringService,
         credential_service::CredentialService,
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
@@ -29,6 +31,7 @@ pub struct AppState {
     pub(super) file_icons: FileIconProvider,
     pub(super) update_service: UpdateService,
     pub(super) ytdlp: Option<Arc<YtDlpTools>>,
+    pub(super) clipboard: Option<Arc<ClipboardMonitoringService>>,
 }
 
 impl AppState {
@@ -50,11 +53,17 @@ impl AppState {
             file_icons,
             update_service,
             ytdlp: YtDlpTools::new().map(Arc::new),
+            clipboard: None,
         }
     }
 
     pub fn with_ytdlp(mut self, ytdlp: Option<Arc<YtDlpTools>>) -> Self {
         self.ytdlp = ytdlp;
+        self
+    }
+
+    pub fn with_clipboard(mut self, clipboard: Arc<ClipboardMonitoringService>) -> Self {
+        self.clipboard = Some(clipboard);
         self
     }
 
@@ -96,6 +105,9 @@ impl AppState {
             .set_speed_limit(candidate.speed_limit_kbps);
         self.download_transfer.set_settings(candidate.clone());
         let _ = crate::infrastructure::autostart::sync_autostart(candidate.start_with_windows);
+        if let Some(ref clipboard) = self.clipboard {
+            clipboard.set_settings(candidate.clipboard_monitoring.clone());
+        }
 
         // 4. Only after runtime reconfiguration succeeds, persist settings to disk
         settings_lock.commit_update(candidate)

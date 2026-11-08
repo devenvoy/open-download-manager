@@ -564,6 +564,55 @@ td {
 	flex: 1;
 }
 
+.clipboard-prompt {
+	position: fixed;
+	bottom: 28px;
+	left: 155px;
+	right: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	background: #ffffff;
+	border: 1px solid #0055ea;
+	border-left: 4px solid #0055ea;
+	border-radius: 4px;
+	padding: 8px 12px;
+	font-size: 11px;
+	box-shadow: 0 4px 12px #00000033;
+	z-index: 101;
+	transition: all 0.2s ease-in-out;
+}
+.clipboard-prompt[hidden] {
+	display: none !important;
+}
+.clipboard-prompt-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.clipboard-prompt-header strong {
+	color: #0055ea;
+	font-size: 11px;
+}
+.clipboard-prompt-header .close-button {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	font-size: 14px;
+	line-height: 14px;
+	color: #666;
+}
+.clipboard-prompt-body {
+	color: #333333;
+	word-break: break-all;
+}
+.clipboard-prompt-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 2px;
+}
+
 /* Detail Error Card */
 .detail-error-card {
 	background: #fff5f5;
@@ -1886,6 +1935,7 @@ body.integration-window {
 }
 .integration-window .app-shell,
 .integration-window #toast,
+.integration-window #clipboard-prompt,
 .integration-window dialog:not(#integration-dialog) {
 	display: none !important;
 }
@@ -2040,6 +2090,7 @@ body.options-window {
 }
 .options-window .app-shell,
 .options-window #toast,
+.options-window #clipboard-prompt,
 .options-window dialog:not(#settings-dialog) {
 	display: none !important;
 }
@@ -2086,9 +2137,11 @@ body.scheduler-window {
 }
 .add-window .app-shell,
 .add-window #toast,
+.add-window #clipboard-prompt,
 .add-window dialog:not(#add-dialog),
 .scheduler-window .app-shell,
 .scheduler-window #toast,
+.scheduler-window #clipboard-prompt,
 .scheduler-window dialog:not(#scheduler-dialog) {
 	display: none !important;
 }

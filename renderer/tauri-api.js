@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -104,5 +105,6 @@ window.downloader = Object.freeze({
   deleteCredentialRule: id => invoke('delete_credential_rule', { id }),
   updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
   retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id }),
-  validateDirectory: path => invoke('validate_directory', { path })
+  validateDirectory: path => invoke('validate_directory', { path }),
+  dismissClipboardCandidate: url => invoke('dismiss_clipboard_candidate', { url })
 });

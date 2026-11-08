@@ -2,6 +2,7 @@
 // Reason: Initial public release
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1270,6 +1271,12 @@ function openSettings() {
 		$("#temporary-directory").value = settings.temporaryDirectory || "";
 	}
 	$("#start-with-windows").checked = settings.startWithWindows !== false;
+	const clipboardMonitoring = settings.clipboardMonitoring || {};
+	if ($("#clipboard-monitoring-enabled")) {
+		$("#clipboard-monitoring-enabled").checked = clipboardMonitoring.enabled === true;
+		$("#clipboard-auto-enqueue").checked = clipboardMonitoring.autoEnqueue === true;
+		$("#clipboard-auto-enqueue").disabled = !$("#clipboard-monitoring-enabled").checked;
+	}
 	$("#default-directory").value = settings.defaultDirectory || "";
 	$("#max-concurrent").value = settings.maxConcurrent || 3;
 	$("#connections").value = settings.connections || 8;
@@ -2392,6 +2399,11 @@ $("#choose-temporary-directory")?.addEventListener("click", async () => {
 $("#reset-temporary-directory")?.addEventListener("click", () => {
 	$("#temporary-directory").value = "";
 });
+$("#clipboard-monitoring-enabled")?.addEventListener("change", () => {
+	if ($("#clipboard-auto-enqueue")) {
+		$("#clipboard-auto-enqueue").disabled = !$("#clipboard-monitoring-enabled").checked;
+	}
+});
 $("#proxy-enabled").addEventListener("change", () => {
 	updateProxyFieldsState();
 	resetProxyTestStatus();
@@ -2487,6 +2499,10 @@ $("#settings-form").addEventListener("submit", async (event) => {
 				confirmed: $("#settings-power-confirm").checked,
 			});
 		}
+		const clipboardMonitoring = {
+			enabled: Boolean($("#clipboard-monitoring-enabled")?.checked),
+			autoEnqueue: Boolean($("#clipboard-auto-enqueue")?.checked),
+		};
 		await call("settings", {
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
@@ -2498,6 +2514,7 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			proxy,
 			capturePolicy,
 			completionActions,
+			clipboardMonitoring,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");
@@ -2546,6 +2563,13 @@ async function start() {
 				)
 					commands[command]?.();
 			});
+		if (window.__TAURI__?.event?.listen) {
+			window.__TAURI__.event.listen("clipboard:candidate", (event) => {
+				const candidate = event.payload;
+				if (!candidate || !candidate.url) return;
+				handleClipboardCandidate(candidate);
+			});
+		}
 	} catch (error) {
 		$("#download-list").setAttribute("aria-busy", "false");
 		$("#list-count").textContent = "Download service unavailable";
@@ -2654,6 +2678,48 @@ $("#credentials-list")?.addEventListener("click", async (e) => {
 		await refreshCredentialRules();
 	} catch (err) {
 		notify(`Failed to delete credential rule: ${messageOf(err)}`, true);
+	}
+});
+
+let currentClipboardCandidate = null;
+
+function handleClipboardCandidate(candidate) {
+	if (!candidate || !candidate.url) return;
+	currentClipboardCandidate = candidate;
+	if (state?.settings?.clipboardMonitoring?.autoEnqueue) {
+		openAdd(candidate.url);
+		return;
+	}
+	const descEl = $("#clipboard-prompt-desc");
+	if (descEl) {
+		descEl.textContent = `Download "${candidate.filename}" from ${candidate.host}?`;
+	}
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) {
+		promptEl.hidden = false;
+	}
+}
+
+function dismissClipboardPrompt() {
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	if (currentClipboardCandidate) {
+		if (typeof api.dismissClipboardCandidate === "function") {
+			api.dismissClipboardCandidate(currentClipboardCandidate.url);
+		}
+		currentClipboardCandidate = null;
+	}
+}
+
+$("#clipboard-prompt-close")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-dismiss")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-add")?.addEventListener("click", () => {
+	const cand = currentClipboardCandidate;
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	currentClipboardCandidate = null;
+	if (cand?.url) {
+		openAdd(cand.url);
 	}
 });
 

@@ -2,6 +2,7 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Legacy configuration document adapter migrating older application settings schemas.
 
 use serde::Deserialize;
@@ -41,6 +42,7 @@ impl LegacySettings {
             proxy: None,
             capture_policy: None,
             completion_actions: None,
+            clipboard_monitoring: None,
         }
     }
 }

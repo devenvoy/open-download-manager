@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Integration tests verifying settings functionality, edge cases, and error recovery.
 
 use std::{
@@ -58,6 +59,7 @@ fn settings_update_is_validated_and_persisted() {
             proxy: None,
             capture_policy: None,
             completion_actions: None,
+            clipboard_monitoring: None,
         })
         .expect("valid settings should save");
 
@@ -100,6 +102,7 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
         proxy: None,
         capture_policy: None,
         completion_actions: None,
+        clipboard_monitoring: None,
     };
 
     let error = service
@@ -136,6 +139,7 @@ fn relative_category_directory_is_rejected() {
             proxy: None,
             capture_policy: None,
             completion_actions: None,
+            clipboard_monitoring: None,
         })
         .expect_err("category directories must be absolute");
 

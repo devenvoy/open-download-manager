@@ -2,13 +2,17 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Partial settings patch payload for atomic configuration updates from UI dialogs.
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::domain::{category::DownloadCategory, settings::proxy::ProxySettings};
+use crate::domain::{
+    category::DownloadCategory, clipboard::ClipboardMonitoringSettings,
+    settings::proxy::ProxySettings,
+};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -27,4 +31,5 @@ pub struct SettingsPatch {
     pub proxy: Option<ProxySettings>,
     pub capture_policy: Option<crate::domain::browser::CapturePolicy>,
     pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    pub clipboard_monitoring: Option<ClipboardMonitoringSettings>,
 }

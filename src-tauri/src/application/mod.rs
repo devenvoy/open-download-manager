@@ -2,8 +2,10 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Module definitions and exports for the application service orchestration layer.
 
+pub mod clipboard_service;
 pub mod credential_service;
 mod download_concurrency_limiter;
 mod download_concurrency_permit;

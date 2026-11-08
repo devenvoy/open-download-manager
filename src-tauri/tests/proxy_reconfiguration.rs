@@ -2,6 +2,7 @@
 // Reason: fix(network): report proxy reconfiguration failures instead of silently saving (Closes #27) (#42)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Description: Integration tests verifying proxy reconfiguration functionality, edge cases, and error recovery.
 
 use std::{
@@ -186,6 +187,7 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
         }),
         capture_policy: None,
         completion_actions: None,
+        clipboard_monitoring: None,
     };
 
     let err = update_settings(state.clone(), invalid_patch)
@@ -220,6 +222,7 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
         }),
         capture_policy: None,
         completion_actions: None,
+        clipboard_monitoring: None,
     };
 
     let err = update_settings(state.clone(), invalid_port_patch)
@@ -303,6 +306,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         }),
         capture_policy: None,
         completion_actions: None,
+        clipboard_monitoring: None,
     };
 
     let err = update_settings(state.clone(), bad_proxy_patch)
@@ -393,6 +397,7 @@ async fn successful_proxy_update_persists_settings_and_updates_runtime() {
         proxy: Some(valid_proxy.clone()),
         capture_policy: None,
         completion_actions: None,
+        clipboard_monitoring: None,
     };
 
     let result = update_settings(state.clone(), patch).expect("valid proxy configuration should succeed");

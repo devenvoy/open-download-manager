@@ -300,6 +300,40 @@
 			</button>
 		</div>
 
+		<div
+			class="clipboard-prompt"
+			id="clipboard-prompt"
+			role="alert"
+			hidden>
+			<div class="clipboard-prompt-header">
+				<strong id="clipboard-prompt-title">Download Link Detected</strong>
+				<button
+					id="clipboard-prompt-close"
+					class="close-button"
+					type="button"
+					aria-label="Dismiss">
+					×
+				</button>
+			</div>
+			<div class="clipboard-prompt-body">
+				<span id="clipboard-prompt-desc"></span>
+			</div>
+			<div class="clipboard-prompt-actions">
+				<button
+					id="clipboard-prompt-add"
+					class="small-button primary"
+					type="button">
+					Add to downloads
+				</button>
+				<button
+					id="clipboard-prompt-dismiss"
+					class="small-button"
+					type="button">
+					Dismiss
+				</button>
+			</div>
+		</div>
+
 		<dialog
 			id="add-dialog"
 			aria-labelledby="add-title">
@@ -538,6 +572,30 @@
 							Automatic startup stays in the tray until you open
 							the app or start a download.
 						</p>
+					</fieldset>
+					<fieldset>
+						<legend>Clipboard Monitoring</legend>
+						<label
+							class="checkbox-label"
+							for="clipboard-monitoring-enabled"
+							><input
+								type="checkbox"
+								id="clipboard-monitoring-enabled" />
+							Monitor clipboard for downloadable links (HTTP / HTTPS)</label
+						>
+						<p class="field-help">
+							When enabled, Open Download Manager detects copied download links and prompts you to add them. Clipboard contents are never logged, stored, or sent across the network.
+						</p>
+						<div id="clipboard-suboptions" style="margin-left: 20px; margin-top: 6px;">
+							<label
+								class="checkbox-label"
+								for="clipboard-auto-enqueue"
+								><input
+									type="checkbox"
+									id="clipboard-auto-enqueue" />
+								Automatically add detected links without confirmation prompt</label
+							>
+						</div>
 					</fieldset>
 					<fieldset>
 						<legend>Save to</legend>
