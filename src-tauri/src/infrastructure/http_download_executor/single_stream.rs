@@ -2,6 +2,7 @@
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Single-stream HTTP download worker handling byte streaming, resume, and rate limiting.
 
 use std::{
@@ -164,10 +165,14 @@ pub(crate) async fn download_single_stream(
     } else if response.status() == reqwest::StatusCode::FORBIDDEN
         || response.status() == reqwest::StatusCode::GONE
     {
-        return Err(AppError::download(format!(
+        return Err(AppError::link_expired(format!(
             "The download link has expired (HTTP {}). Refresh the link to resume.",
             response.status().as_u16()
         )));
+    } else if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppError::link_expired(
+            "The download link has expired or requires authentication (HTTP 401). Refresh the link to resume.",
+        ));
     } else {
         return Err(AppError::download(format!(
             "The server returned HTTP {}.",
@@ -280,8 +285,9 @@ pub(crate) async fn download_single_stream(
                                 let new_response = next_resolved.response;
                                 if new_response.status() == reqwest::StatusCode::FORBIDDEN
                                     || new_response.status() == reqwest::StatusCode::GONE
+                                    || new_response.status() == reqwest::StatusCode::UNAUTHORIZED
                                 {
-                                    return Err(AppError::download(format!(
+                                    return Err(AppError::link_expired(format!(
                                         "The download link has expired (HTTP {}). Refresh the link to resume.",
                                         new_response.status().as_u16()
                                     )));
@@ -378,8 +384,9 @@ pub(crate) async fn download_single_stream(
                             let new_response = next_resolved.response;
                             if new_response.status() == reqwest::StatusCode::FORBIDDEN
                                 || new_response.status() == reqwest::StatusCode::GONE
+                                || new_response.status() == reqwest::StatusCode::UNAUTHORIZED
                             {
-                                return Err(AppError::download(format!(
+                                return Err(AppError::link_expired(format!(
                                     "The download link has expired (HTTP {}). Refresh the link to resume.",
                                     new_response.status().as_u16()
                                 )));
@@ -561,10 +568,9 @@ pub(crate) async fn send_stream_request(
     .await?;
 
     if resolved.response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError {
-            code: "http_auth_required",
-            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
-        });
+        return Err(AppError::link_expired(
+            "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
+        ));
     }
 
     Ok(resolved)

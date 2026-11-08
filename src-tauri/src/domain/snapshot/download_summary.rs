@@ -2,13 +2,17 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Redacted, frontend-safe download transfer summary view model for UI rendering.
 
 use serde::Serialize;
 
 use crate::domain::{
     category::DownloadCategory,
-    download::{redact_download_url, DownloadRecord, DownloadSegmentProgress, DownloadStatus},
+    download::{
+        redact_download_url, sanitize_diagnostic_text, DownloadRecord, DownloadSegmentProgress,
+        DownloadStatus,
+    },
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -66,8 +70,8 @@ impl From<&DownloadRecord> for DownloadSummary {
             path: download.path.clone(),
             temp_directory: download.temp_directory.clone(),
             last_try: download.last_try.clone(),
-            error: download.error.clone(),
-            notice: download.notice.clone(),
+            error: download.error.as_deref().map(sanitize_diagnostic_text),
+            notice: download.notice.as_deref().map(sanitize_diagnostic_text),
             estimated: download.estimated,
             kind: download.kind.clone(),
             resumable: download.resumable,
@@ -75,7 +79,7 @@ impl From<&DownloadRecord> for DownloadSummary {
             connections: download.connections,
             connections_progress: download.connections_progress.clone(),
             transfer_kind: download.transfer_kind.clone(),
-            referer: download.referer.clone(),
+            referer: download.referer.as_deref().map(redact_download_url),
             completion_actions: download.completion_actions.clone(),
             action_ledger: download.action_ledger.clone(),
         }
@@ -101,8 +105,8 @@ impl From<DownloadRecord> for DownloadSummary {
             path: download.path,
             temp_directory: download.temp_directory,
             last_try: download.last_try,
-            error: download.error,
-            notice: download.notice,
+            error: download.error.as_deref().map(sanitize_diagnostic_text),
+            notice: download.notice.as_deref().map(sanitize_diagnostic_text),
             estimated: download.estimated,
             kind: download.kind,
             resumable: download.resumable,
@@ -110,7 +114,7 @@ impl From<DownloadRecord> for DownloadSummary {
             connections: download.connections,
             connections_progress: download.connections_progress,
             transfer_kind: download.transfer_kind,
-            referer: download.referer,
+            referer: download.referer.as_deref().map(redact_download_url),
             completion_actions: download.completion_actions,
             action_ledger: download.action_ledger,
         }

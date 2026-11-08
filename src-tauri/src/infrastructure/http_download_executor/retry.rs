@@ -1,7 +1,8 @@
 // Created: 2026-11-07
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
-// Last updated: 2026-11-07
+// Last updated: 2026-11-08
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Transient network error classifier and exponential backoff retry calculation.
 
 use std::time::Duration;
@@ -49,13 +50,13 @@ pub(crate) async fn send_with_retry(
     Err(AppError::download("Could not connect to the server."))
 }
 
-pub(crate) fn is_retryable_status(status: reqwest::StatusCode) -> bool {
+pub fn is_retryable_status(status: reqwest::StatusCode) -> bool {
     status.is_server_error()
         || status == reqwest::StatusCode::REQUEST_TIMEOUT
         || status == reqwest::StatusCode::TOO_MANY_REQUESTS
 }
 
-pub(crate) fn retry_delay(retry: u8, retry_after_seconds: Option<u64>) -> Duration {
+pub fn retry_delay(retry: u8, retry_after_seconds: Option<u64>) -> Duration {
     let maximum_delay = Duration::from_secs(MAX_RETRY_DELAY_SECONDS);
     let delay = retry_after_seconds
         .map(Duration::from_secs)
@@ -66,7 +67,7 @@ pub(crate) fn retry_delay(retry: u8, retry_after_seconds: Option<u64>) -> Durati
     delay.min(maximum_delay)
 }
 
-pub(crate) fn parse_retry_after(header_value: &str) -> Option<u64> {
+pub fn parse_retry_after(header_value: &str) -> Option<u64> {
     let trimmed = header_value.trim();
     if let Ok(seconds) = trimmed.parse::<u64>() {
         return Some(seconds);
@@ -81,7 +82,7 @@ pub(crate) fn parse_retry_after(header_value: &str) -> Option<u64> {
     None
 }
 
-pub(crate) async fn wait_before_retry(
+pub async fn wait_before_retry(
     control: &mut DownloadControl,
     delay: Duration,
 ) -> AppResult<()> {

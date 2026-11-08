@@ -2,6 +2,7 @@
 // Reason: feat: scaffold Tauri settings shell
 // Last updated: 2026-11-08
 // Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Centralized application error type with stable diagnostic error codes and messages.
 
 use serde::Serialize;
@@ -87,6 +88,13 @@ impl AppError {
     pub fn update(message: impl Into<String>) -> Self {
         Self {
             code: "update_error",
+            message: message.into(),
+        }
+    }
+
+    pub fn link_expired(message: impl Into<String>) -> Self {
+        Self {
+            code: "link_expired",
             message: message.into(),
         }
     }

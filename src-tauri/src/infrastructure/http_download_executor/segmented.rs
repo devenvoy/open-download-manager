@@ -2,6 +2,7 @@
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Segmented HTTP download engine splitting files across concurrent range connections.
 
 use std::{
@@ -63,10 +64,17 @@ pub(crate) async fn discover_ranges(
 
     let response = resolved.response;
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError {
-            code: "http_auth_required",
-            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
-        });
+        return Err(AppError::link_expired(
+            "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
+        ));
+    }
+    if response.status() == reqwest::StatusCode::FORBIDDEN
+        || response.status() == reqwest::StatusCode::GONE
+    {
+        return Err(AppError::link_expired(format!(
+            "The download link has expired (HTTP {}). Refresh the link to resume.",
+            response.status().as_u16()
+        )));
     }
 
     if response.status() != reqwest::StatusCode::PARTIAL_CONTENT
@@ -481,10 +489,17 @@ async fn download_chunk(
     .await?;
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError {
-            code: "http_auth_required",
-            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
-        });
+        return Err(AppError::link_expired(
+            "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
+        ));
+    }
+    if response.status() == reqwest::StatusCode::FORBIDDEN
+        || response.status() == reqwest::StatusCode::GONE
+    {
+        return Err(AppError::link_expired(format!(
+            "The download link has expired (HTTP {}). Refresh the link to resume.",
+            response.status().as_u16()
+        )));
     }
 
     if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
@@ -615,10 +630,17 @@ async fn download_chunk(
                         match next_resp {
                             Ok(new_resp) => {
                                 if new_resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-                                    return Err(AppError {
-                                        code: "http_auth_required",
-                                        message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
-                                    });
+                                    return Err(AppError::link_expired(
+                                        "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
+                                    ));
+                                }
+                                if new_resp.status() == reqwest::StatusCode::FORBIDDEN
+                                    || new_resp.status() == reqwest::StatusCode::GONE
+                                {
+                                    return Err(AppError::link_expired(format!(
+                                        "The download link has expired (HTTP {}). Refresh the link to resume.",
+                                        new_resp.status().as_u16()
+                                    )));
                                 }
                                 if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                     if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
@@ -691,10 +713,17 @@ async fn download_chunk(
                     match next_resp {
                         Ok(new_resp) => {
                             if new_resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-                                return Err(AppError {
-                                    code: "http_auth_required",
-                                    message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
-                                });
+                                return Err(AppError::link_expired(
+                                    "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
+                                ));
+                            }
+                            if new_resp.status() == reqwest::StatusCode::FORBIDDEN
+                                || new_resp.status() == reqwest::StatusCode::GONE
+                            {
+                                return Err(AppError::link_expired(format!(
+                                    "The download link has expired (HTTP {}). Refresh the link to resume.",
+                                    new_resp.status().as_u16()
+                                )));
                             }
                             if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                 if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {

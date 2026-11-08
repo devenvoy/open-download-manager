@@ -2,6 +2,7 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Domain models, conflict resolution, address parsing, and records for download transfers.
 
 mod action;
@@ -25,7 +26,7 @@ pub use conflict::{
 };
 pub use filename::{
     filename_from_url, is_generic_filename, parse_content_disposition_filename, percent_decode,
-    redact_download_url, sanitize_filename,
+    redact_download_url, sanitize_diagnostic_text, sanitize_filename,
 };
 pub use protocol::DownloadProtocol;
 pub use record::{DownloadRecord, DownloadSegmentProgress, SerializableDownloadRecordRef};

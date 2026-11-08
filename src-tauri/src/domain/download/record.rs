@@ -2,6 +2,7 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Core download entity representing active/completed transfers, validators, and file paths.
 
 use chrono::DateTime;
@@ -164,7 +165,7 @@ impl DownloadRecord {
             path: self.path.as_deref(),
             temp_directory: self.temp_directory.as_deref(),
             last_try: self.last_try.as_deref(),
-            error: self.error.as_deref(),
+            error: self.error.as_deref().map(super::filename::sanitize_diagnostic_text),
             notice: self.notice.as_deref(),
             estimated: self.estimated,
             kind: self.kind.as_deref(),
@@ -172,8 +173,8 @@ impl DownloadRecord {
             duration: self.duration,
             connections: self.connections,
             connections_progress: &self.connections_progress,
-            audio_url: self.audio_url.as_deref(),
-            referer: self.referer.as_deref(),
+            audio_url: self.audio_url.as_deref().map(super::filename::redact_download_url),
+            referer: self.referer.as_deref().map(super::filename::redact_download_url),
             transfer_kind: self.transfer_kind.as_deref(),
             etag: self.etag.as_deref().or_else(|| match self.validator.as_ref() {
                 Some(super::validator::TransferValidator::ETag(e)) => Some(e.as_str()),
@@ -206,7 +207,7 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub path: Option<&'a str>,
     pub temp_directory: Option<&'a str>,
     pub last_try: Option<&'a str>,
-    pub error: Option<&'a str>,
+    pub error: Option<String>,
     pub notice: Option<&'a str>,
     pub estimated: bool,
     pub kind: Option<&'a str>,
@@ -214,8 +215,8 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub duration: Option<f64>,
     pub connections: u8,
     pub connections_progress: &'a [DownloadSegmentProgress],
-    pub audio_url: Option<&'a str>,
-    pub referer: Option<&'a str>,
+    pub audio_url: Option<String>,
+    pub referer: Option<String>,
     pub transfer_kind: Option<&'a str>,
     pub etag: Option<&'a str>,
     pub validator: Option<&'a super::validator::TransferValidator>,

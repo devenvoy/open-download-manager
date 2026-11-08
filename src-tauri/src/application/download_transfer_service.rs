@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -838,6 +839,17 @@ impl DownloadTransferService {
                             );
                         });
                     }
+                    "link_expired" => {
+                        let _ = service.history.update_active_download(&id, |d| {
+                            d.status = DownloadStatus::Failed;
+                            d.speed = 0;
+                            d.error = Some(crate::domain::download::sanitize_diagnostic_text(&error.message));
+                            d.notice = Some(
+                                "The download link has expired. Refresh the link from the browser to resume."
+                                    .to_owned(),
+                            );
+                        });
+                    }
                     _ => {
                         eprintln!("Download {id} failed: {}", error.message);
                         service.fail_download(&id, error.message);
@@ -1264,10 +1276,11 @@ impl DownloadTransferService {
     }
 
     fn fail_download(&self, id: &str, message: String) {
+        let sanitized = crate::domain::download::sanitize_diagnostic_text(&message);
         if let Err(error) = self.history.update_active_download(id, |download| {
             download.status = DownloadStatus::Failed;
             download.speed = 0;
-            download.error = Some(message);
+            download.error = Some(sanitized);
         }) {
             eprintln!("Could not save failed download {id}: {}", error.message);
         }

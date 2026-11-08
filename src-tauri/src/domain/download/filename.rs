@@ -2,6 +2,7 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Filename sanitization, reserved Windows name guards, and generic name detection helpers.
 
 use url::Url;
@@ -58,6 +59,31 @@ pub fn redact_download_url(value: &str) -> String {
     url.set_query(None);
     url.set_fragment(None);
     url.to_string()
+}
+
+pub fn sanitize_diagnostic_text(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let words = text.split_whitespace();
+    let mut first = true;
+    for word in words {
+        if !first {
+            result.push(' ');
+        }
+        first = false;
+        if word.starts_with("http://") || word.starts_with("https://") || word.starts_with("ftp://") {
+            let trailing_punct_len = word
+                .chars()
+                .rev()
+                .take_while(|c| matches!(c, ')' | ']' | '}' | ',' | ';' | ':' | '.' | '"' | '\''))
+                .count();
+            let (url_part, punct) = word.split_at(word.len() - trailing_punct_len);
+            result.push_str(&redact_download_url(url_part));
+            result.push_str(punct);
+        } else {
+            result.push_str(word);
+        }
+    }
+    result
 }
 
 pub fn is_generic_filename(name: &str) -> bool {

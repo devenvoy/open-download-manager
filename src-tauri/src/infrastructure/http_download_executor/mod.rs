@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Core HTTP download executor supporting single-stream and multi-segmented transfers.
 
 use std::{
@@ -36,7 +37,7 @@ pub(crate) mod assembler;
 pub(crate) mod auth;
 pub(crate) mod client;
 pub(crate) mod policy;
-pub(crate) mod retry;
+pub mod retry;
 pub(crate) mod segmented;
 pub(crate) mod single_stream;
 pub(crate) mod validator;

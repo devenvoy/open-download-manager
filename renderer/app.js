@@ -6,6 +6,7 @@
 // Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1234,7 +1235,7 @@ function renderDetails() {
 			const errText = d.error || "Download failed or was interrupted.";
 			const isFfmpeg = /ffmpeg/i.test(errText);
 			const isYtdlp = /yt-dlp/i.test(errText);
-			const isExpired = /expired|HTTP 403|HTTP 410/i.test(errText);
+			const isExpired = /expired|HTTP 401|HTTP 403|HTTP 410/i.test(errText);
 			$("#detail-error-title").textContent = isFfmpeg
 				? "FFmpeg Assembly Required"
 				: isYtdlp
@@ -1683,6 +1684,15 @@ function openErrorDialog(downloadId = null) {
 		heading = "The connection was interrupted before all data was received";
 		suggestion = "Click Retry to re-connect and resume downloading the remaining data.";
 		actionText = "Retry Now";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	} else if (/expired|HTTP 401|HTTP 403|HTTP 410/i.test(errText)) {
+		title = "Link or Session Expired";
+		heading = "The download link expired or authentication token timed out";
+		suggestion = "Open the media page in your browser to refresh the link automatically, or click Resume after refreshing.";
+		actionText = "Resume Transfer";
 		onAction = () => {
 			hideDialog("#error-dialog");
 			performAction(d, "resume");
