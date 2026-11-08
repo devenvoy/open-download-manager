@@ -1,5 +1,5 @@
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
-if(typeof importScripts==='function') importScripts('hls.js','youtube-media.js','capture-evaluator.js');
+if(typeof importScripts==='function') importScripts('media-policy.js','hls.js','youtube-media.js','capture-evaluator.js');
 const api = globalThis.browser || chrome;
 const HOST = 'com.open.downloadmanager';
 const CACHE_KEY = 'mediaByTab';
@@ -76,7 +76,10 @@ api.webRequest.onBeforeSendHeaders?.addListener(rememberRequest,{urls:['http://*
 function httpUrl(value) {
   try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password ? u.href : null; } catch { return null; }
 }
-function unsupported(url, mime = '') { return /\.mpd(?:[?#]|$)/i.test(url) || /dash\+xml/i.test(mime); }
+function unsupported(url, mime = '') {
+  const isDash = globalThis.mediaPolicy ? globalThis.mediaPolicy.isDashMime(mime) : /dash\+xml/i.test(mime);
+  return /\.mpd(?:[?#]|$)/i.test(url) || isDash;
+}
 function isFragment(url) { return /\.(m4s|ts|aac)(?:[?#]|$)/i.test(url) || /\/init[^/]*\.mp4(?:[?#]|$)/i.test(url); }
 const hlsSeen=new Map(); let hlsActive=0;
 async function discoverHls(tabId,url) {
@@ -201,11 +204,23 @@ api.webRequest.onHeadersReceived.addListener(details => {
     youtubeObserved.set(details.tabId,urls.slice(0,100));
     if(youtubeObserved.size>50)youtubeObserved.delete(youtubeObserved.keys().next().value);
   }
-  const isMedia=details.type==='media'||/^(video|audio)\//i.test(mime);
-  if (isMedia || unsupported(details.url, mime)) {
-    remember(details.tabId, [{url: details.url, mime, media:isMedia}]).catch(() => {});
+  const policy = globalThis.mediaPolicy;
+  const isMediaMime = policy ? policy.isMediaMime(mime) : /^(video|audio)\//i.test(mime);
+  const isMediaExt = policy ? policy.isMediaExtension(details.url) : /\.(mp4|webm|mkv|avi|mov|m4v|flv|wmv|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(details.url);
+  const isHls = policy ? (policy.isHlsMime(mime) || /\.m3u8(?:[?#]|$)/i.test(details.url)) : (/\.m3u8(?:[?#]|$)/i.test(details.url) || /mpegurl/i.test(mime));
+  const isDash = policy ? (policy.isDashMime(mime) || /\.mpd(?:[?#]|$)/i.test(details.url)) : (/\.mpd(?:[?#]|$)/i.test(details.url) || /dash\+xml/i.test(mime));
+
+  const isMedia = details.type === 'media' || isMediaMime || isMediaExt || isHls;
+  if (isMedia || isDash || unsupported(details.url, mime)) {
+    remember(details.tabId, [{
+      url: details.url,
+      mime,
+      media: isMedia,
+      unsupported: isDash,
+      reason: isDash ? 'DASH streams requiring dynamic manifests or DRM are not supported yet. Choose an MP4 or HLS format.' : ''
+    }]).catch(() => {});
   }
-  if(/\.m3u8(?:[?#]|$)/i.test(details.url)||/mpegurl/i.test(mime))discoverHls(details.tabId,details.url);
+  if (isHls) discoverHls(details.tabId, details.url);
 }, {urls: ['http://*/*', 'https://*/*']}, ['responseHeaders']);
 api.tabs.onRemoved.addListener(tabId => {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});});
 api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading') {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});} });
@@ -311,7 +326,15 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
       }
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);
-      return {ok:true, items:(data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => item.unsupported || item.media || item.format==='HLS' || /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url))};
+      const policy = globalThis.mediaPolicy;
+      return {
+        ok: true,
+        items: (data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => {
+          if (item.unsupported || item.media || item.format === 'HLS') return true;
+          if (policy) return policy.isMediaMime(item.mime) || policy.isMediaExtension(item.url);
+          return /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url);
+        })
+      };
     }
     if(message.action==='extractFormats'&&sender.tab){
       const pageUrl=httpUrl(sender.tab.url||'');

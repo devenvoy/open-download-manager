@@ -62,8 +62,10 @@ pub struct HlsDownloadExecutor {
     ffmpeg: Option<FfmpegTools>,
 }
 
+#[derive(Clone)]
 pub struct ResolvedHlsPlan {
     pub urls: Vec<String>,
+    pub segments: Vec<crate::domain::media::HlsSegment>,
     pub video_count: usize,
     pub has_separate_audio: bool,
     pub duration: f64,
@@ -134,8 +136,11 @@ impl HlsDownloadExecutor {
                     let audio = Box::pin(self.resolve_media_playlist(audio_url, &audio_headers)).await?;
                     let mut combined_urls = video.urls;
                     combined_urls.extend(audio.urls);
+                    let mut combined_segments = video.segments;
+                    combined_segments.extend(audio.segments);
                     Ok(ResolvedHlsPlan {
                         urls: combined_urls,
+                        segments: combined_segments,
                         video_count,
                         has_separate_audio: true,
                         duration: video.duration,
@@ -144,6 +149,7 @@ impl HlsDownloadExecutor {
                 } else {
                     Ok(ResolvedHlsPlan {
                         urls: video.urls,
+                        segments: video.segments,
                         video_count,
                         has_separate_audio: false,
                         duration: video.duration,
@@ -155,6 +161,7 @@ impl HlsDownloadExecutor {
                 let count = media.urls.len();
                 Ok(ResolvedHlsPlan {
                     urls: media.urls,
+                    segments: media.segments,
                     video_count: count,
                     has_separate_audio: false,
                     duration: media.duration,
@@ -255,9 +262,10 @@ impl HlsDownloadExecutor {
         let referer = download.referer.clone();
 
         let mut workers = tokio::task::JoinSet::new();
+        let segments_plan = plan.segments.clone();
         for worker_id in 0..worker_count {
             let client = self.client();
-            let urls = plan.urls.clone();
+            let segments = segments_plan.clone();
             let state = state.clone();
             let next_index = next_index.clone();
             let parts_dir = parts_dir.clone();
@@ -274,7 +282,7 @@ impl HlsDownloadExecutor {
                     let index = {
                         let mut idx_lock = next_index.lock().unwrap();
                         let i = *idx_lock;
-                        if i >= urls.len() {
+                        if i >= segments.len() {
                             break;
                         }
                         *idx_lock += 1;
@@ -291,7 +299,7 @@ impl HlsDownloadExecutor {
 
                     download_hls_segment(
                         &client,
-                        &urls[index],
+                        &segments[index],
                         index,
                         worker_id,
                         segment_count,
@@ -379,7 +387,7 @@ impl HlsDownloadExecutor {
 
 async fn download_hls_segment(
     client: &reqwest::Client,
-    url: &str,
+    segment: &crate::domain::media::HlsSegment,
     index: usize,
     worker_id: usize,
     segment_count: usize,
@@ -399,14 +407,24 @@ async fn download_hls_segment(
         st.worker_progress[worker_id].segment_downloaded = 0;
     }
 
-    let mut req = client.get(url);
+    let mut req = client.get(&segment.url);
     if let Some(r) = referer {
         req = req.header(reqwest::header::REFERER, r);
     }
+    if let Some(range) = segment.byte_range {
+        req = req.header(
+            reqwest::header::RANGE,
+            format!("bytes={}-{}", range.offset, range.offset + range.length - 1),
+        );
+    }
+
     let mut response = req
         .send()
         .await
-        .map_err(|e| AppError::download(format!("Could not download segment {index}: {e}")))?;
+        .map_err(|e| {
+            let safe_url = crate::domain::media::redact_media_url(&segment.url);
+            AppError::download(format!("Could not download segment {index} from {safe_url}: {e}"))
+        })?;
 
     if !response.status().is_success() {
         return Err(AppError::download(format!(
@@ -423,6 +441,17 @@ async fn download_hls_segment(
         .await
         .map_err(|e| AppError::download(format!("Could not create segment file: {e}")))?;
 
+    let is_status_200 = response.status() == reqwest::StatusCode::OK;
+    let (mut skip_remaining, max_bytes) = if let Some(range) = segment.byte_range {
+        if is_status_200 {
+            (range.offset, Some(range.length))
+        } else {
+            (0, Some(range.length))
+        }
+    } else {
+        (0, None)
+    };
+
     let mut segment_downloaded = 0_u64;
     loop {
         let chunk = tokio::select! {
@@ -437,9 +466,32 @@ async fn download_hls_segment(
             break;
         };
 
-        let chunk_size = chunk.len() as u64;
+        let chunk_data = if skip_remaining > 0 {
+            let skip = (chunk.len() as u64).min(skip_remaining);
+            skip_remaining -= skip;
+            &chunk[skip as usize..]
+        } else {
+            &chunk[..]
+        };
+
+        if chunk_data.is_empty() {
+            continue;
+        }
+
+        let to_write = if let Some(limit) = max_bytes {
+            let remaining = limit.saturating_sub(segment_downloaded);
+            if remaining == 0 {
+                break;
+            }
+            let take = (chunk_data.len() as u64).min(remaining) as usize;
+            &chunk_data[..take]
+        } else {
+            chunk_data
+        };
+
+        let chunk_size = to_write.len() as u64;
         rate_limiter.throttle(chunk_size).await;
-        file.write_all(&chunk)
+        file.write_all(to_write)
             .await
             .map_err(|e| AppError::download(format!("Could not write segment: {e}")))?;
 
@@ -468,6 +520,12 @@ async fn download_hls_segment(
                     etag: None,
                     validator: None,
                 });
+            }
+        }
+
+        if let Some(limit) = max_bytes {
+            if segment_downloaded >= limit {
+                break;
             }
         }
     }

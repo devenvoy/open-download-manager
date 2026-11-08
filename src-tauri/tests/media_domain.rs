@@ -58,7 +58,7 @@ fn hls_rejects_unsupported_formats_and_pairs_audio_group() {
     )
     .is_err());
     assert!(parse_hls(
-        "#EXTM3U\n#EXT-X-BYTERANGE:100@0\na.ts\n#EXT-X-ENDLIST",
+        "#EXTM3U\n#EXT-X-BYTERANGE:invalid@offset\na.ts\n#EXT-X-ENDLIST",
         "https://example.com/a"
     )
     .is_err());

@@ -288,7 +288,8 @@ impl FileType {
                 Some(Self::Image)
             }
             "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "wma" | "opus" => Some(Self::Audio),
-            "mp4" | "mov" | "avi" | "mkv" | "webm" | "m4v" | "flv" | "wmv" | "ts" => {
+            "mp4" | "mov" | "avi" | "mkv" | "webm" | "m4v" | "flv" | "wmv" | "ts" | "mpg"
+            | "mpeg" | "f4v" | "divx" | "asf" | "wvx" | "3gp" | "3g2" | "ogv" => {
                 Some(Self::Video)
             }
             "woff2" | "woff" | "ttf" | "otf" | "eot" => Some(Self::Font),

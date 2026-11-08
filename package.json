@@ -24,7 +24,7 @@
     "pack:extension": "bun scripts/pack-extension.mjs",
     "pack:extension:firefox": "bun scripts/pack-extension.mjs",
     "test": "cargo test && bun run test:extension",
-    "test:extension": "bun test extension renderer"
+    "test:extension": "bun test ./extension ./renderer"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

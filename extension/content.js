@@ -277,6 +277,8 @@
         }))}).catch(() => {});
       };
       video.addEventListener?.('loadedmetadata', report, {signal:listeners.signal});
+      video.addEventListener?.('play', report, {signal:listeners.signal});
+      video.addEventListener?.('playing', report, {signal:listeners.signal});
       record.sourceObserver=new MutationObserver(report);
       record.sourceObserver.observe(video,{attributes:true,attributeFilter:['src'],subtree:true,childList:true});
       report();
@@ -401,20 +403,30 @@
           hint.textContent = 'Looking for available formats…';
           try {
             const extracted = await send({action:'extractFormats'});
-            if (!extracted?.ok) throw new Error(extracted?.error || 'Could not extract video formats.');
-            const extractedChoices = globalThis.mediaChoices(extracted.items || [], {url, poster: video?.poster});
-            if (extractedChoices.length) {
-              choices = extractedChoices;
+            if (extracted?.ok) {
+              const extractedChoices = globalThis.mediaChoices(extracted.items || [], {url, poster: video?.poster});
+              if (extractedChoices.length) {
+                choices = extractedChoices;
+              } else if (choices.length) {
+                extractionNotice = 'No formats were found by the page extractor; showing detected media links.';
+              }
             } else if (choices.length) {
-              extractionNotice = 'No formats were found by the page extractor; showing detected media links.';
+              extractionNotice = 'Could not inspect page formats. Showing detected media links.';
             }
           } catch(error) {
-            if (!choices.length) throw error;
-            extractionNotice = `Could not inspect page formats: ${error.message}. Showing detected media links.`;
+            console.warn('[ODM] Page format extractor error:', error);
+            if (choices.length) {
+              extractionNotice = `Could not inspect page formats: ${error.message}. Showing detected media links.`;
+            }
           }
         }
         if (!choices.length) {
-          hint.textContent = result.notice || (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No downloadable formats found. This player may require sign-in, DRM, or a stream format the extractor does not support.');
+          const directSrc = video?.currentSrc || video?.src;
+          const isBlob = directSrc && directSrc.startsWith('blob:');
+          const notice = isBlob
+            ? 'Play the video briefly to capture the stream. Modern players load stream chunks after playback starts.'
+            : (result.notice || (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No downloadable formats found. Play the video briefly to capture the stream, or this player may require DRM.'));
+          hint.textContent = notice;
           return;
         }
         record.prefetchedChoices = choices;
