@@ -26,14 +26,16 @@ fn request(url: &str) -> DownloadRequest {
 }
 
 #[test]
-fn accepts_http_and_https_addresses_and_uses_default_directory() {
+fn accepts_http_and_https_and_ftp_addresses_and_uses_default_directory() {
     for (url, protocol) in [
         ("http://example.test/file.bin", DownloadProtocol::Http),
         ("https://example.test/file.bin", DownloadProtocol::Https),
+        ("ftp://example.test/file.bin", DownloadProtocol::Ftp),
+        ("ftp://user:secret@example.test/file.bin", DownloadProtocol::Ftp),
     ] {
         let valid = request(url)
             .validate(PathBuf::from("/tmp/downloads"))
-            .expect("HTTP and HTTPS should be supported");
+            .expect("HTTP, HTTPS, and FTP should be supported");
         assert_eq!(valid.directory, PathBuf::from("/tmp/downloads"));
         assert_eq!(valid.urls.len(), 1);
         assert_eq!(valid.urls[0].protocol(), protocol);
@@ -44,7 +46,7 @@ fn accepts_http_and_https_addresses_and_uses_default_directory() {
 fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
     for url in [
         "file:///etc/passwd",
-        "ftp://example.test/file.bin",
+        "gopher://example.test/file.bin",
         "https://user:password@example.test/file.bin",
         "https://example.test/video.mpd",
     ] {
@@ -117,6 +119,18 @@ fn redacts_credentials_queries_and_fragments_from_urls() {
     assert_eq!(
         redact_download_url("https://user:password@example.test/file?token=private#section"),
         "https://example.test/file"
+    );
+    assert_eq!(
+        redact_download_url("ftp://user:password@example.test/file.bin"),
+        "ftp://******:******@example.test/file.bin"
+    );
+    assert_eq!(
+        redact_download_url("ftp://user:password@example.test:2121/dir/file.bin?q=1#frag"),
+        "ftp://******:******@example.test:2121/dir/file.bin"
+    );
+    assert_eq!(
+        redact_download_url("ftp://example.test/file.bin"),
+        "ftp://example.test/file.bin"
     );
 }
 

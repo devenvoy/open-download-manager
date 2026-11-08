@@ -5,6 +5,7 @@ pub mod browser;
 pub(crate) mod data_file_policy;
 pub mod download_history_store;
 pub mod file_icons;
+pub mod ftp;
 pub mod http_download_executor;
 pub mod media;
 pub mod metrics;
