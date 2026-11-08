@@ -2,6 +2,7 @@
 // Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
 // Last updated: 2026-11-08
 // Reason: refactor(architecture): decouple proxy domain model from reqwest and encapsulate settings update orchestration
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Description: Proxy server configuration entity supporting HTTP, HTTPS, and SOCKS5 proxy protocols.
 
 use serde::{Deserialize, Serialize};
@@ -11,15 +12,19 @@ use super::validation_error::SettingsValidationError;
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ProxyProtocol {
+    Direct,
     Http,
     Https,
+    Socks5,
 }
 
 impl ProxyProtocol {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Direct => "direct",
             Self::Http => "http",
             Self::Https => "https",
+            Self::Socks5 => "socks5",
         }
     }
 }
@@ -47,6 +52,8 @@ pub struct ProxySettings {
     pub username: Option<String>,
     #[serde(default)]
     pub password: Option<String>,
+    #[serde(default)]
+    pub resolve_dns_remotely: bool,
 }
 
 fn default_proxy_port() -> u16 {
@@ -62,6 +69,7 @@ impl Default for ProxySettings {
             port: DEFAULT_PROXY_PORT,
             username: None,
             password: None,
+            resolve_dns_remotely: false,
         }
     }
 }
@@ -71,6 +79,8 @@ impl ProxySettings {
         let host = self.host.trim();
         let host = host.strip_prefix("http://").unwrap_or(host);
         let host = host.strip_prefix("https://").unwrap_or(host);
+        let host = host.strip_prefix("socks5://").unwrap_or(host);
+        let host = host.strip_prefix("socks5h://").unwrap_or(host);
         let host = host.trim_end_matches('/');
         host.to_string()
     }
@@ -82,7 +92,7 @@ impl ProxySettings {
             ));
         }
 
-        if self.enabled {
+        if self.enabled && self.protocol != ProxyProtocol::Direct {
             let clean = self.clean_host();
             if clean.is_empty() {
                 return Err(SettingsValidationError::new("Proxy host cannot be empty."));

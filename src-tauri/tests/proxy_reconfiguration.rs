@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Description: Integration tests verifying proxy reconfiguration functionality, edge cases, and error recovery.
 
 use std::{
@@ -184,6 +185,7 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
             port: 8080,
             username: None,
             password: None,
+            resolve_dns_remotely: false,
         }),
         capture_policy: None,
         completion_actions: None,
@@ -219,6 +221,7 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
             port: 0,
             username: None,
             password: None,
+            resolve_dns_remotely: false,
         }),
         capture_policy: None,
         completion_actions: None,
@@ -303,6 +306,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
             port: 8080,
             username: None,
             password: None,
+            resolve_dns_remotely: false,
         }),
         capture_policy: None,
         completion_actions: None,
@@ -380,6 +384,7 @@ async fn successful_proxy_update_persists_settings_and_updates_runtime() {
         port: 9090,
         username: Some("proxy_user".to_string()),
         password: Some("proxy_pass".to_string()),
+        resolve_dns_remotely: false,
     };
 
     let patch = SettingsPatch {
@@ -432,6 +437,7 @@ async fn credentials_never_appear_in_error_messages_or_diagnostics() {
         port: 8080,
         username: Some(secret_user.to_string()),
         password: Some(secret_password.to_string()),
+        resolve_dns_remotely: false,
     };
 
     // 1. Test test_proxy_connection error message
@@ -462,6 +468,7 @@ async fn credentials_never_appear_in_error_messages_or_diagnostics() {
         port: 8080,
         username: Some(secret_user.to_string()),
         password: Some(secret_password.to_string()),
+        resolve_dns_remotely: false,
     };
     let validation_err = embedded_cred_proxy.validate().expect_err("embedded credentials in host must fail");
     assert!(

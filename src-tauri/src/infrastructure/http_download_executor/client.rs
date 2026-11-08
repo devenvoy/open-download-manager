@@ -2,13 +2,14 @@
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Description: Configurable Reqwest HTTP client builder with proxy and TLS configuration.
 
 use std::time::Duration;
 
 use crate::{
     application::error::{AppError, AppResult},
-    domain::settings::{ProxySettings, ProxyTestResult},
+    domain::settings::{ProxyProtocol, ProxySettings, ProxyTestResult},
 };
 
 use super::policy::CONNECT_TIMEOUT_SECONDS;
@@ -45,6 +46,9 @@ pub fn sanitize_proxy_error(msg: &str, proxy: Option<&ProxySettings>) -> String 
 
 /// Converts domain ProxySettings into an infrastructure `reqwest::Proxy`.
 pub fn build_reqwest_proxy(proxy: &ProxySettings) -> AppResult<reqwest::Proxy> {
+    if proxy.protocol == ProxyProtocol::Direct {
+        return Err(AppError::invalid_settings("Direct protocol does not use a proxy."));
+    }
     let clean = proxy.clean_host();
     if clean.is_empty() {
         return Err(AppError::invalid_settings("Proxy host cannot be empty."));
@@ -55,7 +59,20 @@ pub fn build_reqwest_proxy(proxy: &ProxySettings) -> AppResult<reqwest::Proxy> {
         ));
     }
 
-    let proxy_url = format!("{}://{}:{}", proxy.protocol.as_str(), clean, proxy.port);
+    let scheme = match proxy.protocol {
+        ProxyProtocol::Http => "http",
+        ProxyProtocol::Https => "https",
+        ProxyProtocol::Socks5 => {
+            if proxy.resolve_dns_remotely {
+                "socks5h"
+            } else {
+                "socks5"
+            }
+        }
+        ProxyProtocol::Direct => "direct",
+    };
+
+    let proxy_url = format!("{scheme}://{clean}:{}", proxy.port);
     let mut req_proxy = reqwest::Proxy::all(&proxy_url).map_err(|err| {
         let msg = format!("Invalid proxy configuration for {clean}:{}: {err}", proxy.port);
         AppError::invalid_settings(sanitize_proxy_error(&msg, Some(proxy)))
@@ -79,7 +96,7 @@ pub fn create_http_client(proxy: Option<&ProxySettings>) -> AppResult<reqwest::C
         .redirect(reqwest::redirect::Policy::none());
 
     if let Some(proxy_config) = proxy {
-        if proxy_config.enabled {
+        if proxy_config.enabled && proxy_config.protocol != ProxyProtocol::Direct {
             let req_proxy = build_reqwest_proxy(proxy_config)?;
             builder = builder.proxy(req_proxy);
         } else {
@@ -99,6 +116,13 @@ pub async fn test_proxy_connection(
     proxy: &ProxySettings,
     test_url: Option<&str>,
 ) -> ProxyTestResult {
+    if proxy.protocol == ProxyProtocol::Direct {
+        return ProxyTestResult {
+            success: true,
+            message: "Direct connection (no proxy configured).".to_string(),
+        };
+    }
+
     if let Err(e) = proxy.validate() {
         return ProxyTestResult {
             success: false,

@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1240,16 +1241,27 @@ function setView(nextFilter, nextCategory = "") {
 }
 function updateProxyFieldsState() {
 	const enabled = $("#proxy-enabled").checked;
+	const protocol = $("#proxy-protocol").value;
+	const isDirect = protocol === "direct";
+	const isSocks5 = protocol === "socks5";
 	const container = $("#proxy-fields");
 	if (container) {
 		container.classList.toggle("disabled", !enabled);
 	}
 	$("#proxy-protocol").disabled = !enabled;
-	$("#proxy-host").disabled = !enabled;
-	$("#proxy-port").disabled = !enabled;
-	$("#proxy-username").disabled = !enabled;
-	$("#proxy-password").disabled = !enabled;
+	$("#proxy-host").disabled = !enabled || isDirect;
+	$("#proxy-port").disabled = !enabled || isDirect;
+	$("#proxy-username").disabled = !enabled || isDirect;
+	$("#proxy-password").disabled = !enabled || isDirect;
 	$("#test-proxy-button").disabled = !enabled;
+
+	const dnsGroup = $("#proxy-dns-group");
+	if (dnsGroup) {
+		dnsGroup.style.display = isSocks5 ? "flex" : "none";
+		if ($("#proxy-resolve-dns-remotely")) {
+			$("#proxy-resolve-dns-remotely").disabled = !enabled || !isSocks5;
+		}
+	}
 }
 
 function resetProxyTestStatus() {
@@ -1289,6 +1301,10 @@ function openSettings() {
 	$("#proxy-port").value = proxy.port || 8080;
 	$("#proxy-username").value = proxy.username || "";
 	$("#proxy-password").value = proxy.password || "";
+	if ($("#proxy-resolve-dns-remotely")) {
+		$("#proxy-resolve-dns-remotely").checked = proxy.resolveDnsRemotely === true;
+	}
+	updateProxyFieldsState();
 
 	const capturePolicy = settings.capturePolicy || {};
 	$("#capture-enabled").checked = capturePolicy.enabled !== false;
@@ -2408,21 +2424,36 @@ $("#proxy-enabled").addEventListener("change", () => {
 	updateProxyFieldsState();
 	resetProxyTestStatus();
 });
+$("#proxy-protocol")?.addEventListener("change", (e) => {
+	const protocol = e.target.value;
+	const portInput = $("#proxy-port");
+	if (portInput) {
+		if (protocol === "socks5" && (portInput.value === "8080" || !portInput.value)) {
+			portInput.value = "1080";
+		} else if ((protocol === "http" || protocol === "https") && portInput.value === "1080") {
+			portInput.value = "8080";
+		}
+	}
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+});
 $("#test-proxy-button").addEventListener("click", async () => {
 	const statusEl = $("#proxy-test-status");
-	const host = $("#proxy-host").value.trim();
-	const port = Number($("#proxy-port").value) || 8080;
 	const protocol = $("#proxy-protocol").value;
+	const isDirect = protocol === "direct";
+	const host = $("#proxy-host").value.trim();
+	const port = Number($("#proxy-port").value) || (protocol === "socks5" ? 1080 : 8080);
 	const username = $("#proxy-username").value.trim() || null;
 	const password = $("#proxy-password").value || null;
+	const resolveDnsRemotely = Boolean($("#proxy-resolve-dns-remotely")?.checked);
 
-	if (!host) {
+	if (!isDirect && !host) {
 		statusEl.textContent = "Please enter a proxy host.";
 		statusEl.className = "proxy-test-status error";
 		return;
 	}
 
-	statusEl.textContent = "Testing proxy connection…";
+	statusEl.textContent = isDirect ? "Testing direct connection…" : "Testing proxy connection…";
 	statusEl.className = "proxy-test-status testing";
 	$("#test-proxy-button").disabled = true;
 
@@ -2435,6 +2466,7 @@ $("#test-proxy-button").addEventListener("click", async () => {
 				port,
 				username,
 				password,
+				resolveDnsRemotely,
 			},
 		});
 		if (res && res.success) {
@@ -2461,9 +2493,10 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			enabled: $("#proxy-enabled").checked,
 			protocol: $("#proxy-protocol").value,
 			host: $("#proxy-host").value.trim(),
-			port: Number($("#proxy-port").value) || 8080,
+			port: Number($("#proxy-port").value) || ($("#proxy-protocol").value === "socks5" ? 1080 : 8080),
 			username: $("#proxy-username").value.trim() || null,
 			password: $("#proxy-password").value || null,
+			resolveDnsRemotely: Boolean($("#proxy-resolve-dns-remotely")?.checked),
 		};
 		const capturePolicy = {
 			enabled: $("#capture-enabled").checked,

@@ -712,7 +712,7 @@
 							><input
 								type="checkbox"
 								id="proxy-enabled" />
-							Use HTTP / HTTPS proxy server for downloads</label
+							Use proxy server for downloads</label
 						>
 						<div
 							id="proxy-fields"
@@ -722,6 +722,8 @@
 								<select id="proxy-protocol">
 									<option value="http">HTTP</option>
 									<option value="https">HTTPS</option>
+									<option value="socks5">SOCKS5</option>
+									<option value="direct">Direct (No Proxy)</option>
 								</select>
 							</div>
 							<div class="form-line">
@@ -739,6 +741,18 @@
 									min="1"
 									max="65535"
 									placeholder="8080" />
+							</div>
+							<div
+								id="proxy-dns-group"
+								class="form-line proxy-dns-line">
+								<label
+									class="checkbox-label"
+									for="proxy-resolve-dns-remotely">
+									<input
+										type="checkbox"
+										id="proxy-resolve-dns-remotely" />
+									Resolve DNS through proxy (Remote DNS)
+								</label>
 							</div>
 							<div class="form-line">
 								<label for="proxy-username">Username (optional):</label>

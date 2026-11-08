@@ -33,7 +33,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 libc = "0.2"
 mime_guess = "2.0"
 opener = { version = "0.9.0", features = ["reveal"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "socks"] }
 sanitize-filename = "0.6"
 semver = "1.0"
 serde = { version = "1", features = ["derive"] }

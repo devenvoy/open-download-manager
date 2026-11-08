@@ -948,6 +948,9 @@ legend {
 	opacity: 0.55;
 	pointer-events: none;
 }
+.proxy-dns-line {
+	margin: 6px 0;
+}
 .proxy-test-line {
 	display: flex;
 	align-items: center;

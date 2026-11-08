@@ -2,6 +2,7 @@
 // Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
 // Last updated: 2026-11-08
 // Reason: refactor(architecture): decouple proxy domain model from reqwest and encapsulate settings update orchestration
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Description: Integration tests verifying proxy functionality, edge cases, and error recovery.
 
 use std::{
@@ -53,6 +54,7 @@ fn proxy_settings_validation_and_host_cleaning() {
         port: 8080,
         username: Some(" user ".to_string()),
         password: Some("secret".to_string()),
+        resolve_dns_remotely: false,
     };
 
     assert_eq!(proxy.clean_host(), "proxy.internal.corp");
@@ -99,6 +101,7 @@ fn proxy_settings_persistence_and_update() {
         port: 3128,
         username: Some("admin".to_string()),
         password: Some("pass123".to_string()),
+        resolve_dns_remotely: false,
     };
 
     let updated = service
@@ -144,6 +147,7 @@ async fn test_proxy_connection_success_with_loopback_server() {
         port,
         username: None,
         password: None,
+        resolve_dns_remotely: false,
     };
 
     let test_url = Some(format!("http://127.0.0.1:{port}/probe"));
@@ -193,6 +197,7 @@ async fn test_proxy_connection_with_authentication_check() {
         port,
         username: Some("wronguser".to_string()),
         password: Some("wrongpass".to_string()),
+        resolve_dns_remotely: false,
     };
 
     let test_url = Some(format!("http://127.0.0.1:{port}/probe"));
@@ -215,6 +220,7 @@ async fn test_proxy_connection_with_authentication_check() {
         port,
         username: Some("validuser".to_string()),
         password: Some("validpass".to_string()),
+        resolve_dns_remotely: false,
     };
 
     let good_result = test_proxy_connection(good_proxy, test_url)
@@ -237,6 +243,7 @@ async fn test_proxy_connection_unreachable_fails_gracefully() {
         port,
         username: None,
         password: None,
+        resolve_dns_remotely: false,
     };
 
     let test_url = Some(format!("http://127.0.0.1:{port}/probe"));
@@ -289,6 +296,7 @@ async fn download_transfer_routes_through_configured_proxy() {
         port: proxy_port,
         username: None,
         password: None,
+        resolve_dns_remotely: false,
     };
 
     let client = create_http_client(Some(&proxy_settings)).expect("client with proxy");
