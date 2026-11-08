@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: fix(browser): test native messaging manifest repair and origin preservation
 // Description: Integration tests verifying browser integration functionality, edge cases, and error recovery.
 
 use std::{
@@ -29,12 +30,12 @@ use open_download_manager_lib::{
     infrastructure::{
         bridge::LoopbackBridge,
         browser::{
-            browser_native_messaging_dir, create_manifest,
+            browser_native_messaging_dir, create_manifest, sync_browser_manifests,
             scanner::{
                 inspect_firefox_profile, inspect_firefox_profile_status, inspect_profile,
                 FIREFOX_EXTENSION_ID,
             },
-            BrowserType, NATIVE_HOST_NAME,
+            BrowserType, NativeHostManifest, NATIVE_HOST_NAME,
         },
         download_history_store::DownloadHistoryStore,
         http_download_executor::HttpDownloadExecutor,
@@ -1239,5 +1240,56 @@ async fn real_user_scenario_browser_capture_rules_workflow_with_intranet_and_rev
 
     server_running.store(false, std::sync::atomic::Ordering::Relaxed);
     bridge.stop().await;
+    fs::remove_dir_all(directory).expect("cleanup directory");
+}
+
+#[test]
+fn human_scenario_native_messaging_manifest_sync_repairs_stale_path_and_preserves_origins() {
+    let directory = temporary_directory();
+    let nm_folder = directory.join("NativeMessaging");
+    fs::create_dir_all(&nm_folder).expect("create test native messaging folder");
+
+    let valid_host_exe = directory.join("open-download-manager-native-host");
+    fs::write(&valid_host_exe, b"#!/bin/sh\nexit 0\n").expect("write dummy host exe");
+
+    // Create a stale manifest pointing to an old nonexistent path and containing custom allowed origins
+    let stale_path = "/nonexistent/old/path/open-download-manager-native-host";
+    let chrome_manifest_file = nm_folder.join("Chrome.json");
+    let initial_manifest = NativeHostManifest {
+        name: NATIVE_HOST_NAME.to_owned(),
+        description: "Open Download Manager browser bridge".to_owned(),
+        path: stale_path.to_owned(),
+        host_type: "stdio".to_owned(),
+        allowed_origins: Some(vec![
+            "chrome-extension://hlomaolpnkkbikjacplamegklgegpjbj/".to_owned(),
+            "chrome-extension://customunpackedextensionidabcdef/".to_owned(),
+        ]),
+        allowed_extensions: None,
+    };
+    fs::write(
+        &chrome_manifest_file,
+        serde_json::to_string_pretty(&initial_manifest).unwrap(),
+    )
+    .expect("write stale manifest");
+
+    // Execute sync
+    let repaired = sync_browser_manifests(&directory, &valid_host_exe);
+    assert!(repaired.contains(&BrowserType::Chrome));
+
+    // Verify the manifest path has been updated to the active host exe
+    let content = fs::read_to_string(&chrome_manifest_file).expect("read repaired manifest");
+    let repaired_manifest: NativeHostManifest = serde_json::from_str(&content).expect("parse manifest");
+
+    assert_eq!(
+        repaired_manifest.path,
+        valid_host_exe.to_string_lossy().into_owned(),
+        "Manifest path must point to active host binary"
+    );
+
+    // Verify existing origins are preserved
+    let origins = repaired_manifest.allowed_origins.expect("allowed origins");
+    assert!(origins.contains(&"chrome-extension://customunpackedextensionidabcdef/".to_owned()));
+    assert!(origins.contains(&"chrome-extension://hlomaolpnkkbikjacplamegklgegpjbj/".to_owned()));
+
     fs::remove_dir_all(directory).expect("cleanup directory");
 }

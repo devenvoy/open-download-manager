@@ -1,7 +1,8 @@
 // Created: 2026-11-05
 // Reason: feat: add native messaging host, loopback bridge, and browser registration
-// Last updated: 2026-11-07
+// Last updated: 2026-11-08
 // Reason: refactor(core): elevate transfer architecture with ThroughputMeter, serialized queue pump mutex, centralized extension config, and connection progress metrics
+// Reason: fix(browser): sync and repair native messaging host manifests with active executable path
 // Description: Manifest installation logic writing browser-specific native messaging JSON files.
 
 use std::path::{Path, PathBuf};
@@ -198,13 +199,122 @@ pub async fn register_browser_manifest(
                 let nm_dir = browser_native_messaging_dir(browser, &home);
                 if let Ok(_) = tokio::fs::create_dir_all(&nm_dir).await {
                     let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
-                    let _ = tokio::fs::write(&target_file, &json_content).await;
+                    let mut final_manifest = manifest.clone();
+                    if let Ok(existing_bytes) = tokio::fs::read(&target_file).await {
+                        if let Ok(existing_manifest) = serde_json::from_slice::<NativeHostManifest>(&existing_bytes) {
+                            if let Some(existing_origins) = existing_manifest.allowed_origins {
+                                if let Some(origins) = &mut final_manifest.allowed_origins {
+                                    origins.extend(existing_origins);
+                                    origins.sort();
+                                    origins.dedup();
+                                }
+                            }
+                            if let Some(existing_exts) = existing_manifest.allowed_extensions {
+                                if let Some(exts) = &mut final_manifest.allowed_extensions {
+                                    exts.extend(existing_exts);
+                                    exts.sort();
+                                    exts.dedup();
+                                }
+                            }
+                        }
+                    }
+                    if let Ok(final_json) = serde_json::to_string_pretty(&final_manifest) {
+                        let _ = tokio::fs::write(&target_file, &final_json).await;
+                    }
                 }
             }
         }
     }
 
     Ok(manifest_path)
+}
+
+/// Synchronizes and repairs native messaging host manifests across installed browsers.
+/// Ensures the executable path points to the active `host_exe_path` and preserves existing origins.
+pub fn sync_browser_manifests(
+    data_directory: &Path,
+    host_exe_path: &Path,
+) -> Vec<BrowserType> {
+    let mut updated = Vec::new();
+    let browsers = [
+        BrowserType::Chrome,
+        BrowserType::Edge,
+        BrowserType::Brave,
+        BrowserType::Opera,
+        BrowserType::Firefox,
+    ];
+
+    let host_str = host_exe_path.to_string_lossy().into_owned();
+
+    // 1. Sync internal data directory manifests (used directly on Windows registry)
+    let folder = data_directory.join("NativeMessaging");
+    if folder.exists() {
+        for &browser in &browsers {
+            let manifest_path = folder.join(format!("{}.json", browser.manifest_name()));
+            if manifest_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+                    if let Ok(mut manifest) = serde_json::from_str::<NativeHostManifest>(&content) {
+                        let current = PathBuf::from(&manifest.path);
+                        if !current.exists() || current != host_exe_path {
+                            manifest.path = host_str.clone();
+                            if let Ok(json) = serde_json::to_string_pretty(&manifest) {
+                                let _ = std::fs::write(&manifest_path, json);
+                                updated.push(browser);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Sync OS browser native messaging directories (macOS & Linux)
+    #[cfg(not(windows))]
+    {
+        let is_test = data_directory.to_string_lossy().contains("open-download-manager-")
+            || data_directory.to_string_lossy().contains("test");
+        if !is_test {
+            if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+                for &browser in &browsers {
+                    let nm_dir = browser_native_messaging_dir(browser, &home);
+                    let target_file = nm_dir.join(format!("{NATIVE_HOST_NAME}.json"));
+
+                    if target_file.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&target_file) {
+                            if let Ok(mut manifest) = serde_json::from_str::<NativeHostManifest>(&content) {
+                                let current = PathBuf::from(&manifest.path);
+                                if !current.exists() || current != host_exe_path {
+                                    manifest.path = host_str.clone();
+                                    if let Ok(json) = serde_json::to_string_pretty(&manifest) {
+                                        let _ = std::fs::write(&target_file, json);
+                                        if !updated.contains(&browser) {
+                                            updated.push(browser);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if nm_dir.exists() {
+                        let default_ext_id = if browser.is_firefox() {
+                            crate::infrastructure::browser::FIREFOX_EXTENSION_ID
+                        } else {
+                            DEFAULT_CHROME_EXTENSION_ID
+                        };
+                        if let Ok(manifest) = create_manifest(browser, default_ext_id, host_exe_path) {
+                            if let Ok(json) = serde_json::to_string_pretty(&manifest) {
+                                let _ = std::fs::write(&target_file, json);
+                                if !updated.contains(&browser) {
+                                    updated.push(browser);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    updated
 }
 
 pub async fn unregister_browser_manifest(

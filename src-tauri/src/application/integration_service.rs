@@ -1,7 +1,8 @@
 // Created: 2026-11-05
 // Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
-// Last updated: 2026-11-05
+// Last updated: 2026-11-08
 // Reason: feat(integration): decouple from upstream Web Store, purge legacy IDs, and add macOS native messaging support
+// Reason: fix(browser): auto-sync native messaging manifests on refresh and initialization
 // Description: Application service detecting installed browsers and registering native messaging manifests.
 
 use std::{
@@ -23,8 +24,8 @@ use crate::{
     infrastructure::{
         browser::{
             is_store_browser, launch_browser, prepare_firefox_extension, register_browser_manifest,
-            resolve_host_exe, resolve_integration_root, scan_browsers, BrowserType,
-            EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
+            resolve_host_exe, resolve_integration_root, scan_browsers, sync_browser_manifests,
+            BrowserType, EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
         },
         system_shell::SystemShellService,
     },
@@ -60,6 +61,8 @@ impl Clone for IntegrationService {
 impl IntegrationService {
     pub fn new(data_directory: PathBuf) -> Self {
         let integration_root = resolve_integration_root();
+        let host_exe = resolve_host_exe(&integration_root);
+        sync_browser_manifests(&data_directory, &host_exe);
         Self {
             data_directory,
             integration_root,
@@ -79,6 +82,11 @@ impl IntegrationService {
             shell_service: Arc::new(shell_service),
             bridge_port: Arc::new(AtomicU16::new(0)),
         }
+    }
+
+    pub fn sync_manifests(&self) -> Vec<BrowserType> {
+        let host_exe = resolve_host_exe(&self.integration_root);
+        sync_browser_manifests(&self.data_directory, &host_exe)
     }
 
     pub fn set_bridge_port(&self, port: u16) {
@@ -104,6 +112,7 @@ impl IntegrationService {
     }
 
     pub fn get_integration_info(&self) -> AppResult<IntegrationStatus> {
+        self.sync_manifests();
         let port = self.bridge_port();
         Ok(scan_browsers(
             &self.data_directory,
