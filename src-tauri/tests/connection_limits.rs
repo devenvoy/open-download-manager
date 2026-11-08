@@ -2,6 +2,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Last updated: 2026-11-08
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Human-scenario integration tests for per-site connection exceptions, redirects, rolling download limits, mock clock advances, and restart persistence.
 
 use std::{
@@ -128,6 +129,7 @@ async fn human_scenario_site_override_forces_single_stream_for_non_resumable_ser
         created_at: Utc::now().to_rfc3339(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(download_dir.to_string_lossy().into_owned()),
@@ -226,6 +228,7 @@ async fn human_scenario_site_override_applied_after_redirects() {
         created_at: Utc::now().to_rfc3339(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(download_dir.to_string_lossy().into_owned()),

@@ -8,6 +8,7 @@
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1007,6 +1008,7 @@ function openAdd(text = "", scheduled = "") {
 	rememberInput.disabled = true;
 	$("#download-schedule").value = scheduled;
 	$("#add-directory").value = state.settings.defaultDirectory || "";
+	refreshQueuesUI();
 	showDialog("#add-dialog");
 	$("#download-urls").focus();
 }
@@ -1905,7 +1907,171 @@ function openErrorDialog(downloadId = null) {
 
 	showDialog("#error-dialog");
 }
+let cachedQueues = [];
+
+async function refreshQueuesUI() {
+	try {
+		cachedQueues = await call("listQueues");
+	} catch (e) {
+		console.warn("Failed to load queues:", e);
+		cachedQueues = [];
+	}
+
+	// Populate Add Dialog select
+	const queueSelect = $("#download-queue");
+	if (queueSelect && Array.isArray(cachedQueues)) {
+		const prevVal = queueSelect.value || "default";
+		queueSelect.innerHTML = "";
+		for (const q of cachedQueues) {
+			const opt = document.createElement("option");
+			opt.value = q.id;
+			opt.textContent = q.name + (q.id === "default" ? " (Default)" : "");
+			queueSelect.appendChild(opt);
+		}
+		if ([...queueSelect.options].some((o) => o.value === prevVal)) {
+			queueSelect.value = prevVal;
+		}
+	}
+
+	// Populate Scheduler queues panel
+	const container = $("#queues-list-container");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!Array.isArray(cachedQueues) || cachedQueues.length === 0) {
+		container.innerHTML = "<p class='field-help'>No queues available.</p>";
+		return;
+	}
+
+	for (const q of cachedQueues) {
+		const card = document.createElement("div");
+		card.className = "queue-card";
+
+		const info = document.createElement("div");
+		info.className = "queue-card-info";
+
+		const header = document.createElement("div");
+		header.className = "queue-card-header";
+		const nameSpan = document.createElement("span");
+		nameSpan.textContent = q.name + (q.id === "default" ? " (Default)" : "");
+		const badge = document.createElement("span");
+		badge.className = `queue-badge ${q.running ? "running" : "paused"}`;
+		badge.textContent = q.running ? "Running" : "Paused";
+		header.append(nameSpan, badge);
+
+		const meta = document.createElement("div");
+		meta.className = "queue-card-meta";
+		const itemCount = Array.isArray(q.itemIds) ? q.itemIds.length : 0;
+		const activeLimit = `Max ${q.concurrencyLimit} active`;
+		const speed =
+			q.speedLimitKbps > 0 ? `${q.speedLimitKbps} KB/s` : "Unlimited speed";
+		let schedInfo = "No schedule";
+		if (q.schedule && q.schedule.enabled) {
+			schedInfo = `Schedule: ${q.schedule.startTime}${q.schedule.stopTime ? " - " + q.schedule.stopTime : ""}`;
+			if (q.schedule.nextRunAt) {
+				schedInfo += ` (Next: ${date(q.schedule.nextRunAt)})`;
+			}
+		}
+		meta.textContent = `${itemCount} downloads • ${activeLimit} • ${speed} • ${schedInfo}`;
+		info.append(header, meta);
+
+		const actions = document.createElement("div");
+		actions.className = "queue-card-actions";
+
+		const toggleBtn = document.createElement("button");
+		toggleBtn.type = "button";
+		toggleBtn.className = "small-button";
+		toggleBtn.textContent = q.running ? "Pause" : "Start";
+		toggleBtn.onclick = async () => {
+			if (q.running) {
+				await call("pauseQueue", { id: q.id });
+			} else {
+				await call("startQueue", { id: q.id });
+			}
+			await refreshQueuesUI();
+			await refresh();
+		};
+		actions.appendChild(toggleBtn);
+
+		const editBtn = document.createElement("button");
+		editBtn.type = "button";
+		editBtn.className = "small-button";
+		editBtn.textContent = "Edit…";
+		editBtn.onclick = () => openQueueEditDialog(q);
+		actions.appendChild(editBtn);
+
+		if (q.id !== "default") {
+			const deleteBtn = document.createElement("button");
+			deleteBtn.type = "button";
+			deleteBtn.className = "small-button";
+			deleteBtn.textContent = "Delete";
+			deleteBtn.onclick = async () => {
+				if (
+					confirm(
+						`Delete queue "${q.name}"? Downloads will be moved to the Default Queue.`,
+					)
+				) {
+					await call("deleteQueue", {
+						id: q.id,
+						disposition: "moveToDefault",
+					});
+					await refreshQueuesUI();
+					await refresh();
+				}
+			};
+			actions.appendChild(deleteBtn);
+		}
+
+		card.append(info, actions);
+		container.appendChild(card);
+	}
+}
+
+function openQueueEditDialog(queue = null) {
+	const errorEl = $("#queue-edit-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	$("#queue-edit-id").value = queue ? queue.id : "";
+	$("#queue-edit-title").textContent = queue
+		? `Edit Queue: ${queue.name}`
+		: "Create Download Queue";
+	$("#queue-edit-name").value = queue ? queue.name : "";
+	$("#queue-edit-name").disabled = queue ? queue.id === "default" : false;
+	$("#queue-edit-concurrency").value = queue ? queue.concurrencyLimit : 2;
+	$("#queue-edit-speed").value = queue ? queue.speedLimitKbps : 0;
+
+	const sched = queue ? queue.schedule : null;
+	const schedEnabled = Boolean(sched && sched.enabled);
+	$("#queue-edit-schedule-enabled").checked = schedEnabled;
+	const schedFields = $("#queue-schedule-fields");
+	if (schedFields) schedFields.hidden = !schedEnabled;
+
+	if (sched) {
+		$("#queue-edit-start-time").value = sched.startTime || "22:00";
+		$("#queue-edit-stop-time").value = sched.stopTime || "06:00";
+		$("#queue-edit-missed-policy").value =
+			sched.missedRunPolicy || "runOnStartup";
+		const days = Array.isArray(sched.daysOfWeek)
+			? sched.daysOfWeek
+			: [1, 2, 3, 4, 5, 6, 7];
+		$$("input[name=q-day]").forEach((cb) => {
+			cb.checked = days.includes(Number(cb.value));
+		});
+	} else {
+		$("#queue-edit-start-time").value = "22:00";
+		$("#queue-edit-stop-time").value = "06:00";
+		$("#queue-edit-missed-policy").value = "runOnStartup";
+		$$("input[name=q-day]").forEach((cb) => {
+			cb.checked = [1, 2, 3, 4, 5].includes(Number(cb.value));
+		});
+	}
+
+	showDialog("#queue-edit-dialog");
+}
+
 function renderScheduler() {
+	refreshQueuesUI();
 	const downloads = state.downloads
 		.filter((d) => statusOf(d) === "scheduled")
 		.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
@@ -2072,6 +2238,98 @@ $("#completion-form").addEventListener("submit", async (event) => {
 });
 $("#scheduler-start").addEventListener("click", commands.resumeAll);
 $("#scheduler-stop").addEventListener("click", commands.pauseAll);
+$("#tab-scheduler-queues")?.addEventListener("click", () => {
+	$("#tab-scheduler-queues").classList.add("active-tab");
+	$("#tab-scheduler-queues").setAttribute("aria-selected", "true");
+	$("#tab-scheduler-oneoff")?.classList.remove("active-tab");
+	$("#tab-scheduler-oneoff")?.setAttribute("aria-selected", "false");
+	const qPanel = $("#scheduler-queues-panel");
+	if (qPanel) qPanel.hidden = false;
+	const oPanel = $("#scheduler-oneoff-panel");
+	if (oPanel) oPanel.hidden = true;
+	refreshQueuesUI();
+});
+$("#tab-scheduler-oneoff")?.addEventListener("click", () => {
+	$("#tab-scheduler-oneoff").classList.add("active-tab");
+	$("#tab-scheduler-oneoff").setAttribute("aria-selected", "true");
+	$("#tab-scheduler-queues")?.classList.remove("active-tab");
+	$("#tab-scheduler-queues")?.setAttribute("aria-selected", "false");
+	const oPanel = $("#scheduler-oneoff-panel");
+	if (oPanel) oPanel.hidden = false;
+	const qPanel = $("#scheduler-queues-panel");
+	if (qPanel) qPanel.hidden = true;
+});
+$("#queue-create-btn")?.addEventListener("click", () => {
+	openQueueEditDialog(null);
+});
+$("#queue-edit-close-btn")?.addEventListener("click", () => {
+	$("#queue-edit-dialog")?.close();
+});
+$("#queue-edit-cancel-btn")?.addEventListener("click", () => {
+	$("#queue-edit-dialog")?.close();
+});
+$("#queue-edit-schedule-enabled")?.addEventListener("change", (e) => {
+	const fields = $("#queue-schedule-fields");
+	if (fields) fields.hidden = !e.target.checked;
+});
+$("#queue-edit-form")?.addEventListener("submit", async (e) => {
+	e.preventDefault();
+	const errorEl = $("#queue-edit-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	const id = $("#queue-edit-id")?.value.trim() || null;
+	const name = $("#queue-edit-name")?.value.trim() || "";
+	const concurrencyLimit = Number($("#queue-edit-concurrency")?.value || 2);
+	const speedLimitKbps = Number($("#queue-edit-speed")?.value || 0);
+
+	const schedEnabled = $("#queue-edit-schedule-enabled")?.checked;
+	let schedule = null;
+	if (schedEnabled) {
+		const startTime = $("#queue-edit-start-time")?.value || "22:00";
+		const stopTime = $("#queue-edit-stop-time")?.value || null;
+		const missedRunPolicy = $("#queue-edit-missed-policy")?.value || "runOnStartup";
+		const days = [];
+		$$("input[name=q-day]:checked").forEach((cb) => {
+			days.push(Number(cb.value));
+		});
+		schedule = {
+			enabled: true,
+			startTime,
+			stopTime: stopTime || null,
+			daysOfWeek: days.length > 0 ? days : [1, 2, 3, 4, 5, 6, 7],
+			missedRunPolicy,
+		};
+	}
+
+	try {
+		if (id) {
+			await call("updateQueue", {
+				id,
+				name,
+				concurrencyLimit,
+				speedLimitKbps,
+				schedule,
+			});
+		} else {
+			await call("createQueue", {
+				name,
+				concurrencyLimit,
+				speedLimitKbps,
+				schedule,
+			});
+		}
+		$("#queue-edit-dialog")?.close();
+		await refreshQueuesUI();
+		await refresh();
+	} catch (err) {
+		if (errorEl) {
+			errorEl.textContent = messageOf(err);
+			errorEl.hidden = false;
+		}
+	}
+});
 $("#schedule-new").addEventListener("click", () => {
 	const future = new Date(Date.now() + 3600000),
 		scheduled = new Date(
@@ -2647,6 +2905,7 @@ $("#add-form").addEventListener("submit", async (event) => {
 			...(selectedCategory ? { category: selectedCategory } : {}),
 			...(chosenYouTubeFormat ? { youtubeFormat: chosenYouTubeFormat } : {}),
 			...(credentials ? { credentials } : {}),
+			...($("#download-queue")?.value ? { queueId: $("#download-queue").value } : {}),
 			description,
 			queueOnly: event.submitter?.dataset.queueOnly === "true",
 		};

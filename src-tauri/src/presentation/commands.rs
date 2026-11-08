@@ -6,6 +6,7 @@
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Tauri IPC command handlers processing frontend requests for downloads, settings, and media.
 
 use std::sync::Arc;
@@ -360,6 +361,103 @@ pub fn delete_credential_rule(
     id: String,
 ) -> AppResult<()> {
     state.credentials.delete(&id)
+}
+
+#[tauri::command]
+pub fn list_queues(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::domain::queue::DownloadQueue>> {
+    Ok(state.queue_service()?.list_queues())
+}
+
+#[tauri::command]
+pub fn create_queue(
+    state: State<'_, AppState>,
+    name: String,
+    concurrency_limit: Option<u8>,
+    speed_limit_kbps: Option<u32>,
+    schedule: Option<crate::domain::queue::QueueSchedule>,
+) -> AppResult<crate::domain::queue::DownloadQueue> {
+    state.queue_service()?.create_queue(
+        name,
+        concurrency_limit.unwrap_or(crate::domain::queue::DEFAULT_QUEUE_CONCURRENCY),
+        speed_limit_kbps.unwrap_or(0),
+        schedule,
+    )
+}
+
+#[tauri::command]
+pub fn update_queue(
+    state: State<'_, AppState>,
+    id: String,
+    name: Option<String>,
+    enabled: Option<bool>,
+    concurrency_limit: Option<u8>,
+    speed_limit_kbps: Option<u32>,
+    schedule: Option<Option<crate::domain::queue::QueueSchedule>>,
+) -> AppResult<crate::domain::queue::DownloadQueue> {
+    state.queue_service()?.update_queue(
+        &id,
+        name,
+        enabled,
+        concurrency_limit,
+        speed_limit_kbps,
+        schedule,
+    )
+}
+
+#[tauri::command]
+pub fn delete_queue(
+    state: State<'_, AppState>,
+    id: String,
+    disposition: Option<crate::domain::queue::QueueDisposition>,
+) -> AppResult<Vec<String>> {
+    state.queue_service()?.delete_queue(
+        &id,
+        disposition.unwrap_or(crate::domain::queue::QueueDisposition::MoveToDefault),
+    )
+}
+
+#[tauri::command]
+pub fn start_queue(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<crate::domain::queue::DownloadQueue> {
+    let result = state.queue_service()?.start_queue(&id)?;
+    state.download_transfer.pump_queue();
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn pause_queue(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<crate::domain::queue::DownloadQueue> {
+    let result = state.queue_service()?.pause_queue(&id)?;
+    state.download_transfer.pause_queue_downloads(&id);
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn assign_download_to_queue(
+    state: State<'_, AppState>,
+    download_id: String,
+    queue_id: String,
+) -> AppResult<()> {
+    state.queue_service()?.assign_download(download_id, &queue_id)?;
+    state.download_transfer.pump_queue();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reorder_queue_items(
+    state: State<'_, AppState>,
+    queue_id: String,
+    item_ids: Vec<String>,
+) -> AppResult<()> {
+    state.queue_service()?.reorder_items(&queue_id, &item_ids)?;
+    state.download_transfer.pump_queue();
+    Ok(())
 }
 
 #[tauri::command]

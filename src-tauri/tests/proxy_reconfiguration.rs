@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying proxy reconfiguration functionality, edge cases, and error recovery.
 
 use std::{
@@ -264,6 +265,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -345,6 +347,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,

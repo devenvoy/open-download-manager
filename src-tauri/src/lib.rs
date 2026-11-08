@@ -7,6 +7,7 @@
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -21,15 +22,17 @@ use infrastructure::{
 use presentation::{
     app_state::AppState,
     commands::{
-        add_download, add_playlist_downloads, apply_detected_proxy, browser_setup_action, check_destination_conflict,
-        check_for_updates, delete_credential_rule, detect_proxy, dismiss_clipboard_candidate, download_action,
-        export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
-        get_video_formats, import_downloads_from_file, install_media_tool, list_credential_rules,
-        register_browser, remove_completed, resolve_asx_playlist, retry_download_actions, review_download,
-        save_credential_rule, show_about_dialog, snapshot, test_proxy_connection,
-        update_download_completion_actions, update_settings, validate_directory,
-        get_advanced_integration_capability, enable_advanced_integration,
-        disable_advanced_integration, repair_advanced_integration,
+        add_download, add_playlist_downloads, apply_detected_proxy, assign_download_to_queue,
+        browser_setup_action, check_destination_conflict, check_for_updates, create_queue,
+        delete_credential_rule, delete_queue, detect_proxy, disable_advanced_integration,
+        dismiss_clipboard_candidate, download_action, enable_advanced_integration,
+        export_downloads_to_file, get_advanced_integration_capability, get_integration_info,
+        get_media_tools_status, get_playlist_info, get_video_formats, import_downloads_from_file,
+        install_media_tool, list_credential_rules, list_queues, pause_queue, register_browser,
+        remove_completed, reorder_queue_items, repair_advanced_integration, resolve_asx_playlist,
+        retry_download_actions, review_download, save_credential_rule, show_about_dialog, snapshot,
+        start_queue, test_proxy_connection, update_download_completion_actions, update_queue,
+        update_settings, validate_directory,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -108,6 +111,13 @@ pub fn run() {
                 crate::infrastructure::system_shell::SystemShellService::new(),
                 allocator,
             );
+            let queue_store = crate::infrastructure::queue_store::QueueStore::new(data_directory.clone());
+            let queue_clock = std::sync::Arc::new(crate::domain::settings::window_limit::SystemClock);
+            let queue_service = std::sync::Arc::new(
+                crate::application::queue_service::QueueService::new(queue_store, queue_clock)
+                    .map_err(|error| std::io::Error::other(error.message))?,
+            );
+            download_transfer.set_queue_service(queue_service.clone());
             download_transfer.set_settings_repository(std::sync::Arc::new(settings_store));
             download_transfer.set_settings(settings.settings().clone());
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
@@ -254,6 +264,7 @@ pub fn run() {
                     file_icons,
                     update_service,
                 )
+                .with_queue_service(queue_service)
                 .with_clipboard(clipboard_service)
                 .with_advanced_integration(advanced_service),
             );
@@ -291,6 +302,14 @@ pub fn run() {
             test_proxy_connection,
             detect_proxy,
             apply_detected_proxy,
+            list_queues,
+            create_queue,
+            update_queue,
+            delete_queue,
+            start_queue,
+            pause_queue,
+            assign_download_to_queue,
+            reorder_queue_items,
             list_credential_rules,
             save_credential_rule,
             delete_credential_rule,

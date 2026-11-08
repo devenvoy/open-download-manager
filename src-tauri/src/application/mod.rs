@@ -6,6 +6,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Module definitions and exports for the application service orchestration layer.
 
 pub mod advanced_integration_service;
@@ -26,6 +27,7 @@ pub mod download_transfer_service;
 pub mod error;
 pub mod integration_service;
 pub mod proxy_discovery_service;
+pub mod queue_service;
 pub mod quota_service;
 pub mod settings_service;
 pub mod shell_service;

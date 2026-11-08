@@ -2,6 +2,7 @@
 // Reason: feat(media): implement notifications, file icons, and adaptive dual-stream muxing (Phase E)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying paired downloads functionality, edge cases, and error recovery.
 
 use std::{
@@ -132,6 +133,7 @@ fn paired_request_validation_and_record_mapping() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: Some("https://example.com/audio_stream".to_string()),
         kind: Some("paired".to_string()),
         sabr: None,
@@ -209,6 +211,7 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
@@ -318,6 +321,7 @@ async fn paired_download_converts_to_mp3() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
@@ -377,6 +381,7 @@ fn paired_download_discard_partial_cleans_up_directory() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),

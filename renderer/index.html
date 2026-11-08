@@ -379,6 +379,12 @@
 						</select>
 					</div>
 					<div class="form-line">
+						<label for="download-queue">Queue:</label>
+						<select id="download-queue">
+							<option value="default">Default Queue</option>
+						</select>
+					</div>
+					<div class="form-line">
 						<label for="download-filename">Save As:</label
 						><input
 							id="download-filename"
@@ -1034,43 +1040,80 @@
 
 		<dialog
 			id="scheduler-dialog"
+			class="scheduler-dialog"
 			aria-labelledby="scheduler-title">
 			<div class="dialog-title">
-				<strong id="scheduler-title">Scheduler</strong
-				><button
+				<strong id="scheduler-title">Scheduler &amp; Queues</strong>
+				<button
 					class="close-button"
 					data-close
 					aria-label="Close">
 					×
 				</button>
 			</div>
+			<div class="dialog-tabs" role="tablist">
+				<button
+					id="tab-scheduler-queues"
+					class="tab active-tab"
+					role="tab"
+					aria-selected="true"
+					type="button">
+					Download Queues
+				</button>
+				<button
+					id="tab-scheduler-oneoff"
+					class="tab"
+					role="tab"
+					aria-selected="false"
+					type="button">
+					One-off Schedules
+				</button>
+			</div>
 			<div class="dialog-body">
-				<fieldset>
-					<legend>Scheduled downloads</legend>
-					<div
-						id="scheduled-list"
-						class="scheduled-list"></div>
-				</fieldset>
-				<p class="field-help">
-					Scheduled downloads start at the chosen local time while
-					this app is running. Start Queue starts paused and scheduled
-					downloads immediately. Stop Queue pauses active and waiting
-					downloads.
-				</p>
-				<div class="scheduler-actions">
-					<button
-						class="button"
-						id="schedule-new">
-						Add scheduled download…</button
-					><button
-						class="button"
-						id="scheduler-start">
-						Start Queue</button
-					><button
-						class="button"
-						id="scheduler-stop">
-						Stop Queue
-					</button>
+				<div id="scheduler-queues-panel" class="scheduler-panel">
+					<div class="queues-toolbar">
+						<button
+							class="button primary"
+							id="queue-create-btn"
+							type="button">
+							+ Create Queue…
+						</button>
+					</div>
+					<div id="queues-list-container" class="queues-list-container">
+						<!-- Queue cards rendered here -->
+					</div>
+				</div>
+				<div id="scheduler-oneoff-panel" class="scheduler-panel" hidden>
+					<fieldset>
+						<legend>Scheduled downloads</legend>
+						<div
+							id="scheduled-list"
+							class="scheduled-list"></div>
+					</fieldset>
+					<p class="field-help">
+						Scheduled downloads start at the chosen local time while
+						this app is running.
+					</p>
+					<div class="scheduler-actions">
+						<button
+							class="button"
+							id="schedule-new"
+							type="button">
+							Add scheduled download…
+						</button>
+						<button
+							class="button"
+							id="scheduler-start"
+							type="button">
+							Start Default Queue
+						</button>
+						<button
+							class="button"
+							id="scheduler-stop"
+							type="button">
+							Stop Default Queue
+						</button>
+					</div>
 				</div>
 			</div>
 			<div class="dialog-footer">
@@ -1080,6 +1123,91 @@
 					Close
 				</button>
 			</div>
+		</dialog>
+
+		<dialog
+			id="queue-edit-dialog"
+			class="queue-edit-dialog"
+			aria-labelledby="queue-edit-title">
+			<form id="queue-edit-form">
+				<div class="dialog-title">
+					<strong id="queue-edit-title">Download Queue</strong>
+					<button
+						class="close-button"
+						id="queue-edit-close-btn"
+						type="button"
+						aria-label="Close">
+						×
+					</button>
+				</div>
+				<div class="dialog-body">
+					<input type="hidden" id="queue-edit-id" />
+					<div class="form-line">
+						<label for="queue-edit-name">Queue Name:</label>
+						<input id="queue-edit-name" required maxlength="100" placeholder="e.g. Nightly, Work" />
+					</div>
+					<div class="form-line">
+						<label for="queue-edit-concurrency">Max Active Downloads:</label>
+						<input id="queue-edit-concurrency" type="number" min="1" max="10" value="2" required />
+					</div>
+					<div class="form-line">
+						<label for="queue-edit-speed">Speed Limit (KB/s, 0 = unlimited):</label>
+						<input id="queue-edit-speed" type="number" min="0" max="1000000" value="0" />
+					</div>
+					<fieldset class="schedule-fieldset">
+						<legend>
+							<label class="checkbox-label" for="queue-edit-schedule-enabled">
+								<input type="checkbox" id="queue-edit-schedule-enabled" />
+								Enable Recurring Schedule
+							</label>
+						</legend>
+						<div id="queue-schedule-fields" class="queue-schedule-fields" hidden>
+							<div class="form-line">
+								<label for="queue-edit-start-time">Start Time (24h):</label>
+								<input id="queue-edit-start-time" type="time" value="22:00" />
+							</div>
+							<div class="form-line">
+								<label for="queue-edit-stop-time">Stop Time (optional):</label>
+								<input id="queue-edit-stop-time" type="time" value="06:00" />
+							</div>
+							<div class="form-line">
+								<label>Days of Week:</label>
+								<div class="days-selector">
+									<label class="day-chip"><input type="checkbox" name="q-day" value="1" checked /> Mon</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="2" checked /> Tue</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="3" checked /> Wed</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="4" checked /> Thu</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="5" checked /> Fri</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="6" /> Sat</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="7" /> Sun</label>
+								</div>
+							</div>
+							<div class="form-line">
+								<label for="queue-edit-missed-policy">Missed Run Policy:</label>
+								<select id="queue-edit-missed-policy">
+									<option value="runOnStartup">Run on Startup (Catch-up if app was closed)</option>
+									<option value="skip">Skip until Next Scheduled Run</option>
+								</select>
+							</div>
+							<p class="field-help">Timezone: Local system time. Start and stop actions apply only to this queue.</p>
+						</div>
+					</fieldset>
+					<p class="form-error" id="queue-edit-error" role="alert" hidden></p>
+				</div>
+				<div class="dialog-footer">
+					<button
+						class="button"
+						id="queue-edit-cancel-btn"
+						type="button">
+						Cancel
+					</button>
+					<button
+						class="button primary"
+						type="submit">
+						Save Queue
+					</button>
+				</div>
+			</form>
 		</dialog>
 
 		<dialog

@@ -1313,6 +1313,92 @@ code {
 	flex-wrap: wrap;
 	margin-top: 15px;
 }
+.queues-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 10px;
+}
+.queues-list-container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+.queue-card {
+	background: #fdfdfd;
+	border: 1px solid #d0d0d0;
+	border-radius: 4px;
+	padding: 10px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+}
+.queue-card-info {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	flex: 1;
+}
+.queue-card-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+	font-size: 12px;
+}
+.queue-card-meta {
+	font-size: 11px;
+	color: #555;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.queue-card-actions {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+.queue-badge {
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-size: 10px;
+	font-weight: 600;
+}
+.queue-badge.running {
+	background: #e6f4ea;
+	color: #137333;
+}
+.queue-badge.paused {
+	background: #fce8e6;
+	color: #c5221f;
+}
+.queue-edit-dialog {
+	width: 480px;
+	max-width: 95vw;
+}
+.schedule-fieldset {
+	margin-top: 10px;
+	padding: 8px 10px;
+	border: 1px solid #ccc;
+}
+.days-selector {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+	margin-top: 4px;
+}
+.day-chip {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	font-size: 11px;
+	background: #eee;
+	padding: 2px 6px;
+	border-radius: 3px;
+	cursor: pointer;
+}
 .tab-panel {
 	min-height: 145px;
 	padding: 10px;

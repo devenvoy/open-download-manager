@@ -1,5 +1,7 @@
 // Created: 2026-11-08
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Last updated: 2026-11-08
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying MMS scheme detection, unsupported migration guidance, safe ASX/WVX parsing, streaming, and cancellation.
 
 use std::{
@@ -282,6 +284,7 @@ async fn human_scenario_mms_streaming_execution_with_mock_server() {
         created_at: "2026-11-08T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         last_try: None,
@@ -377,6 +380,7 @@ async fn human_scenario_mms_streaming_instant_cancellation() {
         created_at: "2026-11-08T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         last_try: None,
@@ -501,6 +505,7 @@ async fn human_scenario_mms_stream_reconnect_and_resume() {
         created_at: "2026-11-08T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         last_try: None,
@@ -585,6 +590,7 @@ async fn human_scenario_mms_does_not_accidentally_fall_back_to_generic_http() {
         created_at: "2026-11-08T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         last_try: None,

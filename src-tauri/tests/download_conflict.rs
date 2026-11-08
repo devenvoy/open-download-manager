@@ -2,6 +2,7 @@
 // Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying download conflict functionality, edge cases, and error recovery.
 
 use std::{
@@ -62,6 +63,7 @@ fn download_req(
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -622,6 +624,7 @@ async fn app_restart_during_conflict_retains_state() {
         created_at: "2026-11-08T01:00:00Z".to_string(),
         needs_review: true,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),

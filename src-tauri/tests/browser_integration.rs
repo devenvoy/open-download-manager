@@ -2,6 +2,7 @@
 // Reason: feat: add native messaging host, loopback bridge, and browser registration
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying browser integration functionality, edge cases, and error recovery.
 
 use std::{
@@ -331,6 +332,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -472,6 +474,7 @@ async fn browser_review_cancellation_and_download_later() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -501,6 +504,7 @@ async fn browser_review_cancellation_and_download_later() {
         queue_only: false,
         review_only: Some(true),
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,

@@ -6,6 +6,7 @@
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -109,6 +110,14 @@ window.downloader = Object.freeze({
   listCredentialRules: () => invoke('list_credential_rules'),
   saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
   deleteCredentialRule: id => invoke('delete_credential_rule', { id }),
+  listQueues: () => invoke('list_queues'),
+  createQueue: ({ name, concurrencyLimit, speedLimitKbps, schedule }) => invoke('create_queue', { name, concurrencyLimit, speedLimitKbps, schedule }),
+  updateQueue: ({ id, name, enabled, concurrencyLimit, speedLimitKbps, schedule }) => invoke('update_queue', { id, name, enabled, concurrencyLimit, speedLimitKbps, schedule }),
+  deleteQueue: ({ id, disposition }) => invoke('delete_queue', { id, disposition }),
+  startQueue: ({ id }) => invoke('start_queue', { id }),
+  pauseQueue: ({ id }) => invoke('pause_queue', { id }),
+  assignDownloadToQueue: ({ downloadId, queueId }) => invoke('assign_download_to_queue', { downloadId, queueId }),
+  reorderQueueItems: ({ queueId, itemIds }) => invoke('reorder_queue_items', { queueId, itemIds }),
   updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
   retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id }),
   validateDirectory: path => invoke('validate_directory', { path }),

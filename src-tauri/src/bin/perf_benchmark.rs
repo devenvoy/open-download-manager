@@ -2,6 +2,7 @@
 // Reason: perf: add comprehensive high-resolution benchmark suite comparing main vs optimized
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Performance benchmarking utility for measuring snapshot serialization and transfer throughput.
 
 use std::{
@@ -40,6 +41,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             created_at: format!("2026-11-0{}T12:00:00Z", (i % 28) + 1),
             needs_review: i % 15 == 0,
             scheduled_at: None,
+            queue_id: None,
             description: Some(format!("Description for record {i}")),
             category: None,
             directory: Some(format!("/Users/devansh/Downloads/folder_{}", i % 5)),

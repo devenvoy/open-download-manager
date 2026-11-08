@@ -2,6 +2,7 @@
 // Reason: refactor: modularize native download architecture
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Inbound download creation request carrying URLs, optional credentials, category, and options.
 
 use std::path::PathBuf;
@@ -36,6 +37,8 @@ pub struct DownloadRequest {
     #[serde(default)]
     pub review_only: Option<bool>,
     pub scheduled_at: Option<String>,
+    #[serde(default)]
+    pub queue_id: Option<String>,
     pub audio_url: Option<String>,
     pub kind: Option<String>,
     pub sabr: Option<SabrSession>,
@@ -173,6 +176,7 @@ impl DownloadRequest {
             queue_only: self.queue_only,
             review_only: self.review_only.unwrap_or(false),
             scheduled_at,
+            queue_id: self.queue_id,
             audio_url,
             kind,
             sabr,

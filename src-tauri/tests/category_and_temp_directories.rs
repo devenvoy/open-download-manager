@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying category and temp directories functionality, edge cases, and error recovery.
 
 use std::{
@@ -93,6 +94,7 @@ async fn extension_based_category_detection_routes_to_category_directories() {
             queue_only: true,
             review_only: None,
             scheduled_at: None,
+            queue_id: None,
             audio_url: None,
             kind: None,
             sabr: None,
@@ -153,6 +155,7 @@ async fn changed_defaults_do_not_relocate_existing_downloads() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -183,6 +186,7 @@ async fn changed_defaults_do_not_relocate_existing_downloads() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -231,6 +235,7 @@ fn restart_and_resume_retains_recorded_final_and_temp_paths() {
         created_at: "2026-11-08T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: Some("Video download".to_string()),
         category: Some(DownloadCategory::Video),
         directory: Some(final_dir.to_string_lossy().into_owned()),
@@ -343,6 +348,7 @@ async fn temporary_parts_directory_is_used_during_download_and_assembled_to_dest
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,

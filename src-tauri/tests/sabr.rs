@@ -2,6 +2,7 @@
 // Reason: feat(sabr): implement YouTube SABR session normalization, Protobuf parser, and transfer deduplication (Phase G)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying sabr functionality, edge cases, and error recovery.
 
 use std::{
@@ -371,6 +372,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr.to_session()),
@@ -400,6 +402,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr2.to_session()),
@@ -427,6 +430,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr3.to_session()),
@@ -606,6 +610,7 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
@@ -717,6 +722,7 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),

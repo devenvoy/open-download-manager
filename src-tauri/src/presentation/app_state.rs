@@ -6,6 +6,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Shared application state holding services, transfer handles, and runtime settings.
 
 use std::sync::{Arc, Mutex};
@@ -42,6 +43,7 @@ pub struct AppState {
     pub(super) clipboard: Option<Arc<ClipboardMonitoringService>>,
     pub(super) advanced_integration: Arc<AdvancedIntegrationService>,
     pub(super) proxy_discovery: Arc<ProxyDiscoveryService>,
+    pub(super) queue_service: Option<Arc<crate::application::queue_service::QueueService>>,
 }
 
 impl AppState {
@@ -70,7 +72,25 @@ impl AppState {
             clipboard: None,
             advanced_integration,
             proxy_discovery,
+            queue_service: None,
         }
+    }
+
+    pub fn with_queue_service(
+        mut self,
+        queue_service: Arc<crate::application::queue_service::QueueService>,
+    ) -> Self {
+        self.download_transfer.set_queue_service(queue_service.clone());
+        self.queue_service = Some(queue_service);
+        self
+    }
+
+    pub fn queue_service(
+        &self,
+    ) -> AppResult<Arc<crate::application::queue_service::QueueService>> {
+        self.queue_service
+            .clone()
+            .ok_or_else(|| AppError::download("Queue service is unavailable."))
     }
 
     pub fn with_ytdlp(mut self, ytdlp: Option<Arc<YtDlpTools>>) -> Self {

@@ -2,6 +2,7 @@
 // Reason: feat(actions): add configurable post-download actions (Closes #31)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying completion actions functionality, edge cases, and error recovery.
 
 use std::{
@@ -122,6 +123,7 @@ async fn scanner_invocation_uses_safe_arguments_and_substitutes_file() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -193,6 +195,7 @@ async fn scanner_failure_records_error_without_marking_download_failed() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -262,6 +265,7 @@ async fn real_system_executor_reports_missing_executable_safely() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -324,6 +328,7 @@ async fn power_action_requires_explicit_confirmation() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -372,6 +377,7 @@ async fn power_action_requires_explicit_confirmation() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -429,6 +435,7 @@ async fn per_download_actions_override_global_settings_deterministically() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -499,6 +506,7 @@ async fn actions_do_not_run_twice_on_restart_but_run_when_retried() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -588,6 +596,7 @@ async fn cancelled_download_never_executes_completion_actions() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,

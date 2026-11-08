@@ -6,6 +6,7 @@
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
 
 'use strict';
@@ -148,6 +149,48 @@ test('detectProxy and applyDetectedProxy invoke corresponding Rust commands', as
   assert.equal(calls[1][0], 'apply_detected_proxy');
   assert.deepEqual(calls[1][1], { detected });
   assert.equal(applied.proxy.host, '10.0.0.1');
+});
+
+test('queue methods invoke corresponding Rust queue commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (cmd, args) => {
+        calls.push([cmd, args]);
+        if (cmd === 'list_queues') return [{ id: 'default', name: 'Default Queue' }];
+        if (cmd === 'create_queue') return { id: 'queue-1', name: args.name };
+        return {};
+      }
+    }
+  });
+
+  const queues = await api.listQueues();
+  assert.equal(calls[0][0], 'list_queues');
+  assert.equal(queues[0].id, 'default');
+
+  const created = await api.createQueue({ name: 'Nightly', concurrencyLimit: 2, speedLimitKbps: 500, schedule: null });
+  assert.equal(calls[1][0], 'create_queue');
+  assert.equal(created.name, 'Nightly');
+
+  await api.startQueue({ id: 'queue-1' });
+  assert.equal(calls[2][0], 'start_queue');
+  assert.deepEqual(calls[2][1], { id: 'queue-1' });
+
+  await api.pauseQueue({ id: 'queue-1' });
+  assert.equal(calls[3][0], 'pause_queue');
+  assert.deepEqual(calls[3][1], { id: 'queue-1' });
+
+  await api.assignDownloadToQueue({ downloadId: 'dl-1', queueId: 'queue-1' });
+  assert.equal(calls[4][0], 'assign_download_to_queue');
+  assert.deepEqual(calls[4][1], { downloadId: 'dl-1', queueId: 'queue-1' });
+
+  await api.reorderQueueItems({ queueId: 'queue-1', itemIds: ['dl-2', 'dl-1'] });
+  assert.equal(calls[5][0], 'reorder_queue_items');
+  assert.deepEqual(calls[5][1], { queueId: 'queue-1', itemIds: ['dl-2', 'dl-1'] });
+
+  await api.deleteQueue({ id: 'queue-1', disposition: 'moveToDefault' });
+  assert.equal(calls[6][0], 'delete_queue');
+  assert.deepEqual(calls[6][1], { id: 'queue-1', disposition: 'moveToDefault' });
 });
 
 test('download details use the native progress window commands', async () => {

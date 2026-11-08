@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Core download entity representing active/completed transfers, validators, and file paths.
 
 use chrono::DateTime;
@@ -39,6 +40,8 @@ pub struct DownloadRecord {
     pub needs_review: bool,
     #[serde(default)]
     pub scheduled_at: Option<String>,
+    #[serde(default)]
+    pub queue_id: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]

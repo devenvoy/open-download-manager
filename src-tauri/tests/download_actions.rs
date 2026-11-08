@@ -2,6 +2,7 @@
 // Reason: feat: implement Phase A download context actions and filesystem parity
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying download actions functionality, edge cases, and error recovery.
 
 use std::{
@@ -50,6 +51,7 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         queue_only,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,

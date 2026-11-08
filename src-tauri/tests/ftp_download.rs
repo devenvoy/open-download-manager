@@ -2,6 +2,7 @@
 // Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying ftp download functionality, edge cases, and error recovery.
 
 use std::{
@@ -390,6 +391,7 @@ fn create_test_record(id: &str, url: &str, filename: &str, dir: &str) -> Downloa
         created_at: "2026-11-08T03:00:00Z".to_owned(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_owned()),

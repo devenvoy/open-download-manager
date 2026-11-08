@@ -2,6 +2,7 @@
 // Reason: feat(media): implement notifications, file icons, and adaptive dual-stream muxing (Phase E)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying file icons functionality, edge cases, and error recovery.
 
 use std::{
@@ -50,6 +51,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             needs_review: false,
             scheduled_at: None,
+            queue_id: None,
             description: None,
             category: None,
             directory: None,
@@ -87,6 +89,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             needs_review: false,
             scheduled_at: None,
+            queue_id: None,
             description: None,
             category: None,
             directory: None,
@@ -124,6 +127,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             needs_review: false,
             scheduled_at: None,
+            queue_id: None,
             description: None,
             category: None,
             directory: None,
@@ -177,6 +181,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: None,

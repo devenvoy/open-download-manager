@@ -2,6 +2,7 @@
 // Reason: feat: add native messaging host, loopback bridge, and browser registration
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Local loopback HTTP bridge server receiving intercepted downloads from browser extensions.
 
 use std::{
@@ -412,6 +413,7 @@ async fn handle_bridge_connection(
             queue_only,
             review_only: Some(review_only),
             scheduled_at: None,
+            queue_id: None,
             audio_url: valid_browser.audio_url,
             kind,
             sabr: valid_browser.sabr,

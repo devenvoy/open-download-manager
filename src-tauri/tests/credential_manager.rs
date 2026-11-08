@@ -2,6 +2,7 @@
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Integration tests verifying credential manager functionality, edge cases, and error recovery.
 
 use std::{
@@ -151,6 +152,7 @@ async fn human_scenario_authenticated_http_download_with_stored_rule() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -249,6 +251,7 @@ async fn human_scenario_path_boundary_enforcement_prevents_credential_leak() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -374,6 +377,7 @@ async fn human_scenario_redirect_cross_domain_strips_authorization_header() {
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -493,6 +497,7 @@ async fn human_scenario_redirect_to_destination_with_its_own_rule_attaches_new_c
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -580,6 +585,7 @@ async fn human_scenario_in_memory_override_takes_precedence_and_is_not_persisted
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
@@ -747,6 +753,7 @@ async fn human_scenario_ftp_download_with_stored_rule_authenticates_clean_url() 
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: Some("ftp".to_owned()),
         sabr: None,

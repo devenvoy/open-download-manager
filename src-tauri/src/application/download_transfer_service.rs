@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -62,6 +63,7 @@ pub struct DownloadTransferService {
     settings: Arc<std::sync::RwLock<Option<Settings>>>,
     quota_service: Arc<QuotaEnforcementService>,
     settings_repository: Arc<std::sync::RwLock<Option<Arc<dyn SettingsRepository>>>>,
+    queue_service: Arc<std::sync::RwLock<Option<Arc<crate::application::queue_service::QueueService>>>>,
 }
 
 impl DownloadTransferService {
@@ -131,7 +133,27 @@ impl DownloadTransferService {
             settings: Arc::new(std::sync::RwLock::new(None)),
             quota_service: Arc::new(QuotaEnforcementService::new(None)),
             settings_repository: Arc::new(std::sync::RwLock::new(None)),
+            queue_service: Arc::new(std::sync::RwLock::new(None)),
         }
+    }
+
+    pub fn with_queue_service(
+        self,
+        queue_service: Arc<crate::application::queue_service::QueueService>,
+    ) -> Self {
+        self.set_queue_service(queue_service);
+        self
+    }
+
+    pub fn set_queue_service(
+        &self,
+        queue_service: Arc<crate::application::queue_service::QueueService>,
+    ) {
+        *self.queue_service.write().unwrap() = Some(queue_service);
+    }
+
+    pub fn queue_service(&self) -> Option<Arc<crate::application::queue_service::QueueService>> {
+        self.queue_service.read().unwrap().clone()
     }
 
     pub fn with_action_executor(
@@ -352,6 +374,10 @@ impl DownloadTransferService {
                     created_at: chrono::Utc::now().to_rfc3339(),
                     needs_review: request.review_only,
                     scheduled_at: request.scheduled_at.clone(),
+                    queue_id: request
+                        .queue_id
+                        .clone()
+                        .or_else(|| Some(crate::domain::queue::DEFAULT_QUEUE_ID.to_string())),
                     description: request.description.clone(),
                     category,
                     directory: Some(item_directory),
@@ -406,6 +432,16 @@ impl DownloadTransferService {
             .map(|record| record.id.clone())
             .collect::<Vec<_>>();
         self.history.add_records(records)?;
+
+        if let Some(qs) = self.queue_service() {
+            let target_queue = request
+                .queue_id
+                .as_deref()
+                .unwrap_or(crate::domain::queue::DEFAULT_QUEUE_ID);
+            for id in &ids {
+                let _ = qs.assign_download(id.clone(), target_queue);
+            }
+        }
 
         if request.review_only {
             for (index, url) in request.urls.iter().enumerate() {
@@ -480,6 +516,7 @@ impl DownloadTransferService {
                     created_at: chrono::Utc::now().to_rfc3339(),
                     needs_review: false,
                     scheduled_at: None,
+                    queue_id: Some(crate::domain::queue::DEFAULT_QUEUE_ID.to_string()),
                     description: Some(format!("From playlist: {}", request.playlist_title)),
                     category: Some(category),
                     directory: Some(target_dir.clone()),
@@ -575,7 +612,13 @@ impl DownloadTransferService {
     }
 
     pub fn remove_completed(&self) -> AppResult<Vec<String>> {
-        self.history.remove_completed_downloads()
+        let removed = self.history.remove_completed_downloads()?;
+        if let Some(qs) = self.queue_service() {
+            for id in &removed {
+                let _ = qs.remove_download(id);
+            }
+        }
+        Ok(removed)
     }
 
     fn remove_download(&self, id: &str) -> AppResult<()> {
@@ -608,6 +651,9 @@ impl DownloadTransferService {
         drop(controls);
 
         self.history.remove_download(id)?;
+        if let Some(qs) = self.queue_service() {
+            let _ = qs.remove_download(id);
+        }
         self.pump_queue();
         Ok(())
     }
@@ -666,13 +712,64 @@ impl DownloadTransferService {
             Ok(count) => count,
             Err(_) => return,
         };
-        if active < max {
-            let available = max - active;
-            if let Ok(next_ids) = self.history.next_queued_download_ids(available) {
-                for id in next_ids {
-                    if let Err(error) = self.start_download(&id, false) {
-                        eprintln!("Failed to auto-start queued download {id}: {}", error.message);
+        if active >= max {
+            return;
+        }
+        let mut available = max - active;
+
+        if let Some(qs) = self.queue_service() {
+            let running = qs.running_queues();
+            for queue in running {
+                if available == 0 {
+                    break;
+                }
+                let mut queue_active = 0;
+                if let Ok(controls) = self.controls.lock() {
+                    for item_id in &queue.item_ids {
+                        if controls.contains_key(item_id) {
+                            queue_active += 1;
+                        }
                     }
+                }
+
+                let queue_limit = queue.concurrency_limit as usize;
+                if queue_active < queue_limit {
+                    let queue_available = (queue_limit - queue_active).min(available);
+                    let mut started_for_queue = 0;
+                    for item_id in &queue.item_ids {
+                        if started_for_queue >= queue_available {
+                            break;
+                        }
+                        if let Ok(record) = self.history.download(item_id) {
+                            if record.status == DownloadStatus::Queued {
+                                if let Err(error) = self.start_download(item_id, false) {
+                                    eprintln!(
+                                        "Failed to auto-start queued download {item_id}: {}",
+                                        error.message
+                                    );
+                                } else {
+                                    started_for_queue += 1;
+                                    available = available.saturating_sub(1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if let Ok(next_ids) = self.history.next_queued_download_ids(available) {
+            for id in next_ids {
+                if let Err(error) = self.start_download(&id, false) {
+                    eprintln!("Failed to auto-start queued download {id}: {}", error.message);
+                }
+            }
+        }
+    }
+
+    pub fn pause_queue_downloads(&self, queue_id: &str) {
+        if let Some(qs) = self.queue_service() {
+            if let Some(q) = qs.get_queue(queue_id) {
+                for item_id in q.item_ids {
+                    let _ = self.action(&item_id, DownloadAction::Pause);
                 }
             }
         }
@@ -705,6 +802,12 @@ impl DownloadTransferService {
                 }
                 if let Err(error) = service.start_due_downloads() {
                     eprintln!("Could not start scheduled downloads: {}", error.message);
+                }
+                if let Some(qs) = service.queue_service() {
+                    let (_started, stopped) = qs.check_schedules();
+                    for stop_id in stopped {
+                        service.pause_queue_downloads(&stop_id);
+                    }
                 }
                 service.pump_queue();
             }
