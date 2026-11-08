@@ -526,13 +526,14 @@ renderDetails = function () {
 		element("span", "completed-icon", "✓"),
 		element(
 			"div",
-			"",
+			"completed-summary-text",
 			`Download complete\nDownloaded ${bytes(d.total || d.downloaded)} (${Math.round(d.total || d.downloaded || 0)} Bytes)`,
 		),
 	);
 	completedFields.url.value = d.url || "";
 	completedFields.path.value = d.path || "";
 	suppressCompletion.checked = state.settings.hideCompletionDialog === true;
+	fitWindowToContent("#details-dialog");
 };
 function numeric(value) {
 	const result = Number(value);
@@ -1019,6 +1020,74 @@ function isYouTubeVideoUrl(text) {
 	if (isYouTubePlaylistUrl(trimmed)) return false;
 	return /(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i.test(trimmed);
 }
+function fitWindowToContent(dialogSelector) {
+	if (!addMode && !progressMode) return;
+	requestAnimationFrame(() => {
+		const selector =
+			dialogSelector ||
+			(progressMode && $("#details-dialog")?.open
+				? "#details-dialog"
+				: "#add-dialog");
+		const dialog = $(selector);
+		if (!dialog) return;
+
+		let targetHeight = 0;
+		if (
+			dialog.id === "details-dialog" &&
+			dialog.classList.contains("is-complete")
+		) {
+			const panel = dialog.querySelector(".completed-panel");
+			if (panel) {
+				const style = window.getComputedStyle(panel);
+				let contentH =
+					parseFloat(style.paddingTop || 0) +
+					parseFloat(style.paddingBottom || 0);
+				for (const child of panel.children) {
+					if (child.hidden || window.getComputedStyle(child).display === "none")
+						continue;
+					const cs = window.getComputedStyle(child);
+					contentH +=
+						child.offsetHeight +
+						parseFloat(cs.marginTop || 0) +
+						parseFloat(cs.marginBottom || 0);
+				}
+				targetHeight = contentH + 8;
+			}
+		} else {
+			const form = dialog.querySelector("form");
+			const body = form
+				? form.querySelector(".dialog-body")
+				: dialog.querySelector(".dialog-body");
+			const footer = form
+				? form.querySelector(".dialog-footer")
+				: dialog.querySelector(".dialog-footer");
+			if (body && footer) {
+				const bodyStyle = window.getComputedStyle(body);
+				let bodyContentH =
+					parseFloat(bodyStyle.paddingTop || 0) +
+					parseFloat(bodyStyle.paddingBottom || 0);
+				for (const child of body.children) {
+					if (child.hidden || window.getComputedStyle(child).display === "none")
+						continue;
+					const cs = window.getComputedStyle(child);
+					bodyContentH +=
+						child.offsetHeight +
+						parseFloat(cs.marginTop || 0) +
+						parseFloat(cs.marginBottom || 0);
+				}
+				targetHeight = bodyContentH + footer.offsetHeight + 4;
+			} else if (dialog) {
+				targetHeight = dialog.scrollHeight;
+			}
+		}
+
+		if (targetHeight >= 180) {
+			call("resizeAuxiliaryWindow", {
+				height: Math.ceil(targetHeight),
+			}).catch(() => {});
+		}
+	});
+}
 function checkPlaylistUrl() {
 	const val = $("#download-urls")?.value || "";
 	const playlistBanner = $("#playlist-banner");
@@ -1027,6 +1096,7 @@ function checkPlaylistUrl() {
 	const isVideo = isYouTubeVideoUrl(val);
 	if (playlistBanner) playlistBanner.hidden = !isPlaylist;
 	if (videoBanner) videoBanner.hidden = !isVideo;
+	fitWindowToContent("#add-dialog");
 }
 function openAdd(text = "", scheduled = "") {
 	pendingReviewId = null;
@@ -1046,6 +1116,7 @@ function openAdd(text = "", scheduled = "") {
 	refreshQueuesUI();
 	showDialog("#add-dialog");
 	$("#download-urls").focus();
+	fitWindowToContent("#add-dialog");
 }
 async function openAddFromClipboard() {
 	openAdd(await call("clipboard"));
@@ -1070,6 +1141,7 @@ function openReview(id) {
 	rememberInput.disabled = !$("#download-category").value;
 	$("#add-directory").value =
 		d.directory || state.settings.defaultDirectory || "";
+	fitWindowToContent("#add-dialog");
 }
 async function dismissReview() {
 	if (!pendingReviewId) return;
@@ -3378,14 +3450,16 @@ if (schedulerMode)
 		call("closeProgress").catch((error) => notify(messageOf(error), true));
 	});
 start().then(async () => {
+	$("#add-auth-enabled")?.addEventListener("change", (e) => {
+		const fields = $("#add-auth-fields");
+		if (fields) fields.hidden = !e.target.checked;
+		fitWindowToContent("#add-dialog");
+	});
+
 	if (progressMode) {
 		showDetails(progressMode);
 		return;
 	}
-	$("#add-auth-enabled")?.addEventListener("change", (e) => {
-	const fields = $("#add-auth-fields");
-	if (fields) fields.hidden = !e.target.checked;
-});
 
 $("#cred-save-btn")?.addEventListener("click", async () => {
 	const scheme = $("#cred-scheme").value;

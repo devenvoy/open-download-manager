@@ -1865,7 +1865,7 @@ td {
 .completed-panel {
 	display: none;
 	padding: 10px 14px;
-	color: #111;
+	color: #222;
 }
 .is-complete > .dialog-body,
 .is-complete > .dialog-footer {
@@ -1881,21 +1881,24 @@ td {
 	white-space: pre-line;
 	min-height: 44px;
 	margin-bottom: 12px;
+	color: #111;
 }
 .completed-icon {
 	font-size: 28px;
-	color: #448b55;
+	color: #22863a;
 }
 .completed-field {
 	display: block;
 	margin: 8px 0;
+	color: #444;
+	font-size: 11px;
 }
 .completed-field input {
 	display: block;
 	width: 100%;
 	margin-top: 4px;
 	height: 23px;
-	color: #111;
+	color: #222;
 }
 .completed-panel .transfer-buttons {
 	display: flex;
@@ -1911,6 +1914,7 @@ td {
 }
 .completed-panel .checkbox-label {
 	margin: 9px 0 0;
+	color: #333;
 }
 
 /* Browser confirmation lives in its own window, never over the dashboard. */
@@ -2770,14 +2774,23 @@ body.scheduler-window {
 [data-theme="dark"] input,
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
-	background: #1e1e1e;
+	background: #252526;
 	border: 1px solid #454545;
 	color: #ffffff;
 }
+[data-theme="dark"] select option {
+	background: #252526;
+	color: #e0e0e0;
+}
 [data-theme="dark"] input[readonly],
 [data-theme="dark"] textarea[readonly] {
-	background: #282828;
-	color: #aaaaaa;
+	background: #1c1c1c;
+	border-color: #383838;
+	color: #cccccc;
+}
+[data-theme="dark"] input[type="checkbox"],
+[data-theme="dark"] input[type="radio"] {
+	accent-color: #007acc;
 }
 [data-theme="dark"] input:focus,
 [data-theme="dark"] textarea:focus,
@@ -3268,5 +3281,42 @@ body.scheduler-window {
 [data-theme="dark"] .progress-window #details-dialog::backdrop,
 [data-theme="dark"] .progress-window.review-window #add-dialog::backdrop {
 	background: #1e1e1e !important;
+}
+
+/* Completed Download Dialog & Panel */
+[data-theme="dark"] #details-dialog,
+[data-theme="dark"] .progress-window #details-dialog {
+	background: #1e1e1e !important;
+	color: #e0e0e0 !important;
+	border-color: #383838 !important;
+}
+[data-theme="dark"] .completed-panel {
+	color: #e0e0e0 !important;
+}
+[data-theme="dark"] .completed-summary,
+[data-theme="dark"] .completed-summary-text {
+	color: #ffffff !important;
+}
+[data-theme="dark"] .completed-summary div {
+	color: #ffffff !important;
+	font-weight: 500;
+}
+[data-theme="dark"] .completed-icon {
+	color: #4ade80 !important;
+	text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+}
+[data-theme="dark"] .completed-field {
+	color: #cccccc !important;
+}
+[data-theme="dark"] .completed-field input {
+	background: #252526 !important;
+	border: 1px solid #454545 !important;
+	color: #ffffff !important;
+}
+[data-theme="dark"] .completed-field input:focus {
+	border-color: #007acc !important;
+}
+[data-theme="dark"] .completed-panel .checkbox-label {
+	color: #cccccc !important;
 }
 

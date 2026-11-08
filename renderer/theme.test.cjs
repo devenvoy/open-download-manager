@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: fix(theme): verify dark theme CSS overrides for main downloads table and auxiliary windows (Refs #4)
 // Reason: fix(theme): verify dark theme styling for progress dialog tabs, active tab, and tab panels (Refs #4)
+// Reason: fix(theme): verify dark theme styling for completed download dialog and panels
 // Description: Frontend tests verifying theme selection, dynamic system tracking, data-theme attributes, and CSS rules.
 
 'use strict';
@@ -112,4 +113,10 @@ test('styles.css contains high-contrast dark theme overrides for main table and 
   assert.match(css, /\[data-theme="dark"\]\s+\.browser-card/);
   assert.match(css, /\[data-theme="dark"\]\s+\.playlist-items-list/);
   assert.match(css, /\[data-theme="dark"\]\s+\.site-overrides-list/);
+
+  // Verify completed download dialog and panels in dark mode
+  assert.match(css, /\[data-theme="dark"\]\s+\.completed-panel/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.completed-summary/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.completed-icon/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.completed-field/);
 });

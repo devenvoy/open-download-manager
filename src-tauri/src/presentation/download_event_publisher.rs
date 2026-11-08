@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(actions): add configurable post-download actions (Closes #31)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: fix(window): use window manager completion sizing constants to avoid wasted dialog space
 // Description: Tauri IPC event publisher pushing real-time download updates to frontend windows.
 
 use tauri::{AppHandle, Emitter, LogicalSize, Manager};
@@ -14,7 +15,13 @@ use crate::{
         error::{AppError, AppResult},
     },
     domain::{clipboard::ClipboardCandidate, download::DownloadStatus},
-    presentation::{app_state::AppState, window_manager::PROGRESS_WINDOW_PREFIX},
+    presentation::{
+        app_state::AppState,
+        window_manager::{
+            COMPLETE_WINDOW_HEIGHT, COMPLETE_WINDOW_MIN_HEIGHT, COMPLETE_WINDOW_MIN_WIDTH,
+            COMPLETE_WINDOW_WIDTH, PROGRESS_WINDOW_PREFIX,
+        },
+    },
 };
 
 use super::event_policy::{CLIPBOARD_CANDIDATE_EVENT, DOWNLOAD_CHANGE_EVENT};
@@ -72,8 +79,14 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
                                     let _ = window.destroy();
                                 } else {
                                     let _ = window.set_title("Download complete");
-                                    let _ = window.set_min_size(Some(LogicalSize::new(470.0, 270.0)));
-                                    let _ = window.set_size(LogicalSize::new(480.0, 280.0));
+                                    let _ = window.set_min_size(Some(LogicalSize::new(
+                                        COMPLETE_WINDOW_MIN_WIDTH,
+                                        COMPLETE_WINDOW_MIN_HEIGHT,
+                                    )));
+                                    let _ = window.set_size(LogicalSize::new(
+                                        COMPLETE_WINDOW_WIDTH,
+                                        COMPLETE_WINDOW_HEIGHT,
+                                    ));
                                 }
                             } else {
                                 let title = if d.needs_review {

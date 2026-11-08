@@ -84,6 +84,7 @@ window.downloader = Object.freeze({
   openProgress: ({ id }) => invoke('open_progress_window', { id }),
   closeProgress: () => invoke('close_auxiliary_window'),
   resizeProgress: ({ expanded }) => invoke('resize_progress_window', { expanded }),
+  resizeAuxiliaryWindow: ({ width, height } = {}) => invoke('resize_auxiliary_window', { width, height }),
   add: request => invoke('add_download', { request }),
   action: request => invoke('download_action', request),
   removeCompleted: () => invoke('remove_completed'),

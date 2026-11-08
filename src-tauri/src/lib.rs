@@ -9,6 +9,7 @@
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: fix(browser): sync native messaging host manifests on startup
+// Reason: feat(window): register resize_auxiliary_window for runtime content fitting
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -38,7 +39,8 @@ use presentation::{
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
         close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
-        open_progress_window, open_scheduler_window, resize_progress_window,
+        open_progress_window, open_scheduler_window, resize_auxiliary_window,
+        resize_progress_window,
     },
 };
 use tauri::Manager;
@@ -280,6 +282,7 @@ pub fn run() {
             validate_directory,
             open_progress_window,
             close_auxiliary_window,
+            resize_auxiliary_window,
             resize_progress_window,
             get_integration_info,
             register_browser,

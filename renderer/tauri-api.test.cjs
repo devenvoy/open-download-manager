@@ -208,11 +208,13 @@ test('download details use the native progress window commands', async () => {
 
   await api.openProgress({ id: 'download-123' });
   await api.resizeProgress({ expanded: true });
+  await api.resizeAuxiliaryWindow({ height: 350 });
   await api.closeProgress();
 
   assert.equal(JSON.stringify(calls), JSON.stringify([
     ['open_progress_window', { id: 'download-123' }],
     ['resize_progress_window', { expanded: true }],
+    ['resize_auxiliary_window', { height: 350 }],
     ['close_auxiliary_window', undefined]
   ]));
 });

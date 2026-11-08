@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
 // Reason: fix(ui): expand review and add window dimensions to prevent button cut-off
+// Reason: feat(window): dynamic runtime content fitting and compact initial dialog dimensions
 // Description: Auxiliary window manager controlling progress dialogs, options windows, and dimensions.
 
 use std::path::PathBuf;
@@ -36,13 +37,13 @@ pub const PROGRESS_WINDOW_MIN_WIDTH: f64 = 540.0;
 pub const PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT: f64 = 440.0;
 pub const PROGRESS_WINDOW_MIN_COLLAPSED_HEIGHT: f64 = 325.0;
 
-pub const REVIEW_WINDOW_HEIGHT: f64 = 520.0;
-pub const REVIEW_WINDOW_MIN_HEIGHT: f64 = 420.0;
+pub const REVIEW_WINDOW_HEIGHT: f64 = 370.0;
+pub const REVIEW_WINDOW_MIN_HEIGHT: f64 = 300.0;
 
 pub const COMPLETE_WINDOW_WIDTH: f64 = 480.0;
-pub const COMPLETE_WINDOW_HEIGHT: f64 = 280.0;
-pub const COMPLETE_WINDOW_MIN_WIDTH: f64 = 470.0;
-pub const COMPLETE_WINDOW_MIN_HEIGHT: f64 = 270.0;
+pub const COMPLETE_WINDOW_HEIGHT: f64 = 230.0;
+pub const COMPLETE_WINDOW_MIN_WIDTH: f64 = 460.0;
+pub const COMPLETE_WINDOW_MIN_HEIGHT: f64 = 190.0;
 
 pub const OPTIONS_WINDOW_WIDTH: f64 = 540.0;
 pub const OPTIONS_WINDOW_HEIGHT: f64 = 650.0;
@@ -50,9 +51,9 @@ pub const OPTIONS_WINDOW_MIN_WIDTH: f64 = 500.0;
 pub const OPTIONS_WINDOW_MIN_HEIGHT: f64 = 500.0;
 
 pub const ADD_WINDOW_WIDTH: f64 = 565.0;
-pub const ADD_WINDOW_HEIGHT: f64 = 520.0;
+pub const ADD_WINDOW_HEIGHT: f64 = 370.0;
 pub const ADD_WINDOW_MIN_WIDTH: f64 = 520.0;
-pub const ADD_WINDOW_MIN_HEIGHT: f64 = 420.0;
+pub const ADD_WINDOW_MIN_HEIGHT: f64 = 300.0;
 
 pub const SCHEDULER_WINDOW_WIDTH: f64 = 550.0;
 pub const SCHEDULER_WINDOW_HEIGHT: f64 = 430.0;
@@ -299,6 +300,37 @@ pub fn resize_progress_window(window: WebviewWindow, expanded: bool) -> AppResul
     let _ = window.set_min_size(Some(LogicalSize::new(min_w, min_h)));
     window
         .set_size(LogicalSize::new(width, height))
+        .map_err(|error| AppError::window(error.to_string()))
+}
+
+#[tauri::command]
+pub fn resize_auxiliary_window(
+    window: WebviewWindow,
+    width: Option<f64>,
+    height: Option<f64>,
+) -> AppResult<()> {
+    if window.label() == "main" {
+        return Err(AppError::window(
+            "The main window cannot be resized with this command.",
+        ));
+    }
+
+    let scale_factor = window.scale_factor().unwrap_or(1.0);
+    let current_size = window
+        .inner_size()
+        .map_err(|error| AppError::window(error.to_string()))?
+        .to_logical::<f64>(scale_factor);
+
+    let target_width = width.unwrap_or(current_size.width).clamp(380.0, 960.0);
+    let target_height = height.unwrap_or(current_size.height).clamp(180.0, 850.0);
+
+    let _ = window.set_min_size(Some(LogicalSize::new(
+        target_width.min(460.0),
+        target_height.min(190.0),
+    )));
+
+    window
+        .set_size(LogicalSize::new(target_width, target_height))
         .map_err(|error| AppError::window(error.to_string()))
 }
 
