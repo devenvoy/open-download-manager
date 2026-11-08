@@ -6,6 +6,7 @@
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: fix(transfer): prioritize HLS kind detection over paired fallback for m3u8 addresses
+// Reason: fix(transfer): release controls lock before pump_queue to prevent pause deadlock
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -868,33 +869,35 @@ impl DownloadTransferService {
 
     fn stop_download(&self, id: &str, reason: DownloadStopReason) -> AppResult<()> {
         self.quota_service.remove_download_tracker(id);
-        let controls = self
-            .controls
-            .lock()
-            .map_err(|_| AppError::storage("Download controls are unavailable."))?;
         let record = self.history.download(id)?;
         self.history.stop_download(id, reason)?;
-        if let Some(control) = controls.get(id) {
-            control.send_replace(Some(reason));
-            if reason == DownloadStopReason::Cancel {
-                let control = control.clone();
-                let executor = self.executor.clone();
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    handle.spawn(async move {
-                        control.closed().await;
-                        if let Err(error) = executor.discard_partial(&record) {
-                            eprintln!(
-                                "Could not remove the cancelled download partial: {}",
-                                error.message
-                            );
-                        }
-                    });
-                } else {
-                    let _ = executor.discard_partial(&record);
+        {
+            let controls = self
+                .controls
+                .lock()
+                .map_err(|_| AppError::storage("Download controls are unavailable."))?;
+            if let Some(control) = controls.get(id) {
+                control.send_replace(Some(reason));
+                if reason == DownloadStopReason::Cancel {
+                    let control = control.clone();
+                    let executor = self.executor.clone();
+                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                        handle.spawn(async move {
+                            control.closed().await;
+                            if let Err(error) = executor.discard_partial(&record) {
+                                eprintln!(
+                                    "Could not remove the cancelled download partial: {}",
+                                    error.message
+                                );
+                            }
+                        });
+                    } else {
+                        let _ = executor.discard_partial(&record);
+                    }
                 }
+            } else if reason == DownloadStopReason::Cancel {
+                self.executor.discard_partial(&record)?;
             }
-        } else if reason == DownloadStopReason::Cancel {
-            self.executor.discard_partial(&record)?;
         }
         self.pump_queue();
         Ok(())

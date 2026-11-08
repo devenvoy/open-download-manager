@@ -1,7 +1,8 @@
 // Created: 2026-11-05
 // Reason: feat: migrate history and adopt Bun
-// Last updated: 2026-11-07
+// Last updated: 2026-11-08
 // Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Reason: fix(ui): expand review and add window dimensions to prevent button cut-off
 // Description: Auxiliary window manager controlling progress dialogs, options windows, and dimensions.
 
 use std::path::PathBuf;
@@ -35,8 +36,8 @@ pub const PROGRESS_WINDOW_MIN_WIDTH: f64 = 540.0;
 pub const PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT: f64 = 440.0;
 pub const PROGRESS_WINDOW_MIN_COLLAPSED_HEIGHT: f64 = 325.0;
 
-pub const REVIEW_WINDOW_HEIGHT: f64 = 365.0;
-pub const REVIEW_WINDOW_MIN_HEIGHT: f64 = 330.0;
+pub const REVIEW_WINDOW_HEIGHT: f64 = 520.0;
+pub const REVIEW_WINDOW_MIN_HEIGHT: f64 = 420.0;
 
 pub const COMPLETE_WINDOW_WIDTH: f64 = 480.0;
 pub const COMPLETE_WINDOW_HEIGHT: f64 = 280.0;
@@ -49,9 +50,9 @@ pub const OPTIONS_WINDOW_MIN_WIDTH: f64 = 500.0;
 pub const OPTIONS_WINDOW_MIN_HEIGHT: f64 = 500.0;
 
 pub const ADD_WINDOW_WIDTH: f64 = 565.0;
-pub const ADD_WINDOW_HEIGHT: f64 = 430.0;
+pub const ADD_WINDOW_HEIGHT: f64 = 520.0;
 pub const ADD_WINDOW_MIN_WIDTH: f64 = 520.0;
-pub const ADD_WINDOW_MIN_HEIGHT: f64 = 390.0;
+pub const ADD_WINDOW_MIN_HEIGHT: f64 = 420.0;
 
 pub const SCHEDULER_WINDOW_WIDTH: f64 = 550.0;
 pub const SCHEDULER_WINDOW_HEIGHT: f64 = 430.0;

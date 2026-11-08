@@ -1095,6 +1095,8 @@ function showDetails(id) {
 	}
 	document.body.classList.remove("review-window");
 	detailId = id;
+	const details = $("#connection-details");
+	call("resizeProgress", { expanded: !details?.hidden }).catch(() => {});
 	$("#detail-speed-limit").value = state.settings.speedLimitKbps || 0;
 	$("#notify-complete").checked = state.settings.notifyOnComplete !== false;
 	$("#reveal-complete").checked = state.settings.revealOnComplete === true;

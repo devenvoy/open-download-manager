@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Open Download Manager",
-        "width": 805,
-        "height": 465,
+        "width": 900,
+        "height": 560,
         "minWidth": 760,
         "minHeight": 450,
         "visible": false

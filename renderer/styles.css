@@ -869,6 +869,13 @@ dialog::backdrop {
 	width: 63px;
 	flex-shrink: 0;
 }
+.form-line > label.checkbox-label,
+.form-line.auth-toggle-line > label,
+.form-line > .checkbox-label {
+	width: auto !important;
+	flex: 1 1 auto !important;
+	white-space: normal;
+}
 .form-line > input,
 .form-line > textarea,
 .form-line > select {
@@ -2462,23 +2469,32 @@ body.scheduler-window {
 .scheduler-window #scheduler-dialog::backdrop {
 	display: none;
 }
-.add-window #add-dialog > form {
+.add-window #add-dialog > form,
+.review-window #add-dialog > form,
+.progress-window.review-window #add-dialog > form {
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
 }
 .add-window #add-dialog > form > .dialog-title,
+.review-window #add-dialog > form > .dialog-title,
+.progress-window.review-window #add-dialog > form > .dialog-title,
 .scheduler-window #scheduler-dialog > .dialog-title {
 	display: none !important;
 }
 .add-window #add-dialog > form > .dialog-body,
+.review-window #add-dialog > form > .dialog-body,
+.progress-window.review-window #add-dialog > form > .dialog-body,
 .scheduler-window #scheduler-dialog > .dialog-body {
-	flex: 1;
+	flex: 1 1 auto;
 	min-height: 0;
-	overflow: auto;
+	overflow-y: auto;
 	padding: 16px;
 }
 .add-window #add-dialog > form > .dialog-footer,
+.review-window #add-dialog > form > .dialog-footer,
+.progress-window.review-window #add-dialog > form > .dialog-footer,
 .scheduler-window #scheduler-dialog > .dialog-footer {
 	flex: 0 0 48px;
 	border-top: 1px solid #ccc;
@@ -3222,6 +3238,8 @@ body.scheduler-window {
 }
 [data-theme="dark"] .options-window #settings-dialog,
 [data-theme="dark"] .add-window #add-dialog,
+[data-theme="dark"] .review-window #add-dialog,
+[data-theme="dark"] .progress-window.review-window #add-dialog,
 [data-theme="dark"] .scheduler-window #scheduler-dialog,
 [data-theme="dark"] .integration-window #integration-dialog,
 [data-theme="dark"] .progress-window #details-dialog {
@@ -3230,6 +3248,8 @@ body.scheduler-window {
 }
 [data-theme="dark"] .options-window #settings-dialog > form > .dialog-body,
 [data-theme="dark"] .add-window #add-dialog > form > .dialog-body,
+[data-theme="dark"] .review-window #add-dialog > form > .dialog-body,
+[data-theme="dark"] .progress-window.review-window #add-dialog > form > .dialog-body,
 [data-theme="dark"] .scheduler-window #scheduler-dialog > .dialog-body,
 [data-theme="dark"] .integration-window #integration-dialog > .dialog-body,
 [data-theme="dark"] .progress-window .dialog-body {
@@ -3238,6 +3258,8 @@ body.scheduler-window {
 }
 [data-theme="dark"] .options-window #settings-dialog > form > .dialog-footer,
 [data-theme="dark"] .add-window #add-dialog > form > .dialog-footer,
+[data-theme="dark"] .review-window #add-dialog > form > .dialog-footer,
+[data-theme="dark"] .progress-window.review-window #add-dialog > form > .dialog-footer,
 [data-theme="dark"] .scheduler-window #scheduler-dialog > .dialog-footer,
 [data-theme="dark"] .integration-window #integration-dialog > .dialog-footer {
 	border-top: 1px solid #383838 !important;

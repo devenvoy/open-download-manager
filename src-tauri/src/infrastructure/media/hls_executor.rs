@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
 // Reason: fix(hls): resolve external audio playlist when audio_url is specified on media variant
+// Reason: fix(hls): abort workers cleanly on pause, select stopped on network requests, and throttle progress
 // Description: HLS stream executor downloading individual media segments and assembling into continuous streams.
 
 use std::{
@@ -367,9 +368,13 @@ impl HlsDownloadExecutor {
             match res {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
+                    workers.abort_all();
+                    while workers.join_next().await.is_some() {}
                     return Err(e);
                 }
                 Err(e) => {
+                    workers.abort_all();
+                    while workers.join_next().await.is_some() {}
                     return Err(AppError::download(format!("HLS segment task failed: {e}")));
                 }
             }
@@ -469,13 +474,13 @@ async fn download_hls_segment(
         );
     }
 
-    let mut response = req
-        .send()
-        .await
-        .map_err(|e| {
+    let mut response = tokio::select! {
+        reason = control.stopped() => return Err(stopped_error(reason)),
+        res = req.send() => res.map_err(|e| {
             let safe_url = crate::domain::media::redact_media_url(&segment.url);
             AppError::download(format!("Could not download segment {index} from {safe_url}: {e}"))
-        })?;
+        })?,
+    };
 
     if !response.status().is_success() {
         return Err(AppError::download(format!(
@@ -541,10 +546,25 @@ async fn download_hls_segment(
         };
 
         let chunk_size = to_write.len() as u64;
-        rate_limiter.throttle(chunk_size).await;
-        file.write_all(to_write)
-            .await
-            .map_err(|e| AppError::download(format!("Could not write segment: {e}")))?;
+        let throttled = tokio::select! {
+            reason = control.stopped() => {
+                let _ = tokio::fs::remove_file(&temp_part).await;
+                return Err(stopped_error(reason));
+            }
+            () = rate_limiter.throttle(chunk_size) => Ok(()),
+        };
+        if let Err(e) = throttled {
+            return Err(e);
+        }
+
+        let write_res = tokio::select! {
+            reason = control.stopped() => {
+                let _ = tokio::fs::remove_file(&temp_part).await;
+                return Err(stopped_error(reason));
+            }
+            res = file.write_all(to_write) => res.map_err(|e| AppError::download(format!("Could not write segment: {e}"))),
+        };
+        write_res?;
 
         segment_downloaded += chunk_size;
 
@@ -597,23 +617,27 @@ async fn download_hls_segment(
         st.worker_progress[worker_id].segment_downloaded = segment_downloaded;
 
         let total_downloaded: u64 = st.segments.iter().map(|s| s.downloaded).sum();
-        let stream_prog = calculate_stream_progress(&st.segments);
-        let speed = st.meter.current_throughput();
-        let conns = st.build_connections_progress(segment_count);
-        let eff_conns = st.worker_progress.len() as u8;
-        drop(st);
+        let all_done = st.segments.iter().all(|s| s.done);
+        let speed_opt = st.meter.update(total_downloaded);
+        if all_done || speed_opt.is_some() {
+            let stream_prog = calculate_stream_progress(&st.segments);
+            let speed = speed_opt.unwrap_or_else(|| st.meter.current_throughput());
+            let conns = st.build_connections_progress(segment_count);
+            let eff_conns = st.worker_progress.len() as u8;
+            drop(st);
 
-        progress_handler(DownloadProgress {
-            downloaded: total_downloaded,
-            total: stream_prog.estimated_bytes,
-            bytes_per_second: speed,
-            connections_progress: conns,
-            notice: None,
-            transfer_kind: Some("hls".to_string()),
-            effective_concurrency: Some(eff_conns),
-            etag: None,
-            validator: None,
-        });
+            progress_handler(DownloadProgress {
+                downloaded: total_downloaded,
+                total: stream_prog.estimated_bytes,
+                bytes_per_second: speed,
+                connections_progress: conns,
+                notice: None,
+                transfer_kind: Some("hls".to_string()),
+                effective_concurrency: Some(eff_conns),
+                etag: None,
+                validator: None,
+            });
+        }
     }
 
     Ok(())
