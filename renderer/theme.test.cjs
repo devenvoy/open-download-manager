@@ -2,6 +2,7 @@
 // Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Last updated: 2026-11-08
 // Reason: fix(theme): verify dark theme CSS overrides for main downloads table and auxiliary windows (Refs #4)
+// Reason: fix(theme): verify dark theme styling for progress dialog tabs, active tab, and tab panels (Refs #4)
 // Description: Frontend tests verifying theme selection, dynamic system tracking, data-theme attributes, and CSS rules.
 
 'use strict';
@@ -89,8 +90,14 @@ test('styles.css contains high-contrast dark theme overrides for main table and 
   // Verify main download pane, table scroll, and cell overrides
   assert.match(css, /\[data-theme="dark"\]\s+\.main-pane/);
   assert.match(css, /\[data-theme="dark"\]\s+\.table-scroll/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.downloads-table tbody/);
   assert.match(css, /\[data-theme="dark"\]\s+\.downloads-table tbody td/);
   assert.match(css, /\[data-theme="dark"\]\s+\.downloads-table thead th/);
+
+  // Verify dialog tabs and tab panels in dark mode
+  assert.match(css, /\[data-theme="dark"\]\s+\.dialog-tabs button/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.dialog-tabs \.active-tab/);
+  assert.match(css, /\[data-theme="dark"\]\s+\.tab-panel/);
 
   // Verify auxiliary window modes have dark backgrounds
   assert.match(css, /\[data-theme="dark"\]\s+body\.options-window/);

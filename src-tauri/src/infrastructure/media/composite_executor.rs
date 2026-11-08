@@ -4,6 +4,7 @@
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: fix(media): ensure HLS downloads with audio_url route to HlsDownloadExecutor instead of PairedDownloadExecutor
 // Description: Composite download executor routing transfers to HTTP, FTP, MMS, HLS, or YouTube executors.
 
 use std::sync::{Arc, RwLock};
@@ -95,12 +96,12 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         control: DownloadControl,
         rate_limiter: Arc<DownloadRateLimiter>,
     ) -> DownloadExecution {
-        let is_sabr = download.kind.as_deref() == Some("sabr") || download.sabr.is_some();
-        let is_paired = download.kind.as_deref() == Some("paired")
-            || download.audio_url.is_some();
         let is_hls = download.kind.as_deref() == Some("hls")
             || download.url.ends_with(".m3u8")
             || download.url.contains(".m3u8?");
+        let is_sabr = download.kind.as_deref() == Some("sabr") || download.sabr.is_some();
+        let is_paired = !is_hls
+            && (download.kind.as_deref() == Some("paired") || download.audio_url.is_some());
         let is_direct_stream = download.url.contains("googlevideo.com") || download.url.contains("videoplayback");
         let is_youtube = !is_direct_stream
             && (download.kind.as_deref() == Some("youtube")
@@ -126,17 +127,17 @@ impl DownloadExecutor for CompositeDownloadExecutor {
                 sabr.transfer(download, progress_handler, control, rate_limiter)
                     .await
             })
+        } else if is_hls {
+            let hls = self.hls_executor.clone();
+            Box::pin(async move {
+                hls.transfer(download, progress_handler, control, rate_limiter)
+                    .await
+            })
         } else if is_paired {
             let paired = self.paired_executor.clone();
             Box::pin(async move {
                 paired
                     .transfer(download, progress_handler, control, rate_limiter)
-                    .await
-            })
-        } else if is_hls {
-            let hls = self.hls_executor.clone();
-            Box::pin(async move {
-                hls.transfer(download, progress_handler, control, rate_limiter)
                     .await
             })
         } else if is_youtube {

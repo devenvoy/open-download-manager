@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: fix(browser): classify browser m3u8 requests as HLS even when audio_url is present
 // Description: Local loopback HTTP bridge server receiving intercepted downloads from browser extensions.
 
 use std::{
@@ -390,12 +391,16 @@ async fn handle_bridge_connection(
         let confirm = active_settings.confirm_browser_downloads || is_confirmation_required;
         let review_only = (!valid_browser.start_now || is_confirmation_required) && confirm;
         let queue_only = review_only;
-        let is_paired = valid_browser.audio_url.is_some();
+        let is_hls = valid_browser.url.ends_with(".m3u8")
+            || valid_browser.url.contains(".m3u8?");
+        let is_paired = !is_hls && valid_browser.audio_url.is_some();
         let is_raw_youtube_page = crate::domain::media::youtube_url(&valid_browser.url).is_some();
         let primary_url = valid_browser.url.clone();
         let referer = valid_browser.canonical_url.clone().or(valid_browser.referer.clone());
         let kind = if valid_browser.sabr.is_some() {
             Some("sabr".to_owned())
+        } else if is_hls {
+            Some("hls".to_owned())
         } else if is_paired {
             Some("paired".to_owned())
         } else if is_raw_youtube_page {

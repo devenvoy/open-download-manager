@@ -5,6 +5,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: fix(transfer): prioritize HLS kind detection over paired fallback for m3u8 addresses
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -389,8 +390,11 @@ impl DownloadTransferService {
                         .then(|| format!("Address {} of {}.", index + 1, request.urls.len())),
                     estimated: NEW_DOWNLOAD_IS_ESTIMATED,
                     kind: request.kind.clone().or_else(|| {
+                        let is_hls = url.url().path().ends_with(".m3u8") || url.url().as_str().contains(".m3u8?");
                         if request.sabr.is_some() {
                             Some("sabr".to_owned())
+                        } else if is_hls {
+                            Some("hls".to_owned())
                         } else if request.audio_url.is_some() {
                             Some("paired".to_owned())
                         } else if crate::domain::media::youtube_url(url.url().as_str()).is_some() {

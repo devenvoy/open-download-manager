@@ -2620,6 +2620,9 @@ body.scheduler-window {
 [data-theme="dark"] .downloads-table {
 	background: #1e1e1e !important;
 }
+[data-theme="dark"] .downloads-table tbody {
+	background: #1e1e1e !important;
+}
 [data-theme="dark"] .downloads {
 	background: #1e1e1e;
 }
@@ -2645,6 +2648,10 @@ body.scheduler-window {
 	background: #1e1e1e !important;
 	border-bottom: 1px solid #2d2d30 !important;
 	border-right: 1px solid #2d2d30 !important;
+	color: #e0e0e0 !important;
+}
+[data-theme="dark"] .download-row {
+	background: #1e1e1e !important;
 	color: #e0e0e0 !important;
 }
 [data-theme="dark"] .download-row:hover:not(.selected) td {
@@ -2802,18 +2809,34 @@ body.scheduler-window {
 	border-top: 1px solid #383838;
 }
 [data-theme="dark"] .dialog-tabs {
-	border-bottom: 1px solid #383838;
+	border-bottom: 1px solid #383838 !important;
 }
+[data-theme="dark"] .dialog-tabs button,
 [data-theme="dark"] .tab {
-	background: transparent;
-	color: #888888;
+	background: #252526 !important;
+	border: 1px solid #383838 !important;
+	border-bottom: 0 !important;
+	color: #999999 !important;
 }
+[data-theme="dark"] .dialog-tabs button:hover,
 [data-theme="dark"] .tab:hover {
-	color: #cccccc;
+	color: #ffffff !important;
+	background: #2d2d30 !important;
 }
+[data-theme="dark"] .dialog-tabs button.active-tab,
+[data-theme="dark"] .dialog-tabs .active-tab,
 [data-theme="dark"] .tab.active-tab {
-	color: #ffffff;
-	border-bottom-color: #007acc;
+	background: #1e1e1e !important;
+	border: 1px solid #383838 !important;
+	border-top: 2px solid #007acc !important;
+	border-bottom: 0 !important;
+	color: #ffffff !important;
+	font-weight: 600;
+}
+[data-theme="dark"] .tab-panel {
+	background: #1e1e1e !important;
+	border-color: #383838 !important;
+	color: #e0e0e0 !important;
 }
 
 /* Progress Bars & Segment Maps */

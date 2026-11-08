@@ -2,6 +2,7 @@
 // Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
 // Last updated: 2026-11-08
 // Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Reason: fix(hls): resolve external audio playlist when audio_url is specified on media variant
 // Description: HLS stream executor downloading individual media segments and assembling into continuous streams.
 
 use std::{
@@ -100,6 +101,7 @@ impl HlsDownloadExecutor {
     pub async fn resolve_plan(
         &self,
         url: &str,
+        audio_url: Option<&str>,
         headers: &HashMap<String, String>,
         depth: usize,
     ) -> AppResult<ResolvedHlsPlan> {
@@ -107,9 +109,15 @@ impl HlsDownloadExecutor {
             return Err(AppError::download("Too many nested HLS playlists."));
         }
 
-        let resp = self
-            .client()
-            .get(url)
+        let mut req = self.client().get(url);
+        for (k, v) in headers {
+            if let Ok(name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(v) {
+                    req = req.header(name, val);
+                }
+            }
+        }
+        let resp = req
             .send()
             .await
             .map_err(|e| AppError::download(format!("Could not fetch HLS playlist: {e}")))?;
@@ -137,9 +145,10 @@ impl HlsDownloadExecutor {
                 let video = Box::pin(self.resolve_media_playlist(&chosen.url, headers)).await?;
                 let video_count = video.urls.len();
 
-                if let Some(audio_url) = &chosen.audio_url {
-                    let audio_headers = scoped_headers(headers, url, audio_url);
-                    let audio = Box::pin(self.resolve_media_playlist(audio_url, &audio_headers)).await?;
+                let target_audio = chosen.audio_url.as_deref().or(audio_url);
+                if let Some(target_audio_url) = target_audio {
+                    let audio_headers = scoped_headers(headers, url, target_audio_url);
+                    let audio = Box::pin(self.resolve_media_playlist(target_audio_url, &audio_headers)).await?;
                     let mut combined_urls = video.urls;
                     combined_urls.extend(audio.urls);
                     let mut combined_segments = video.segments;
@@ -164,15 +173,32 @@ impl HlsDownloadExecutor {
                 }
             }
             ParsedHls::Media(media) => {
-                let count = media.urls.len();
-                Ok(ResolvedHlsPlan {
-                    urls: media.urls,
-                    segments: media.segments,
-                    video_count: count,
-                    has_separate_audio: false,
-                    duration: media.duration,
-                    extension: media.extension,
-                })
+                let video_count = media.urls.len();
+                if let Some(target_audio_url) = audio_url {
+                    let audio_headers = scoped_headers(headers, url, target_audio_url);
+                    let audio = Box::pin(self.resolve_media_playlist(target_audio_url, &audio_headers)).await?;
+                    let mut combined_urls = media.urls;
+                    combined_urls.extend(audio.urls);
+                    let mut combined_segments = media.segments;
+                    combined_segments.extend(audio.segments);
+                    Ok(ResolvedHlsPlan {
+                        urls: combined_urls,
+                        segments: combined_segments,
+                        video_count,
+                        has_separate_audio: true,
+                        duration: media.duration,
+                        extension: ".mp4",
+                    })
+                } else {
+                    Ok(ResolvedHlsPlan {
+                        urls: media.urls,
+                        segments: media.segments,
+                        video_count,
+                        has_separate_audio: false,
+                        duration: media.duration,
+                        extension: media.extension,
+                    })
+                }
             }
         }
     }
@@ -180,11 +206,17 @@ impl HlsDownloadExecutor {
     async fn resolve_media_playlist(
         &self,
         url: &str,
-        _headers: &HashMap<String, String>,
+        headers: &HashMap<String, String>,
     ) -> AppResult<HlsMediaPlaylist> {
-        let resp = self
-            .client()
-            .get(url)
+        let mut req = self.client().get(url);
+        for (k, v) in headers {
+            if let Ok(name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(v) {
+                    req = req.header(name, val);
+                }
+            }
+        }
+        let resp = req
             .send()
             .await
             .map_err(|e| AppError::download(format!("Could not fetch HLS media playlist: {e}")))?;
@@ -204,7 +236,13 @@ impl HlsDownloadExecutor {
 
         match parse_hls(&text, &final_url).map_err(AppError::download)? {
             ParsedHls::Media(media) => Ok(media),
-            ParsedHls::Master(_) => Err(AppError::download("Nested master playlists are not supported.")),
+            ParsedHls::Master(master) => {
+                let chosen = master
+                    .variants
+                    .first()
+                    .ok_or_else(|| AppError::download("No audio variants found in master playlist."))?;
+                Box::pin(self.resolve_media_playlist(&chosen.url, headers)).await
+            }
         }
     }
 
@@ -230,7 +268,7 @@ impl HlsDownloadExecutor {
             headers.insert("Referer".to_string(), referer.clone());
         }
         let plan = self
-            .resolve_plan(&download.url, &headers, 0)
+            .resolve_plan(&download.url, download.audio_url.as_deref(), &headers, 0)
             .await?;
 
         let parts_dir = directory.join(format!(".open-download-manager-hls-{}", download.id));
@@ -344,6 +382,13 @@ impl HlsDownloadExecutor {
             let base_name = download
                 .filename
                 .strip_suffix(".m3u8")
+                .or_else(|| {
+                    if plan.extension == ".mp4" {
+                        download.filename.strip_suffix(".ts")
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or(&download.filename);
             format!("{base_name}{}", plan.extension)
         };

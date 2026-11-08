@@ -2,6 +2,7 @@
 // Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
 // Last updated: 2026-11-08
 // Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Reason: fix(hls): verify HLS downloads with audio_url route to HlsDownloadExecutor and build muxed plan
 // Description: Integration tests verifying hls download functionality, edge cases, and error recovery.
 
 use std::{
@@ -307,4 +308,58 @@ async fn hls_byte_range_segments_download_and_assemble_correctly() {
     );
 
     fs::remove_dir_all(directory).expect("clean directory");
+}
+
+#[tokio::test]
+async fn hls_download_with_audio_url_resolves_combined_plan() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("local address");
+
+    thread::spawn(move || {
+        loop {
+            let (mut stream, _) = match listener.accept() {
+                Ok(conn) => conn,
+                Err(_) => break,
+            };
+            let mut request = [0; 1024];
+            let bytes_read = match stream.read(&mut request) {
+                Ok(n) if n > 0 => n,
+                _ => continue,
+            };
+            let req_str = String::from_utf8_lossy(&request[..bytes_read]);
+            let path = req_str.lines().next().and_then(|l| l.split_whitespace().nth(1)).unwrap_or("");
+
+            if path == "/video_variant.m3u8" {
+                let body = "#EXTM3U\n#EXTINF:4.0,\n/video_seg0.ts\n#EXTINF:4.0,\n/video_seg1.ts\n#EXT-X-ENDLIST\n";
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            } else if path == "/audio_variant.m3u8" {
+                let body = "#EXTM3U\n#EXTINF:4.0,\n/audio_seg0.ts\n#EXTINF:4.0,\n/audio_seg1.ts\n#EXT-X-ENDLIST\n";
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        }
+    });
+
+    let executor = open_download_manager_lib::infrastructure::media::HlsDownloadExecutor::new(reqwest::Client::new());
+
+    let video_url = format!("http://{address}/video_variant.m3u8");
+    let audio_url = format!("http://{address}/audio_variant.m3u8");
+
+    let headers = std::collections::HashMap::new();
+    let plan = executor
+        .resolve_plan(&video_url, Some(&audio_url), &headers, 0)
+        .await
+        .expect("plan should resolve successfully with separate audio playlist");
+
+    assert!(plan.has_separate_audio, "plan must indicate separate audio track");
+    assert_eq!(plan.video_count, 2, "video count must match video segments");
+    assert_eq!(plan.urls.len(), 4, "total URLs must include 2 video and 2 audio segments");
+    assert_eq!(plan.extension, ".mp4", "muxed plan should output mp4");
 }
