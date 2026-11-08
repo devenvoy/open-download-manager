@@ -773,6 +773,22 @@ td {
 	line-height: 1.5;
 	color: #333;
 }
+.media-tool-steps {
+	margin: 6px 0 8px 0;
+	padding: 8px 10px;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 4px;
+	font-size: 11px;
+	line-height: 1.5;
+}
+.media-tool-steps ol {
+	margin: 4px 0 2px 18px;
+	padding: 0;
+}
+.media-tool-steps li {
+	margin-bottom: 3px;
+}
 .media-tool-dialog-help {
 	margin: 0 0 10px 0;
 	font-size: 11px;
@@ -3199,6 +3215,11 @@ body.scheduler-window {
 	color: #ffffff !important;
 }
 [data-theme="dark"] .media-tool-dialog-desc {
+	color: #cccccc !important;
+}
+[data-theme="dark"] .media-tool-steps {
+	background: #1e1e1e !important;
+	border-color: #383838 !important;
 	color: #cccccc !important;
 }
 [data-theme="dark"] .media-tool-dialog-help {

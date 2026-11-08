@@ -2,6 +2,7 @@
 // Reason: fix(engine): implement genuine auto-updater payload execution and SABR UMP streaming executor
 // Last updated: 2026-11-08
 // Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Reason: feat(media): auto-fallback to yt-dlp on premature SABR stream cutoff and provide 1-click solution flow
 // Description: YouTube SABR streaming executor reading UMP chunks and reassembling playable media.
 
 use std::{
@@ -23,7 +24,7 @@ use crate::{
         download::{DownloadRecord, DownloadSegmentProgress},
         media::sabr::{build_sabr_request_body, parse_media_header_itag, SabrFormat},
     },
-    infrastructure::media::ffmpeg::FfmpegTools,
+    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
 };
 
 pub struct SabrDownloadExecutor {
@@ -346,11 +347,50 @@ impl SabrDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not save audio track part: {e}")))?;
 
+        // Destination resolution
+        let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
+        let destination_filename = if is_mp3 {
+            download.filename.clone()
+        } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
+            download.filename.clone()
+        } else {
+            let base = Path::new(&download.filename)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&download.filename);
+            format!("{base}.mp4")
+        };
+        let destination = directory.join(destination_filename);
+
         // Validate stream completeness before invoking FFmpeg
         let total_downloaded = video_downloaded + audio_downloaded;
         if let Some(expected_total) = total {
             if total_downloaded < expected_total {
                 let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+                if let Some(ytdlp) = YtDlpTools::new() {
+                    let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                    let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                    progress_handler(DownloadProgress {
+                        downloaded: 0,
+                        total: Some(expected_total),
+                        bytes_per_second: 0,
+                        connections_progress: Vec::new(),
+                        notice: Some("Direct YouTube stream ended prematurely; resuming with yt-dlp to download full video.".to_string()),
+                        transfer_kind: Some("ytdlp".to_string()),
+                        effective_concurrency: Some(1),
+                        etag: None,
+                        validator: None,
+                    });
+                    return ytdlp.download(
+                        &watch_url,
+                        format_spec.as_deref(),
+                        download.referer.as_deref().or(Some(&watch_url)),
+                        &destination,
+                        progress_handler,
+                        control,
+                        0,
+                    ).await;
+                }
                 return Err(AppError::download(format!(
                     "YouTube stream ended prematurely: received {total_downloaded} of {expected_total} bytes ({:.1}%). Please install yt-dlp from Settings > Media Tools to download full YouTube streams.",
                     (total_downloaded as f64 / expected_total as f64) * 100.0
@@ -367,28 +407,38 @@ impl SabrDownloadExecutor {
 
         if has_video && video_len == 0 {
             let _ = tokio::fs::remove_dir_all(&parts_dir).await;
-            return Err(AppError::download("YouTube video track is empty. The media cannot be assembled."));
+            if let Some(ytdlp) = YtDlpTools::new() {
+                let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                return ytdlp.download(
+                    &watch_url,
+                    format_spec.as_deref(),
+                    download.referer.as_deref().or(Some(&watch_url)),
+                    &destination,
+                    progress_handler,
+                    control,
+                    0,
+                ).await;
+            }
+            return Err(AppError::download("YouTube video track is empty. Please install yt-dlp to download full YouTube streams."));
         }
         if audio_len == 0 {
             let _ = tokio::fs::remove_dir_all(&parts_dir).await;
-            return Err(AppError::download("YouTube audio track is empty. The media cannot be assembled."));
+            if let Some(ytdlp) = YtDlpTools::new() {
+                let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                return ytdlp.download(
+                    &watch_url,
+                    format_spec.as_deref(),
+                    download.referer.as_deref().or(Some(&watch_url)),
+                    &destination,
+                    progress_handler,
+                    control,
+                    0,
+                ).await;
+            }
+            return Err(AppError::download("YouTube audio track is empty. Please install yt-dlp to download full YouTube streams."));
         }
-
-        // Mux tracks or convert
-        let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
-        let destination_filename = if is_mp3 {
-            download.filename.clone()
-        } else if download.filename.to_ascii_lowercase().ends_with(".mp4") {
-            download.filename.clone()
-        } else {
-            let base = Path::new(&download.filename)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(&download.filename);
-            format!("{base}.mp4")
-        };
-
-        let destination = directory.join(destination_filename);
 
         if has_video {
             let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {

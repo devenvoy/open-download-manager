@@ -10,6 +10,7 @@
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Reason: feat(ui): provide solution flow dialog with steps to install yt-dlp and auto-resume YouTube downloads
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1188,10 +1189,11 @@ function renderDetails() {
 		content = $("#details-content");
 	$("#details-title").textContent =
 		`${percent !== null ? `${Math.floor(percent)}% ` : ""}${d.filename || "Download status"}`;
-	const isWatchPage = d.url && (d.url.includes("youtube.com/watch") || d.url.includes("youtu.be/"));
-	const sourceAddress = isWatchPage ? (d.referer || d.url || "") : (d.url || d.referer || "");
+	const isYouTube = d.transferKind === "sabr" || (d.url && (d.url.includes("googlevideo.com") || d.url.includes("youtube.com")));
+	const watchUrl = d.canonicalUrl || (d.referer && (d.referer.includes("youtube.com") || d.referer.includes("youtu.be")) ? d.referer : null);
+	const sourceAddress = (isYouTube && watchUrl) ? watchUrl : (d.url || d.referer || "");
 	$("#transfer-source").textContent = sourceAddress;
-	$("#transfer-source").title = sourceAddress;
+	$("#transfer-source").title = d.url ? `${sourceAddress}\nStream: ${d.url}` : sourceAddress;
 	const names = {
 		completed: "Complete",
 		downloading: "Receiving data…",
@@ -1356,8 +1358,26 @@ function renderDetails() {
 						? "Download Link Expired"
 						: "Download Interrupted";
 			$("#detail-error-summary").textContent = errText;
-			$("#detail-error-view-btn").onclick = () => openErrorDialog(d.id);
-			$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");
+			$("#detail-error-view-btn").textContent = (isYtdlp || isFfmpeg) ? "View Solution Steps…" : "View full details…";
+			$("#detail-error-view-btn").onclick = () => {
+				if (isYtdlp) {
+					openMediaToolDialog("yt-dlp", d.id);
+				} else if (isFfmpeg) {
+					openMediaToolDialog("ffmpeg", d.id);
+				} else {
+					openErrorDialog(d.id);
+				}
+			};
+			if (isYtdlp) {
+				$("#detail-error-retry-btn").textContent = "Install yt-dlp & Fix";
+				$("#detail-error-retry-btn").onclick = () => openMediaToolDialog("yt-dlp", d.id);
+			} else if (isFfmpeg) {
+				$("#detail-error-retry-btn").textContent = "Install FFmpeg & Fix";
+				$("#detail-error-retry-btn").onclick = () => openMediaToolDialog("ffmpeg", d.id);
+			} else {
+				$("#detail-error-retry-btn").textContent = "Retry download";
+				$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");
+			}
 		}
 	}
 	const connDetails = $("#connection-details");
@@ -1366,13 +1386,14 @@ function renderDetails() {
 	}
 
 	const isFfmpegError = Boolean(d.error && /ffmpeg is required/i.test(d.error));
+	const isYtdlpError = Boolean(d.error && /yt-dlp/i.test(d.error));
 	const toolBanner = $("#media-tool-fix-banner");
 	if (toolBanner) {
 		toolBanner.hidden = !isFfmpegError;
 	}
-	if (isFfmpegError && (status === "error" || status === "failed") && !d._mediaToolPrompted) {
+	if ((isFfmpegError || isYtdlpError) && (status === "error" || status === "failed") && !d._mediaToolPrompted) {
 		d._mediaToolPrompted = true;
-		openMediaToolDialog("ffmpeg", d.id);
+		openMediaToolDialog(isYtdlpError ? "yt-dlp" : "ffmpeg", d.id);
 	} else if (d.error && (status === "error" || status === "failed") && !d._notified) {
 		d._notified = true;
 		notify(d.error, true, {
@@ -1870,23 +1891,71 @@ async function installMediaToolAction(tool) {
 		await refreshMediaToolsStatus();
 	}
 }
+let activeMediaToolType = "ffmpeg";
 let activeMediaToolDownloadId = null;
 
 function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
+	activeMediaToolType = tool === "yt-dlp" ? "yt-dlp" : "ffmpeg";
 	activeMediaToolDownloadId = downloadId || state.selectedId || null;
 	const dialog = $("#media-tool-dialog");
 	if (!dialog) return;
 
-	const upper = tool.toUpperCase();
-	$("#media-tool-title").textContent = tool === "ffmpeg" ? "FFmpeg Required" : `${upper} Required`;
-	$("#media-tool-dialog-heading").textContent = `${upper} is required to combine video and audio`;
-	$("#media-tool-confirm-btn").textContent = `Download & Install ${upper} Now`;
-	$("#media-tool-confirm-btn").disabled = false;
-	$("#media-tool-cancel-btn").disabled = false;
-	$("#media-tool-dialog-progress").hidden = true;
-	$("#media-tool-dialog-error").hidden = true;
+	const descEl = $("#media-tool-dialog-desc");
+	const helpEl = $("#media-tool-dialog-help");
+	const headingEl = $("#media-tool-dialog-heading");
+	const titleEl = $("#media-tool-title");
+	const confirmBtn = $("#media-tool-confirm-btn");
+
+	if (activeMediaToolType === "yt-dlp") {
+		if (titleEl) titleEl.textContent = "YouTube Decryption Tool Required";
+		if (headingEl) headingEl.textContent = "yt-dlp is required to download this YouTube stream";
+		if (descEl) {
+			descEl.innerHTML = `
+				<div class="media-tool-steps">
+					<p style="margin: 0 0 6px 0;"><strong>Why this happened:</strong> YouTube cut off the direct browser stream due to signature encryption (Po-Token/SABR).</p>
+					<p style="margin: 0 0 4px 0;"><strong>Solution Steps:</strong></p>
+					<ol style="margin: 0 0 4px 18px; padding: 0;">
+						<li>Click below to automatically install <strong>yt-dlp</strong> into the sandboxed tools folder.</li>
+						<li>Open Download Manager will automatically decrypt the YouTube stream and solve signatures.</li>
+						<li>Your download will resume immediately once installation finishes.</li>
+					</ol>
+				</div>
+			`;
+		}
+		if (helpEl) helpEl.textContent = "No terminal commands or manual setup needed. Install now?";
+		if (confirmBtn) confirmBtn.textContent = "Install yt-dlp & Resume Download";
+	} else {
+		if (titleEl) titleEl.textContent = "FFmpeg Assembly Required";
+		if (headingEl) headingEl.textContent = "FFmpeg is required to combine video and audio";
+		if (descEl) {
+			descEl.innerHTML = `
+				<div class="media-tool-steps">
+					<p style="margin: 0 0 6px 0;"><strong>Why this happened:</strong> This video was streamed as separate high-definition video and audio tracks.</p>
+					<p style="margin: 0 0 4px 0;"><strong>Solution Steps:</strong></p>
+					<ol style="margin: 0 0 4px 18px; padding: 0;">
+						<li>Click below to install <strong>FFmpeg</strong> into the sandboxed tools folder.</li>
+						<li>Open Download Manager will assemble video and audio into a complete playable file.</li>
+						<li>Assembly will start automatically once installation finishes.</li>
+					</ol>
+				</div>
+			`;
+		}
+		if (helpEl) helpEl.textContent = "Would you like Open Download Manager to automatically download and install FFmpeg now?";
+		if (confirmBtn) confirmBtn.textContent = "Install FFmpeg & Assemble";
+	}
+
+	if (confirmBtn) confirmBtn.disabled = false;
+	const cancelBtn = $("#media-tool-cancel-btn");
+	if (cancelBtn) cancelBtn.disabled = false;
+	const progressArea = $("#media-tool-dialog-progress");
+	if (progressArea) progressArea.hidden = true;
+	const errorEl = $("#media-tool-dialog-error");
+	if (errorEl) errorEl.hidden = true;
 
 	showDialog("#media-tool-dialog");
+	if (typeof fitWindowToContent === "function") {
+		fitWindowToContent("#media-tool-dialog");
+	}
 }
 
 let activeErrorDownloadId = null;
@@ -1912,22 +1981,22 @@ function openErrorDialog(downloadId = null) {
 	let onAction = null;
 
 	if (isFfmpeg) {
-		title = "Media Assembly Failed";
+		title = "Media Assembly Required";
 		heading = "FFmpeg is required to combine video and audio tracks";
-		suggestion = "Open Media Tools in Options to install or reinstall FFmpeg.";
-		actionText = "Open Media Tools";
+		suggestion = "Install FFmpeg to automatically assemble the downloaded video and audio tracks into a single playable MP4.";
+		actionText = "Install FFmpeg & Assemble";
 		onAction = () => {
 			hideDialog("#error-dialog");
-			openSettings();
+			openMediaToolDialog("ffmpeg", d.id);
 		};
 	} else if (isYtdlp) {
-		title = "YouTube Tool Required";
-		heading = "yt-dlp is required to process this media stream";
-		suggestion = "Install yt-dlp from Options > Media Tools.";
-		actionText = "Open Media Tools";
+		title = "YouTube Stream Decryption Required";
+		heading = "yt-dlp is required to process this encrypted YouTube stream";
+		suggestion = "YouTube blocked direct streaming. Install yt-dlp to decrypt signatures and automatically resume downloading the full video.";
+		actionText = "Install yt-dlp & Resume";
 		onAction = () => {
 			hideDialog("#error-dialog");
-			openSettings();
+			openMediaToolDialog("yt-dlp", d.id);
 		};
 	} else if (isPremature) {
 		title = "Stream Interrupted";
@@ -2868,17 +2937,19 @@ $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
 	const progressArea = $("#media-tool-dialog-progress");
 	const statusText = $("#media-tool-dialog-status-text");
 	const errorEl = $("#media-tool-dialog-error");
+	const tool = activeMediaToolType || "ffmpeg";
+	const toolLabel = tool === "yt-dlp" ? "yt-dlp" : "FFmpeg";
 
 	confirmBtn.disabled = true;
 	cancelBtn.disabled = true;
 	progressArea.hidden = false;
 	errorEl.hidden = true;
-	statusText.textContent = "Downloading & installing FFmpeg into managed tools directory… Please wait.";
+	statusText.textContent = `Downloading & installing ${toolLabel} into managed tools directory… Please wait.`;
 
 	try {
-		await api.installMediaTool("ffmpeg");
-		statusText.textContent = "FFmpeg installed successfully! Resuming download…";
-		notify("FFmpeg installed successfully.");
+		await api.installMediaTool(tool);
+		statusText.textContent = `${toolLabel} installed successfully! Resuming download…`;
+		notify(`${toolLabel} installed successfully.`);
 		await refreshMediaToolsStatus();
 
 		const downloadIdToResume = activeMediaToolDownloadId;
