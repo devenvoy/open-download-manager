@@ -93,10 +93,18 @@ fn create_test_app(data_dir: &Path) -> tauri::App<tauri::test::MockRuntime> {
         true,
     );
 
+    let cred_store = std::sync::Arc::new(
+        open_download_manager_lib::infrastructure::credentials::CredentialStore::new(data_dir),
+    );
+    let cred_service = std::sync::Arc::new(
+        open_download_manager_lib::application::credential_service::CredentialService::new(cred_store),
+    );
+
     let app_state = AppState::new(
         settings,
         history,
         transfer,
+        cred_service,
         integration,
         file_icons,
         update_service,
@@ -241,6 +249,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         referer: None,
         youtube_format: None,
         conflict_policy: None,
+        credentials: None,
     };
 
     let ids = add_download(state.clone(), req).await.unwrap();
@@ -313,6 +322,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         referer: None,
         youtube_format: None,
         conflict_policy: None,
+        credentials: None,
     };
 
     let ids2 = add_download(state.clone(), req2).await.unwrap();

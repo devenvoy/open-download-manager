@@ -1,3 +1,4 @@
+pub mod credential_service;
 mod download_concurrency_limiter;
 mod download_concurrency_permit;
 pub mod download_event_publisher;

@@ -63,6 +63,16 @@ impl CompositeDownloadExecutor {
             client: shared_client,
         }
     }
+
+    pub fn with_credentials(
+        mut self,
+        credential_store: Arc<crate::infrastructure::credentials::CredentialStore>,
+    ) -> Self {
+        let allocator = self.http_executor.allocator();
+        self.http_executor = self.http_executor.with_credentials(credential_store.clone());
+        self.ftp_executor = Arc::new(FtpDownloadExecutor::new(allocator).with_credentials(credential_store));
+        self
+    }
 }
 
 impl DownloadExecutor for CompositeDownloadExecutor {

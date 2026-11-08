@@ -26,6 +26,7 @@ use crate::{
 };
 
 pub(crate) mod assembler;
+pub(crate) mod auth;
 pub(crate) mod client;
 pub(crate) mod policy;
 pub(crate) mod retry;
@@ -39,12 +40,14 @@ pub use client::{
 };
 use policy::TEMPORARY_DOWNLOAD_PREFIX;
 use validator::SegmentValidator;
+use crate::infrastructure::credentials::CredentialStore;
 
 #[derive(Clone)]
 pub struct HttpDownloadExecutor {
     client: Arc<RwLock<reqwest::Client>>,
     segment_validators: Arc<Mutex<HashMap<String, SegmentValidator>>>,
     allocator: DestinationAllocator,
+    credential_store: Option<Arc<CredentialStore>>,
 }
 
 impl HttpDownloadExecutor {
@@ -58,6 +61,7 @@ impl HttpDownloadExecutor {
             client: Arc::new(RwLock::new(client)),
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator: DestinationAllocator::new(),
+            credential_store: None,
         }
     }
 
@@ -66,6 +70,7 @@ impl HttpDownloadExecutor {
             client,
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator: DestinationAllocator::new(),
+            credential_store: None,
         }
     }
 
@@ -77,7 +82,13 @@ impl HttpDownloadExecutor {
             client,
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator,
+            credential_store: None,
         }
+    }
+
+    pub fn with_credentials(mut self, credential_store: Arc<CredentialStore>) -> Self {
+        self.credential_store = Some(credential_store);
+        self
     }
 
     pub fn allocator(&self) -> DestinationAllocator {
@@ -161,6 +172,9 @@ impl HttpDownloadExecutor {
 
         let _claim_guard = self.allocator.claim_guard(destination.clone());
 
+        let matcher = self.credential_store.as_ref().and_then(|s| s.matcher().ok());
+        let override_creds = download.credentials_override.as_ref();
+
         let mut metrics = crate::infrastructure::metrics::TransferMetrics::new(
             &download.id,
             if download.connections > 1 { "segmented_http" } else { "single_http" },
@@ -180,9 +194,10 @@ impl HttpDownloadExecutor {
             )
             .await?;
             let range_info =
-                segmented::discover_ranges(&self.client(), url.clone(), &mut control).await?;
-            if let Some((validator, suggested_filename)) = range_info {
-                if let Some(better_name) = suggested_filename {
+                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref()).await?;
+            if let Some(discovery) = range_info {
+                let validator = discovery.validator;
+                if let Some(better_name) = discovery.cd_filename {
                     let current_stem = destination
                         .file_stem()
                         .and_then(|s| s.to_str())
@@ -259,7 +274,7 @@ impl HttpDownloadExecutor {
                 let download_res = segmented::download_segments(
                     self.client(),
                     &download.id,
-                    url.clone(),
+                    discovery.final_url,
                     &validator,
                     segments,
                     download.connections,
@@ -267,6 +282,7 @@ impl HttpDownloadExecutor {
                     &mut control,
                     rate_limiter.clone(),
                     &progress_handler,
+                    discovery.auth_header,
                 )
                 .await;
 
@@ -366,6 +382,8 @@ impl HttpDownloadExecutor {
             &progress_handler,
             &mut control,
             rate_limiter,
+            override_creds,
+            matcher.as_ref(),
         )
         .await?;
 

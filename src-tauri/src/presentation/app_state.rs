@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     application::{
+        credential_service::CredentialService,
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
         error::{AppError, AppResult},
@@ -17,6 +18,7 @@ pub struct AppState {
     pub(super) settings: Mutex<SettingsService>,
     pub(super) download_history: DownloadHistoryService,
     pub(super) download_transfer: DownloadTransferService,
+    pub(super) credentials: Arc<CredentialService>,
     pub(super) integration: IntegrationService,
     pub(super) file_icons: FileIconProvider,
     pub(super) update_service: UpdateService,
@@ -28,6 +30,7 @@ impl AppState {
         settings: SettingsService,
         download_history: DownloadHistoryService,
         download_transfer: DownloadTransferService,
+        credentials: Arc<CredentialService>,
         integration: IntegrationService,
         file_icons: FileIconProvider,
         update_service: UpdateService,
@@ -36,6 +39,7 @@ impl AppState {
             settings: Mutex::new(settings),
             download_history,
             download_transfer,
+            credentials,
             integration,
             file_icons,
             update_service,

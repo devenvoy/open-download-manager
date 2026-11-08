@@ -11,10 +11,11 @@ use presentation::{
     app_state::AppState,
     commands::{
         add_download, add_playlist_downloads, browser_setup_action, check_destination_conflict,
-        check_for_updates, download_action, export_downloads_to_file, get_integration_info,
-        get_media_tools_status, get_playlist_info, get_video_formats, import_downloads_from_file,
-        install_media_tool, register_browser, remove_completed, review_download, show_about_dialog,
-        snapshot, test_proxy_connection, update_settings,
+        check_for_updates, delete_credential_rule, download_action, export_downloads_to_file,
+        get_integration_info, get_media_tools_status, get_playlist_info, get_video_formats,
+        import_downloads_from_file, install_media_tool, list_credential_rules, register_browser,
+        remove_completed, review_download, save_credential_rule, show_about_dialog, snapshot,
+        test_proxy_connection, update_settings,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -69,14 +70,22 @@ pub fn run() {
             .map_err(|error| std::io::Error::other(error.message))?;
             let shared_client = std::sync::Arc::new(std::sync::RwLock::new(initial_client));
             let allocator = crate::domain::download::DestinationAllocator::new();
+            let credential_store = std::sync::Arc::new(
+                crate::infrastructure::credentials::CredentialStore::new(data_directory.clone()),
+            );
+            let credential_service = std::sync::Arc::new(
+                crate::application::credential_service::CredentialService::new(credential_store.clone()),
+            );
             let http_executor = HttpDownloadExecutor::with_shared_client_and_allocator(
                 shared_client.clone(),
                 allocator.clone(),
-            );
+            )
+            .with_credentials(credential_store.clone());
             let download_executor = crate::infrastructure::media::CompositeDownloadExecutor::with_shared(
                 http_executor,
                 shared_client,
-            );
+            )
+            .with_credentials(credential_store.clone());
             let download_transfer = DownloadTransferService::with_shell_and_allocator(
                 download_history.clone(),
                 download_executor,
@@ -199,6 +208,7 @@ pub fn run() {
                 settings,
                 download_history,
                 download_transfer,
+                credential_service,
                 integration_service,
                 file_icons,
                 update_service,
@@ -232,7 +242,10 @@ pub fn run() {
             add_playlist_downloads,
             get_media_tools_status,
             install_media_tool,
-            test_proxy_connection
+            test_proxy_connection,
+            list_credential_rules,
+            save_credential_rule,
+            delete_credential_rule
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

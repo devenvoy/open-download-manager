@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::{
     category::DownloadCategory,
@@ -37,6 +37,15 @@ pub struct DownloadRequest {
     pub youtube_format: Option<String>,
     #[serde(default)]
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(default)]
+    pub credentials: Option<DownloadCredentials>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadCredentials {
+    pub username: String,
+    pub password: Option<String>,
 }
 
 impl DownloadRequest {
@@ -142,6 +151,7 @@ impl DownloadRequest {
             referer: self.referer,
             youtube_format: self.youtube_format,
             conflict_policy: self.conflict_policy,
+            credentials: self.credentials,
         })
     }
 }

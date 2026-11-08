@@ -62,6 +62,7 @@ fn download_req(
         referer: None,
         youtube_format: None,
         conflict_policy,
+        credentials: None,
     }
 }
 
@@ -585,6 +586,7 @@ async fn review_workflow_allows_user_to_choose_policy_interactively() {
         queue_only: None,
         scheduled_at: None,
         conflict_policy: Some(FileConflictPolicy::Overwrite),
+        credentials: None,
     };
     service.review_download(review_req).unwrap();
 
@@ -632,6 +634,7 @@ async fn app_restart_during_conflict_retains_state() {
         etag: None,
         validator: None,
         conflict_policy: Some(FileConflictPolicy::Ask),
+        credentials_override: None,
     };
 
     let store = DownloadHistoryStore::new(&dir);

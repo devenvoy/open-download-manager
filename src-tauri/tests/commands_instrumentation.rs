@@ -106,10 +106,18 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
         true,
     );
 
+    let cred_store = std::sync::Arc::new(
+        open_download_manager_lib::infrastructure::credentials::CredentialStore::new(data_dir),
+    );
+    let cred_service = std::sync::Arc::new(
+        open_download_manager_lib::application::credential_service::CredentialService::new(cred_store),
+    );
+
     let app_state = AppState::new(
         settings,
         history,
         transfer,
+        cred_service,
         integration,
         file_icons,
         update_service,
@@ -387,6 +395,7 @@ async fn commands_review_download_through_tauri_state() {
         queue_only: Some(true),
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
 
     let result = review_download(state.clone(), rev_req).unwrap();

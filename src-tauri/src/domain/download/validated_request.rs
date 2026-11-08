@@ -23,4 +23,5 @@ pub struct ValidatedDownloadRequest {
     pub referer: Option<String>,
     pub youtube_format: Option<String>,
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    pub credentials: Option<super::request::DownloadCredentials>,
 }

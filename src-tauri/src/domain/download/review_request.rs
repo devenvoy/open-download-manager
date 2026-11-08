@@ -15,4 +15,6 @@ pub struct ReviewDownloadRequest {
     pub scheduled_at: Option<String>,
     #[serde(default)]
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(default)]
+    pub credentials: Option<super::request::DownloadCredentials>,
 }
