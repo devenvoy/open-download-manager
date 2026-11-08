@@ -302,6 +302,10 @@ impl DownloadHistoryService {
 
         downloads[index].scheduled_at = scheduled_time.clone();
         downloads[index].needs_review = false;
+        if let Some(creds) = &request.credentials {
+            downloads[index].credentials_override =
+                Some((creds.username.clone(), creds.password.clone().unwrap_or_default()));
+        }
 
         let queue_only = request.queue_only.unwrap_or(false);
         if queue_only {

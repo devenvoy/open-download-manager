@@ -92,5 +92,8 @@ window.downloader = Object.freeze({
   addPlaylistDownloads: request => invoke('add_playlist_downloads', { request }),
   getMediaToolsStatus: () => invoke('get_media_tools_status'),
   installMediaTool: tool => invoke('install_media_tool', { tool }),
-  testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null })
+  testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null }),
+  listCredentialRules: () => invoke('list_credential_rules'),
+  saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
+  deleteCredentialRule: id => invoke('delete_credential_rule', { id })
 });

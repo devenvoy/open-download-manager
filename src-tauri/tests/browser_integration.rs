@@ -331,6 +331,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         referer: None,
         youtube_format: None,
         conflict_policy: None,
+        credentials: None,
     };
 
     let ids = service.add(request, &settings).unwrap();
@@ -360,6 +361,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: None,
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
     let err = service.review_download(relative_rev).unwrap_err();
     assert!(err.message.contains("Choose an absolute save folder."));
@@ -374,6 +376,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: None,
         scheduled_at: Some("2020-01-01T00:00:00Z".to_owned()),
         conflict_policy: None,
+        credentials: None,
     };
     let err = service.review_download(past_rev).unwrap_err();
     assert!(err.message.contains("The scheduled time must be in the future."));
@@ -388,6 +391,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: None,
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
     let err = service.review_download(overlong_rev).unwrap_err();
     assert!(err.message.contains("Description is too long."));
@@ -402,6 +406,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: Some(false),
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
 
     let confirmed_ids = service.review_download(valid_rev).unwrap();
@@ -424,6 +429,7 @@ async fn browser_download_review_lifecycle_and_validation() {
         queue_only: None,
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
     let dup_err = service.review_download(duplicate_rev).unwrap_err();
     assert!(dup_err.message.contains("This download is not waiting for confirmation."));
@@ -459,6 +465,7 @@ async fn browser_review_cancellation_and_download_later() {
         referer: None,
         youtube_format: None,
         conflict_policy: None,
+        credentials: None,
     };
     let ids1 = service.add(req1, &settings).unwrap();
     let id1 = &ids1[0];
@@ -485,6 +492,7 @@ async fn browser_review_cancellation_and_download_later() {
         referer: None,
         youtube_format: None,
         conflict_policy: None,
+        credentials: None,
     };
     let ids2 = service.add(req2, &settings).unwrap();
     let id2 = &ids2[0];
@@ -498,6 +506,7 @@ async fn browser_review_cancellation_and_download_later() {
         queue_only: Some(true),
         scheduled_at: None,
         conflict_policy: None,
+        credentials: None,
     };
     service.review_download(rev_later).unwrap();
     let record2 = history.downloads().unwrap().into_iter().find(|d| &d.id == id2).unwrap();
@@ -1151,6 +1160,7 @@ async fn real_user_scenario_browser_capture_rules_workflow_with_intranet_and_rev
             queue_only: Some(false),
             scheduled_at: None,
             conflict_policy: None,
+            credentials: None,
         })
         .expect("user review approval");
 

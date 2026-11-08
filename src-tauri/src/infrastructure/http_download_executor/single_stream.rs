@@ -28,7 +28,7 @@ use super::{
     policy::{
         MAX_TRANSIENT_RETRIES, PROGRESS_EVENT_INTERVAL_MILLISECONDS, READ_TIMEOUT_SECONDS,
     },
-    retry::{retry_delay, send_with_retry, wait_before_retry},
+    retry::{retry_delay, wait_before_retry},
     validator::{content_range, extract_validator, SegmentValidator},
 };
 
@@ -42,6 +42,8 @@ pub(crate) async fn download_single_stream(
     progress_handler: &DownloadProgressHandler,
     control: &mut DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
+    override_creds: Option<&(String, String)>,
+    matcher: Option<&crate::domain::credentials::CredentialMatcher>,
 ) -> AppResult<(DownloadResult, Option<SegmentValidator>)> {
     let mut downloaded = match fs::metadata(&temporary).await {
         Ok(metadata) => metadata.len(),
@@ -70,14 +72,19 @@ pub(crate) async fn download_single_stream(
         );
     }
 
-    let mut response = send_stream_request(
+    let mut active_url = url;
+    let mut resolved = send_stream_request(
         &client,
-        url.clone(),
+        &active_url,
         downloaded,
         if downloaded > 0 { previous_validator.as_ref() } else { None },
         control,
+        override_creds,
+        matcher,
     )
     .await?;
+    active_url = resolved.final_url;
+    let mut response = resolved.response;
 
     if downloaded > 0 && response.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
         fs::remove_file(&temporary).await.map_err(|error| {
@@ -88,7 +95,9 @@ pub(crate) async fn download_single_stream(
             "The server could not satisfy the byte range; restarted download from the beginning."
                 .to_owned(),
         );
-        response = send_stream_request(&client, url.clone(), 0, None, control).await?;
+        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await?;
+        active_url = resolved.final_url;
+        response = resolved.response;
     }
 
     let mut total = response.content_length();
@@ -123,7 +132,9 @@ pub(crate) async fn download_single_stream(
                         "The remote file changed on the server; restarted download from the beginning."
                             .to_owned(),
                     );
-                    response = send_stream_request(&client, url.clone(), 0, None, control).await?;
+                    resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await?;
+                    active_url = resolved.final_url;
+                    response = resolved.response;
                 }
             }
         }
@@ -252,13 +263,15 @@ pub(crate) async fn download_single_stream(
                         wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                         let next_request = if supports_range && downloaded > 0 {
-                            send_stream_request(&client, url.clone(), downloaded, new_validator.as_ref(), control).await
+                            send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher).await
                         } else {
-                            send_stream_request(&client, url.clone(), 0, None, control).await
+                            send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await
                         };
 
                         match next_request {
-                            Ok(new_response) => {
+                            Ok(next_resolved) => {
+                                active_url = next_resolved.final_url;
+                                let new_response = next_resolved.response;
                                 if new_response.status() == reqwest::StatusCode::FORBIDDEN
                                     || new_response.status() == reqwest::StatusCode::GONE
                                 {
@@ -348,13 +361,15 @@ pub(crate) async fn download_single_stream(
                     wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                     let next_request = if supports_range && downloaded > 0 {
-                        send_stream_request(&client, url.clone(), downloaded, new_validator.as_ref(), control).await
+                        send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher).await
                     } else {
-                        send_stream_request(&client, url.clone(), 0, None, control).await
+                        send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await
                     };
 
                     match next_request {
-                        Ok(new_response) => {
+                        Ok(next_resolved) => {
+                            active_url = next_resolved.final_url;
+                            let new_response = next_resolved.response;
                             if new_response.status() == reqwest::StatusCode::FORBIDDEN
                                 || new_response.status() == reqwest::StatusCode::GONE
                             {
@@ -520,23 +535,31 @@ pub(crate) async fn download_single_stream(
 
 pub(crate) async fn send_stream_request(
     client: &reqwest::Client,
-    url: Url,
+    url: &Url,
     offset: u64,
     validator: Option<&SegmentValidator>,
     control: &mut DownloadControl,
-) -> AppResult<reqwest::Response> {
-    let client = client.clone();
-    let val_header = validator.map(|v| v.header());
-    let val_value = validator.map(|v| v.if_range_value().to_owned());
-    send_with_retry(control, move || {
-        let mut request = client.get(url.clone());
-        if offset > 0 {
-            request = request.header(reqwest::header::RANGE, format!("bytes={offset}-"));
-            if let (Some(ref h), Some(ref v)) = (&val_header, &val_value) {
-                request = request.header(h.clone(), v.clone());
-            }
-        }
-        request
-    })
-    .await
+    override_creds: Option<&(String, String)>,
+    matcher: Option<&crate::domain::credentials::CredentialMatcher>,
+) -> AppResult<super::auth::ResolvedResponse> {
+    let resolved = super::auth::send_authenticated_request_with_redirects(
+        client,
+        url,
+        control,
+        override_creds,
+        matcher,
+        if offset > 0 { Some(offset) } else { None },
+        None,
+        if offset > 0 { validator } else { None },
+    )
+    .await?;
+
+    if resolved.response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppError {
+            code: "http_auth_required",
+            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
+        });
+    }
+
+    Ok(resolved)
 }

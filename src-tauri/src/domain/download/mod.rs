@@ -23,7 +23,7 @@ pub use filename::{
 };
 pub use protocol::DownloadProtocol;
 pub use record::{DownloadRecord, DownloadSegmentProgress, SerializableDownloadRecordRef};
-pub use request::DownloadRequest;
+pub use request::{DownloadCredentials, DownloadRequest};
 pub use review_request::ReviewDownloadRequest;
 pub use status::DownloadStatus;
 pub use validated_request::ValidatedDownloadRequest;

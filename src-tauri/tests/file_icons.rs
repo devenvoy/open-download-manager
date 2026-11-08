@@ -65,6 +65,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             etag: None,
             validator: None,
             conflict_policy: None,
+            credentials_override: None,
         },
         DownloadRecord {
             id: "2".to_string(),
@@ -98,6 +99,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             etag: None,
             validator: None,
             conflict_policy: None,
+            credentials_override: None,
         },
         DownloadRecord {
             id: "3".to_string(),
@@ -131,6 +133,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             etag: None,
             validator: None,
             conflict_policy: None,
+            credentials_override: None,
         },
     ];
 
@@ -180,6 +183,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
         etag: None,
         validator: None,
         conflict_policy: None,
+        credentials_override: None,
     }];
     let loaded_again = provider.load(&extra);
     assert!(!loaded_again, "already loaded extension should not reload");

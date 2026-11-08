@@ -33,6 +33,7 @@ use connection::{FtpConnection, DEFAULT_FTP_PORT, DEFAULT_FTP_TIMEOUT};
 use data_channel::FtpDataChannel;
 use error::FtpError;
 use stream::stream_ftp_payload;
+use crate::infrastructure::credentials::CredentialStore;
 
 pub const TEMPORARY_DOWNLOAD_PREFIX: &str = ".open-download-manager-";
 
@@ -40,6 +41,7 @@ pub const TEMPORARY_DOWNLOAD_PREFIX: &str = ".open-download-manager-";
 pub struct FtpDownloadExecutor {
     allocator: DestinationAllocator,
     passive_default: bool,
+    credential_store: Option<Arc<CredentialStore>>,
 }
 
 impl FtpDownloadExecutor {
@@ -47,6 +49,7 @@ impl FtpDownloadExecutor {
         Self {
             allocator,
             passive_default: true,
+            credential_store: None,
         }
     }
 
@@ -54,7 +57,13 @@ impl FtpDownloadExecutor {
         Self {
             allocator,
             passive_default,
+            credential_store: None,
         }
+    }
+
+    pub fn with_credentials(mut self, credential_store: Arc<CredentialStore>) -> Self {
+        self.credential_store = Some(credential_store);
+        self
     }
 
     pub fn allocator(&self) -> DestinationAllocator {
@@ -153,13 +162,20 @@ impl FtpDownloadExecutor {
             }
         };
 
-        // Extract credentials: from URL if present
-        let username = if !url.username().is_empty() {
-            Some(percent_decode(url.username()))
+        // Extract credentials:
+        // Priority: 1. download.credentials_override, 2. inline URL credentials, 3. CredentialStore matcher
+        let (username, password) = if let Some((ref u, ref p)) = download.credentials_override {
+            (Some(u.clone()), Some(p.clone()))
+        } else if !url.username().is_empty() {
+            (
+                Some(percent_decode(url.username())),
+                url.password().map(|p| percent_decode(p)),
+            )
+        } else if let Some(rule) = self.credential_store.as_ref().and_then(|s| s.matcher().ok()).and_then(|m| m.match_url(&url).cloned()) {
+            (Some(rule.username.clone()), Some(rule.secret.clone()))
         } else {
-            None
+            (None, None)
         };
-        let password = url.password().map(|p| percent_decode(p));
 
         // 1. Connect control channel
         let mut conn = FtpConnection::connect(host, port, DEFAULT_FTP_TIMEOUT)

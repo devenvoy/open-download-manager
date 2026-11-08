@@ -5,7 +5,7 @@ use crate::{
     domain::settings::{ProxySettings, ProxyTestResult},
 };
 
-use super::policy::{CONNECT_TIMEOUT_SECONDS, MAX_REDIRECTS};
+use super::policy::CONNECT_TIMEOUT_SECONDS;
 
 /// Extension trait providing reqwest proxy conversion for `ProxySettings`
 /// without polluting the domain layer with infrastructure types.
@@ -70,7 +70,7 @@ pub fn build_reqwest_proxy(proxy: &ProxySettings) -> AppResult<reqwest::Proxy> {
 pub fn create_http_client(proxy: Option<&ProxySettings>) -> AppResult<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
-        .redirect(reqwest::redirect::Policy::limited(MAX_REDIRECTS));
+        .redirect(reqwest::redirect::Policy::none());
 
     if let Some(proxy_config) = proxy {
         if proxy_config.enabled {

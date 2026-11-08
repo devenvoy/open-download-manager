@@ -2,6 +2,7 @@ pub mod atomic_file;
 pub mod autostart;
 pub mod bridge;
 pub mod browser;
+pub mod credentials;
 pub(crate) mod data_file_policy;
 pub mod download_history_store;
 pub mod file_icons;

@@ -397,3 +397,43 @@ test('media tools methods invoke get_media_tools_status and install_media_tool',
   assert.equal(calls[1][0], 'install_media_tool');
   assert.deepEqual(calls[1][1], { tool: 'yt-dlp' });
 });
+
+test('credential rules methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        if (args[0] === 'list_credential_rules') {
+          return [
+            { id: 'rule-1', scheme: 'https', host: 'site.test', pathPrefix: '/team/', username: 'alice', secret: '******' }
+          ];
+        }
+        if (args[0] === 'save_credential_rule') {
+          return { id: 'rule-2', ...args[1].rule, secret: '******' };
+        }
+        return null;
+      }
+    }
+  });
+
+  const rules = await api.listCredentialRules();
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].host, 'site.test');
+  assert.equal(calls[0][0], 'list_credential_rules');
+
+  const saved = await api.saveCredentialRule({
+    scheme: 'https',
+    host: 'site2.test',
+    pathPrefix: '/',
+    username: 'bob',
+    secret: 'password123'
+  });
+  assert.equal(saved.username, 'bob');
+  assert.equal(calls[1][0], 'save_credential_rule');
+  assert.equal(calls[1][1].rule.username, 'bob');
+
+  await api.deleteCredentialRule('rule-1');
+  assert.equal(calls[2][0], 'delete_credential_rule');
+  assert.deepEqual(calls[2][1], { id: 'rule-1' });
+});

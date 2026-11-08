@@ -55,6 +55,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             etag: None,
             validator: None,
             conflict_policy: None,
+            credentials_override: None,
         });
     }
     records

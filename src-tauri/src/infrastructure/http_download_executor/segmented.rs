@@ -29,18 +29,40 @@ use super::{
 
 pub const MIN_CHUNK_REASSIGN_BYTES: u64 = 2 * 1024 * 1024; // 2 MB minimum remaining to split a chunk
 
+pub struct RangeDiscovery {
+    pub validator: SegmentValidator,
+    pub cd_filename: Option<String>,
+    pub final_url: Url,
+    pub auth_header: Option<String>,
+}
+
 pub(crate) async fn discover_ranges(
     client: &reqwest::Client,
     url: Url,
     control: &mut DownloadControl,
-) -> AppResult<Option<(SegmentValidator, Option<String>)>> {
-    let response = send_with_retry(control, || {
-        client
-            .get(url.clone())
-            .header(reqwest::header::RANGE, "bytes=0-0")
-            .header(reqwest::header::ACCEPT_ENCODING, "identity")
-    })
+    override_creds: Option<&(String, String)>,
+    matcher: Option<&crate::domain::credentials::CredentialMatcher>,
+) -> AppResult<Option<RangeDiscovery>> {
+    let resolved = super::auth::send_authenticated_request_with_redirects(
+        client,
+        &url,
+        control,
+        override_creds,
+        matcher,
+        Some(0),
+        Some(0),
+        None,
+    )
     .await?;
+
+    let response = resolved.response;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppError {
+            code: "http_auth_required",
+            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
+        });
+    }
+
     if response.status() != reqwest::StatusCode::PARTIAL_CONTENT
         || response
             .headers()
@@ -60,7 +82,12 @@ pub(crate) async fn discover_ranges(
         .get(reqwest::header::CONTENT_DISPOSITION)
         .and_then(|value| value.to_str().ok())
         .and_then(crate::domain::download::parse_content_disposition_filename);
-    Ok(extract_validator(&response, total).map(|v| (v, cd_filename)))
+    Ok(extract_validator(&response, total).map(|v| RangeDiscovery {
+        validator: v,
+        cd_filename,
+        final_url: resolved.final_url,
+        auth_header: resolved.auth_header,
+    }))
 }
 
 pub(crate) async fn segment_ranges(
@@ -164,9 +191,11 @@ pub(crate) async fn download_segments(
     control: &mut DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
+    auth_header: Option<String>,
 ) -> AppResult<Vec<DownloadSegmentProgress>> {
     let segments_shared = Arc::new(Mutex::new(segments));
     let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
+    let auth_shared: Option<Arc<str>> = auth_header.map(Arc::from);
 
     // Initial progress report
     {
@@ -202,6 +231,7 @@ pub(crate) async fn download_segments(
         let worker_rate_limiter = rate_limiter.clone();
         let worker_progress = progress_handler.clone();
         let worker_meter = meter.clone();
+        let worker_auth = auth_shared.clone();
 
         jobs.spawn(async move {
             run_segment_worker(
@@ -216,6 +246,7 @@ pub(crate) async fn download_segments(
                 worker_rate_limiter,
                 worker_progress,
                 worker_meter,
+                worker_auth,
             )
             .await
         });
@@ -263,6 +294,7 @@ async fn run_segment_worker(
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: DownloadProgressHandler,
     meter: Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
+    auth_header: Option<Arc<str>>,
 ) -> AppResult<()> {
     loop {
         if let Some(reason) = control.current_stop_reason() {
@@ -375,6 +407,7 @@ async fn run_segment_worker(
                     rate_limiter.clone(),
                     &progress_handler,
                     &meter,
+                    auth_header.clone(),
                 )
                 .await?;
             }
@@ -398,6 +431,7 @@ async fn download_chunk(
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
     meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
+    auth_header: Option<Arc<str>>,
 ) -> AppResult<()> {
     let (start_offset, end_offset, downloaded_init) = {
         let guard = segments
@@ -426,14 +460,26 @@ async fn download_chunk(
     let req_start = start_offset + downloaded_init;
     let req_end = end_offset;
 
+    let auth_for_init = auth_header.clone();
     let mut response = send_with_retry(control, || {
-        client
+        let mut req = client
             .get(url.clone())
             .header(reqwest::header::RANGE, format!("bytes={req_start}-{req_end}"))
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
-            .header(validator.header(), validator.if_range_value())
+            .header(validator.header(), validator.if_range_value());
+        if let Some(ref auth) = auth_for_init {
+            req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+        }
+        req
     })
     .await?;
+
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppError {
+            code: "http_auth_required",
+            message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
+        });
+    }
 
     if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
         return Err(AppError::download(
@@ -544,19 +590,30 @@ async fn download_chunk(
                             (guard[index].start, guard[index].end)
                         };
                         let start = cur_start + downloaded;
+                        let auth_retry1 = auth_header.clone();
                         let next_resp = send_with_retry(control, || {
-                            client
+                            let mut req = client
                                 .get(url.clone())
                                 .header(
                                     reqwest::header::RANGE,
                                     format!("bytes={start}-{cur_end}"),
                                 )
                                 .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                                .header(validator.header(), validator.if_range_value())
+                                .header(validator.header(), validator.if_range_value());
+                            if let Some(ref auth) = auth_retry1 {
+                                req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+                            }
+                            req
                         })
                         .await;
                         match next_resp {
                             Ok(new_resp) => {
+                                if new_resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+                                    return Err(AppError {
+                                        code: "http_auth_required",
+                                        message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
+                                    });
+                                }
                                 if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                     if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
                                         let entity_ok = new_resp
@@ -609,19 +666,30 @@ async fn download_chunk(
                         (guard[index].start, guard[index].end)
                     };
                     let start = cur_start + downloaded;
+                    let auth_retry2 = auth_header.clone();
                     let next_resp = send_with_retry(control, || {
-                        client
+                        let mut req = client
                             .get(url.clone())
                             .header(
                                 reqwest::header::RANGE,
                                 format!("bytes={start}-{cur_end}"),
                             )
                             .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                            .header(validator.header(), validator.if_range_value())
+                            .header(validator.header(), validator.if_range_value());
+                        if let Some(ref auth) = auth_retry2 {
+                            req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+                        }
+                        req
                     })
                     .await;
                     match next_resp {
                         Ok(new_resp) => {
+                            if new_resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+                                return Err(AppError {
+                                    code: "http_auth_required",
+                                    message: "Authentication required (HTTP 401). Configure site credentials in Options.".to_owned(),
+                                });
+                            }
                             if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                 if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
                                     let entity_ok = new_resp

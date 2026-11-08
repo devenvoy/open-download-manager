@@ -405,6 +405,7 @@ fn create_test_record(id: &str, url: &str, filename: &str, dir: &str) -> Downloa
         validator: None,
         conflict_policy: None,
         sabr: None,
+        credentials_override: None,
     }
 }
 

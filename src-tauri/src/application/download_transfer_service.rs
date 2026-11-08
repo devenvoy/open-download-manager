@@ -290,6 +290,9 @@ impl DownloadTransferService {
                     etag: None,
                     validator: None,
                     conflict_policy: request.conflict_policy,
+                    credentials_override: request.credentials.as_ref().map(|c| {
+                        (c.username.clone(), c.password.clone().unwrap_or_default())
+                    }),
                 }
             })
             .collect::<Vec<_>>();
@@ -378,6 +381,7 @@ impl DownloadTransferService {
                     etag: None,
                     validator: None,
                     conflict_policy: None,
+                    credentials_override: None,
                 }
             })
             .collect();

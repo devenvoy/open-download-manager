@@ -1250,7 +1250,74 @@ function openSettings() {
 
 	$("#settings-error").hidden = true;
 	refreshMediaToolsStatus();
+	refreshCredentialRules();
 	showDialog("#settings-dialog");
+}
+async function refreshCredentialRules() {
+	if (!api.listCredentialRules) return;
+	const listEl = $("#credentials-list");
+	if (!listEl) return;
+	try {
+		const rules = await api.listCredentialRules();
+		listEl.innerHTML = "";
+		if (!rules || rules.length === 0) {
+			const tr = document.createElement("tr");
+			tr.innerHTML = '<td colspan="7" style="text-align:center; color: var(--text-muted, #888); padding: 8px;">No stored site credentials.</td>';
+			listEl.appendChild(tr);
+			return;
+		}
+		for (const rule of rules) {
+			const tr = document.createElement("tr");
+			tr.style.borderBottom = "1px solid var(--border-color, #e5e7eb)";
+
+			const tdScheme = document.createElement("td");
+			tdScheme.style.padding = "4px";
+			tdScheme.textContent = rule.scheme;
+
+			const tdHost = document.createElement("td");
+			tdHost.style.padding = "4px";
+			tdHost.style.fontWeight = "600";
+			tdHost.textContent = rule.host;
+
+			const tdPort = document.createElement("td");
+			tdPort.style.padding = "4px";
+			tdPort.textContent = rule.port ? String(rule.port) : "default";
+
+			const tdPath = document.createElement("td");
+			tdPath.style.padding = "4px";
+			tdPath.textContent = rule.pathPrefix;
+
+			const tdUser = document.createElement("td");
+			tdUser.style.padding = "4px";
+			tdUser.textContent = rule.username;
+
+			const tdPass = document.createElement("td");
+			tdPass.style.padding = "4px";
+			tdPass.textContent = "******";
+
+			const tdAction = document.createElement("td");
+			tdAction.style.padding = "4px";
+			const delBtn = document.createElement("button");
+			delBtn.type = "button";
+			delBtn.className = "small-button delete-cred-btn";
+			delBtn.textContent = "Delete";
+			delBtn.style.color = "#dc2626";
+			delBtn.dataset.id = rule.id;
+			tdAction.appendChild(delBtn);
+
+			tr.appendChild(tdScheme);
+			tr.appendChild(tdHost);
+			tr.appendChild(tdPort);
+			tr.appendChild(tdPath);
+			tr.appendChild(tdUser);
+			tr.appendChild(tdPass);
+			tr.appendChild(tdAction);
+
+			listEl.appendChild(tr);
+		}
+	} catch (e) {
+		console.error("Could not refresh credentials list:", e);
+	}
 }
 async function refreshMediaToolsStatus() {
 	if (!api.getMediaToolsStatus) return;
@@ -2124,9 +2191,9 @@ $("#add-form").addEventListener("submit", async (event) => {
 			} catch {
 				throw new Error(`Invalid address: ${url}`);
 			}
-			if (!["http:", "https:"].includes(parsed.protocol))
+			if (!["http:", "https:", "ftp:"].includes(parsed.protocol))
 				throw new Error(
-					"Download addresses must begin with http:// or https://.",
+					"Download addresses must begin with http://, https://, or ftp://.",
 				);
 		}
 		if (filename && urls.length !== 1)
@@ -2152,12 +2219,17 @@ $("#add-form").addEventListener("submit", async (event) => {
 					[selectedCategory]: directory,
 				},
 			});
+		const authEnabled = $("#add-auth-enabled")?.checked;
+		const authUser = $("#add-auth-user")?.value.trim();
+		const authPass = $("#add-auth-pass")?.value || "";
+		const credentials = (authEnabled && authUser) ? { username: authUser, password: authPass || null } : undefined;
 		const data = {
 			...(filename ? { filename } : {}),
 			...(scheduledAt ? { scheduledAt } : {}),
 			...(directory ? { directory } : {}),
 			...(selectedCategory ? { category: selectedCategory } : {}),
 			...(chosenYouTubeFormat ? { youtubeFormat: chosenYouTubeFormat } : {}),
+			...(credentials ? { credentials } : {}),
 			description,
 			queueOnly: event.submitter?.dataset.queueOnly === "true",
 		};
@@ -2362,7 +2434,78 @@ start().then(async () => {
 		showDetails(progressMode);
 		return;
 	}
-	if (optionsMode) {
+	$("#add-auth-enabled")?.addEventListener("change", (e) => {
+	const fields = $("#add-auth-fields");
+	if (fields) fields.hidden = !e.target.checked;
+});
+
+$("#cred-save-btn")?.addEventListener("click", async () => {
+	const scheme = $("#cred-scheme").value;
+	const host = $("#cred-host").value.trim();
+	const portVal = $("#cred-port").value.trim();
+	const pathPrefix = $("#cred-path").value.trim() || "/";
+	const username = $("#cred-user").value.trim();
+	const secret = $("#cred-pass").value;
+	const statusEl = $("#cred-status");
+
+	if (!host) {
+		if (statusEl) {
+			statusEl.textContent = "Please enter a valid host.";
+			statusEl.style.color = "#dc2626";
+		}
+		return;
+	}
+	if (!username) {
+		if (statusEl) {
+			statusEl.textContent = "Please enter a username.";
+			statusEl.style.color = "#dc2626";
+		}
+		return;
+	}
+
+	const port = portVal ? parseInt(portVal, 10) : null;
+	try {
+		await api.saveCredentialRule({
+			scheme,
+			host,
+			port,
+			pathPrefix,
+			username,
+			secret
+		});
+		$("#cred-host").value = "";
+		$("#cred-port").value = "";
+		$("#cred-path").value = "/";
+		$("#cred-user").value = "";
+		$("#cred-pass").value = "";
+		if (statusEl) {
+			statusEl.textContent = "Login rule saved.";
+			statusEl.style.color = "#166534";
+			setTimeout(() => { statusEl.textContent = ""; }, 3000);
+		}
+		await refreshCredentialRules();
+	} catch (err) {
+		if (statusEl) {
+			statusEl.textContent = `Error: ${messageOf(err)}`;
+			statusEl.style.color = "#dc2626";
+		}
+	}
+});
+
+$("#credentials-list")?.addEventListener("click", async (e) => {
+	const btn = e.target.closest(".delete-cred-btn");
+	if (!btn) return;
+	const id = btn.dataset.id;
+	if (!id) return;
+	try {
+		await api.deleteCredentialRule(id);
+		await refreshCredentialRules();
+	} catch (err) {
+		notify(`Failed to delete credential rule: ${messageOf(err)}`, true);
+	}
+});
+
+if (optionsMode) {
 		openSettings();
 		return;
 	}

@@ -227,3 +227,26 @@ pub async fn install_media_tool(
     let manager = crate::infrastructure::media::MediaToolsManager::default_service();
     manager.download_tool(tool).await
 }
+
+#[tauri::command]
+pub fn list_credential_rules(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<crate::domain::credentials::CredentialRule>> {
+    state.credentials.list_redacted()
+}
+
+#[tauri::command]
+pub fn save_credential_rule(
+    state: State<'_, AppState>,
+    rule: crate::domain::credentials::CredentialRule,
+) -> AppResult<crate::domain::credentials::CredentialRule> {
+    state.credentials.save(rule)
+}
+
+#[tauri::command]
+pub fn delete_credential_rule(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<()> {
+    state.credentials.delete(&id)
+}

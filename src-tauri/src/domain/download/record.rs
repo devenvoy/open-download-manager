@@ -74,6 +74,8 @@ pub struct DownloadRecord {
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
+    #[serde(skip)]
+    pub credentials_override: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

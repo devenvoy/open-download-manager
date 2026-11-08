@@ -377,6 +377,16 @@
 							>Optional</span
 						>
 					</div>
+					<div class="form-line auth-toggle-line">
+						<label class="checkbox-label" for="add-auth-enabled">
+							<input type="checkbox" id="add-auth-enabled" />
+							Use basic authentication for this download
+						</label>
+					</div>
+					<div id="add-auth-fields" class="form-line auth-fields" hidden style="display: flex; gap: 8px;">
+						<input type="text" id="add-auth-user" placeholder="Username" autocomplete="off" style="flex: 1;" />
+						<input type="password" id="add-auth-pass" placeholder="Password" autocomplete="off" style="flex: 1;" />
+					</div>
 					<p
 						class="form-error"
 						id="add-error"
@@ -685,6 +695,45 @@
 								type="text"
 								id="capture-excluded-addresses"
 								placeholder="192.168.1.100, /sensitive/, https://internal..." />
+						</div>
+					</fieldset>
+					<fieldset id="credentials-fieldset">
+						<legend>Site Logins &amp; Passwords</legend>
+						<p class="field-help">
+							Manage saved credentials for protected HTTP and FTP downloads. Longest-prefix matching will automatically select the right credentials without leaking across hosts or out-of-scope paths.
+						</p>
+						<div class="credentials-manager">
+							<div class="credentials-table-wrapper" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); margin-bottom: 8px;">
+								<table class="credentials-table" id="credentials-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+									<thead>
+										<tr style="background: var(--bg-secondary, #f3f4f6); text-align: left;">
+											<th style="padding: 4px;">Scheme</th>
+											<th style="padding: 4px;">Host</th>
+											<th style="padding: 4px;">Port</th>
+											<th style="padding: 4px;">Path Prefix</th>
+											<th style="padding: 4px;">User</th>
+											<th style="padding: 4px;">Password</th>
+											<th style="padding: 4px;">Action</th>
+										</tr>
+									</thead>
+									<tbody id="credentials-list">
+									</tbody>
+								</table>
+							</div>
+							<div class="credentials-add-form" id="credentials-add-form" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+								<select id="cred-scheme" style="font-size: 11px; padding: 2px;">
+									<option value="https">https</option>
+									<option value="http">http</option>
+									<option value="ftp">ftp</option>
+								</select>
+								<input type="text" id="cred-host" placeholder="Host (e.g. site.com)" style="font-size: 11px; padding: 2px; width: 110px;" />
+								<input type="number" id="cred-port" placeholder="Port" min="1" max="65535" style="font-size: 11px; padding: 2px; width: 50px;" />
+								<input type="text" id="cred-path" placeholder="Path (e.g. /team/)" value="/" style="font-size: 11px; padding: 2px; width: 80px;" />
+								<input type="text" id="cred-user" placeholder="User" style="font-size: 11px; padding: 2px; width: 80px;" autocomplete="off" />
+								<input type="password" id="cred-pass" placeholder="Password" style="font-size: 11px; padding: 2px; width: 80px;" autocomplete="off" />
+								<button type="button" class="small-button" id="cred-save-btn">Add Rule</button>
+							</div>
+							<span id="cred-status" class="field-help" style="display: block; margin-top: 4px;"></span>
 						</div>
 					</fieldset>
 					<fieldset>
