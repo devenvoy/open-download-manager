@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-06
+// Reason: perf: streamline snapshot IPC construction and tune segment assembly buffer
+// Description: High-level state snapshot combining downloads, settings, and integration health for frontend.
+
 mod browser_status;
 mod download_summary;
 mod file_icon;

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Description: Tauri IPC event publisher pushing real-time download updates to frontend windows.
+
 use tauri::{AppHandle, Emitter, LogicalSize, Manager};
 
 use crate::{

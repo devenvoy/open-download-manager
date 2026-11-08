@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Unit tests verifying bitrate formatting, resolution badges, and quality labels in the extension UI.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

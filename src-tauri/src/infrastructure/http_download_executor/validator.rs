@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Description: HTTP validator parser extracting Content-Range, ETag, and Last-Modified headers.
+
 use reqwest::header::HeaderName;
 
 use crate::{

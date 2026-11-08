@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: Platform-specific media tool adapter trait for locating and executing binary dependencies.
+
 use std::path::{Path, PathBuf};
 
 use crate::{

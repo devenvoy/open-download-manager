@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Media panel candidate format representation containing URLs, bitrates, resolutions, and roles.
+
 use serde::{Deserialize, Serialize};
 
 use super::policy::redact_media_url;

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(sabr): implement YouTube SABR session normalization, Protobuf parser, and transfer deduplication (Phase G)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying sabr functionality, edge cases, and error recovery.
+
 use std::{
     io::{Read, Write},
     net::TcpListener,

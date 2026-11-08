@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-07
+// Reason: feat(media): complete YouTube media pipeline, desktop quality selector, resilient download resumption, and native messaging registration
+// Description: Media download infrastructure orchestrating specialized executors for adaptive streams.
+
 pub mod composite_executor;
 pub mod ffmpeg;
 pub mod hls_executor;

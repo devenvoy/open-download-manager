@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying commands instrumentation functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     path::{Path, PathBuf},

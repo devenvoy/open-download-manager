@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-06
+// Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Description: Integration tests verifying settings store functionality, edge cases, and error recovery.
+
 use std::fs;
 
 use open_download_manager_lib::{

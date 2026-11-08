@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: fix(engine): implement genuine auto-updater payload execution and SABR UMP streaming executor
+// Last updated: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Description: YouTube SABR streaming executor reading UMP chunks and reassembling playable media.
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

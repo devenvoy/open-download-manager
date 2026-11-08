@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase B desktop shell, system tray, and autostart
+// Last updated: 2026-11-06
+// Reason: feat(platform): implement Firefox native messaging parity, Linux multi-browser registration, and macOS/Linux autostart
+// Description: Operating system autostart integration for Windows registry and macOS launch agents.
+
 use std::path::{Path, PathBuf};
 use crate::application::error::{AppError, AppResult};
 

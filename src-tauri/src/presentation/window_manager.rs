@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Auxiliary window manager controlling progress dialogs, options windows, and dimensions.
+
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

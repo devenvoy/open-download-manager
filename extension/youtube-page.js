@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: YouTube page script intercepting player response objects and SABR streaming configurations.
+
 // Observes only player responses consumed by this YouTube page. Never initiates downloads.
 (() => {
   const publish=value=>{

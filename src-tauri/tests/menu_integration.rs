@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase D window management, menus, and text file import/export
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Integration tests verifying menu integration functionality, edge cases, and error recovery.
+
 use open_download_manager_lib::presentation::menu::menu_id_to_command;
 
 #[test]

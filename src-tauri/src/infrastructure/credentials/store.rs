@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Encrypted JSON file credential store with strict 0o600 filesystem permissions.
+
 use std::{
     fs,
     path::{Path, PathBuf},

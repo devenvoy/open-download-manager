@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Unit tests verifying extension cleanup after context invalidation and YouTube relay detachment.
+
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');

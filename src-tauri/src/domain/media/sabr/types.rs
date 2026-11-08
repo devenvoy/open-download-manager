@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Data models for SABR streaming contexts, track itags, and video identification.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

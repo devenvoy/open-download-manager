@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: FFmpeg wrapper executing stream multiplexing, track extraction, and format conversions.
+
 use std::{path::{Path, PathBuf}, process::Stdio};
 use tokio::{io::AsyncReadExt, process::Command};
 

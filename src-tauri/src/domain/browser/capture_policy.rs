@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Browser download capture policy defining confirmation modes, file types, and host exclusions.
+
 use serde::{Deserialize, Serialize};
 use url::Url;
 

@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Media candidate acceptance policies, URL redacting, and format role classification rules.
+
 use url::Url;
 
 /// The version of the media capture policy specification.

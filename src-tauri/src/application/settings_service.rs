@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: fix(network): report proxy reconfiguration failures instead of silently saving (Closes #27) (#42)
+// Description: Application service managing user preferences, runtime validation, and configuration persistence.
+
 use std::path::PathBuf;
 
 use crate::{

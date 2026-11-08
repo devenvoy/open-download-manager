@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Last updated: 2026-11-08
+// Reason: refactor(architecture): decouple proxy domain model from reqwest and encapsulate settings update orchestration
+// Description: Integration tests verifying proxy functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},

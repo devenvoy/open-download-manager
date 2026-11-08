@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Server-Adaptive BitRate (SABR) YouTube protocol definitions and stream decoders.
+
 pub mod proto;
 pub mod request;
 pub mod sanitize;

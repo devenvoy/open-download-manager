@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keep the download button over the visible part of its video
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Floating media panel position calculator keeping the download button anchored over visible video elements.
+
 (function (root) {
   // Geometry for the floating download panel: the panel follows the part of
   // its video that is actually visible instead of disappearing as soon as the

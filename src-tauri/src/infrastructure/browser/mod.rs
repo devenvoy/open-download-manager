@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-06
+// Reason: feat(platform): implement Firefox native messaging parity, Linux multi-browser registration, and macOS/Linux autostart
+// Description: Browser detection and native messaging manifest registration implementations.
+
 pub mod registration;
 pub mod scanner;
 

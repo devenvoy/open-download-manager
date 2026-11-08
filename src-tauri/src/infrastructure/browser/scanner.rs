@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Filesystem scanner locating browser binary paths and user profile extension directories.
+
 use std::{
     path::{Path, PathBuf},
     process::Command,

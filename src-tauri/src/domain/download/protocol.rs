@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: Supported transfer protocols enumeration (HTTP, HTTPS, FTP) and scheme validation.
+
 use serde::{Deserialize, Serialize};
 
 use super::download_policy::{FTP_PROTOCOL, HTTPS_PROTOCOL, HTTP_PROTOCOL};

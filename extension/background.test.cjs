@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Unit tests verifying background service worker download interception, tab caching, and native messaging handoff.
+
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');

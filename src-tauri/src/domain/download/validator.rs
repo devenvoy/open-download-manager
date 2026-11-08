@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Last updated: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Description: Transfer validation entities including ETags and Last-Modified validators for resume integrity.
+
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

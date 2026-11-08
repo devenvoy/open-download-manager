@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
+
 use application::{
     download_history_service::DownloadHistoryService,
     download_transfer_service::DownloadTransferService, settings_service::SettingsService,

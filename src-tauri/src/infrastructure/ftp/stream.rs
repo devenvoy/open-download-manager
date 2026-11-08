@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: FTP stream reader writing downloaded data to disk and calculating transfer rates.
+
 use std::{
     sync::Arc,
     time::{Duration, Instant},

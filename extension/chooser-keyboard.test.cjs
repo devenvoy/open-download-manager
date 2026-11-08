@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keyboard navigation for the quality chooser
+// Last updated: 2026-11-06
+// Reason: extension: keyboard navigation for the quality chooser
+// Description: Unit tests verifying keyboard navigation (arrows, home, end, escape) in the media quality menu.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

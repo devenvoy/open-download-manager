@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: HTTP authorization header construction for Basic and Bearer token requests.
+
 use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, LOCATION, RANGE};
 use url::Url;
 

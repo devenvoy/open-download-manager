@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: FTP protocol error mapping converting server response codes to actionable application errors.
+
 use crate::application::error::AppError;
 
 #[derive(Debug)]

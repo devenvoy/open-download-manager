@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Core download entity representing active/completed transfers, validators, and file paths.
+
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 

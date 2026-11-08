@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: Binary tool downloader retrieving sandboxed FFmpeg and yt-dlp builds from official mirrors.
+
 use std::{future::Future, path::Path, pin::Pin};
 
 use tokio::io::AsyncWriteExt;

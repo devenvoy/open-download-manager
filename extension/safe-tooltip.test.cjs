@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keep raw URLs out of quality-row tooltips and add #6 regression coverage
+// Last updated: 2026-11-06
+// Reason: extension: keep raw URLs out of quality-row tooltips and add #6 regression coverage
+// Description: Unit tests verifying sensitive query parameter and token redaction from extension hover tooltips.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: Linux adapter locating media tools in system paths, AppImage bundles, and user libexec directories.
+
 use std::path::{Path, PathBuf};
 
 use crate::{

@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Configurable Reqwest HTTP client builder with proxy and TLS configuration.
+
 use std::time::Duration;
 
 use crate::{

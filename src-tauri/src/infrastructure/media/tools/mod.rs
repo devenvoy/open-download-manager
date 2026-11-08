@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: External media tool management module for FFmpeg and yt-dlp discovery and sandboxing.
+
 mod adapter;
 mod adapters;
 mod archive;

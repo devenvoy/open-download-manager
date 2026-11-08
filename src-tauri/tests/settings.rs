@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying settings functionality, edge cases, and error recovery.
+
 use std::{
     collections::BTreeMap,
     path::PathBuf,

@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Content script injected into web pages to detect HTML5 video elements and render media download overlay buttons.
+
 (() => {
   const api = globalThis.browser || chrome;
   const seen = new WeakSet();

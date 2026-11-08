@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Integration tests verifying media adaptive stream functionality, edge cases, and error recovery.
+
 use open_download_manager_lib::domain::media::{
     parse_dash, parse_hls, redact_media_url, DashError, HlsByteRange, MediaCandidate,
     MediaCapturePolicy, MediaRole, MediaRoute, ParsedHls,

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Integration tests verifying download category functionality, edge cases, and error recovery.
+
 use std::collections::BTreeMap;
 
 use open_download_manager_lib::domain::{category::DownloadCategory, settings::Settings};

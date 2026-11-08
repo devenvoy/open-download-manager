@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: FTP control connection client managing command-response sequences and TLS negotiation.
+
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,

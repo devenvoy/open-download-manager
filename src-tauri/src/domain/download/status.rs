@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Description: State machine enumeration defining download transfer lifecycle statuses and transitions.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]

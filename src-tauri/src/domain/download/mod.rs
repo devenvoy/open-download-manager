@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Domain models, conflict resolution, address parsing, and records for download transfers.
+
 mod action;
 mod address;
 mod conflict;

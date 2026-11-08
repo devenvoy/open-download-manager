@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Format presentation utilities formatting bitrates, resolution badges, and quality labels for UI.
+
 (function (root) {
   'use strict';
 

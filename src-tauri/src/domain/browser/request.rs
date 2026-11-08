@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Validated browser request payload representing intercepted downloads from web browsers.
+
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use url::Url;

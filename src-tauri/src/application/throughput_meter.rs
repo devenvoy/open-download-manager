@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: refactor(core): elevate transfer architecture with ThroughputMeter, serialized queue pump mutex, centralized extension config, and connection progress metrics
+// Last updated: 2026-11-07
+// Reason: refactor(core): elevate transfer architecture with ThroughputMeter, serialized queue pump mutex, centralized extension config, and connection progress metrics
+// Description: Rolling throughput meter calculating real-time download speeds with exponential smoothing.
+
 use std::time::{Duration, Instant};
 
 /// `ThroughputMeter` calculates real-time download throughput using a moving

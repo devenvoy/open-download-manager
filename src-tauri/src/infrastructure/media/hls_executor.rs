@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: HLS stream executor downloading individual media segments and assembling into continuous streams.
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

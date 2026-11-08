@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: perf: add comprehensive high-resolution benchmark suite comparing main vs optimized
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Performance benchmarking utility for measuring snapshot serialization and transfer throughput.
+
 use std::{
     borrow::Cow,
     collections::HashSet,

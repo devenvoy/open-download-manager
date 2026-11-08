@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(updater): implement auto-updater, periodic background checks, and active transfer safety guard (Phase F)
+// Last updated: 2026-11-05
+// Reason: fix(engine): implement genuine auto-updater payload execution and SABR UMP streaming executor
+// Description: Application service coordinating automatic update checks, release discovery, and binary installation.
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: YouTube-specific URL detection, format matching, and adaptive stream handoff policy.
+
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use url::Url;

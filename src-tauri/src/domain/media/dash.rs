@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: MPEG-DASH MPD manifest parser extracting representations, segment templates, and initialization URLs.
+
 use url::Url;
 
 const MAX_DASH_MANIFEST_SIZE: usize = 1024 * 1024; // 1 MiB max

@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Sanitizer for SABR media session contexts stripping expired parameters and credentials.
+
 use base64::prelude::*;
 use url::Url;
 

@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keep the download button over the visible part of its video
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Unit tests verifying video panel overlay positioning, viewport boundary clamping, and scrolling visibility.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: Domain constants governing download constraints, filename lengths, and concurrency ceilings.
+
 pub(super) const MAX_DOWNLOAD_URLS: usize = 500;
 pub(super) const MAX_URL_LENGTH_BYTES: usize = 8_192;
 pub(super) const MAX_DOWNLOAD_FILENAME_CHARACTERS: usize = 180;

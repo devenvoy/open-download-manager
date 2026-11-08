@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Extension media detection policy identifying video MIME types, streaming manifests, and sensitive URL redaction.
+
 (function(root) {
   const VIDEO_MIME_TYPES = new Set([
     'video/mp4',

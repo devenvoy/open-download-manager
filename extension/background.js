@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Extension service worker managing browser download interception, context menus, and native messaging communication.
+
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
 if(typeof importScripts==='function') importScripts('media-policy.js','hls.js','youtube-media.js','capture-evaluator.js');
 const api = globalThis.browser || chrome;

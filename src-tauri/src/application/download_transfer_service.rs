@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native HTTP download engine
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
+
 use std::{
     collections::HashMap,
     path::Path,

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Description: System integration status view model reporting native messaging host registration.
+
 use serde::{Deserialize, Serialize};
 
 use super::browser_status::BrowserStatus;

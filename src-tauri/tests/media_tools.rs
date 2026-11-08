@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: feat(media): modular production-grade media tools resolver and test suite
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: Integration tests verifying media tools functionality, edge cases, and error recovery.
+
 use std::{
     io::{Read, Write},
     net::TcpListener,

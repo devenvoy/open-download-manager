@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Filesystem utility functions for directory writability validation, available disk space, and cross-volume copy.
+
 use std::path::Path;
 
 use tokio::{

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: integrate standard crates (mime_guess, sanitize-filename, tempfile, which) and FileType vector icon catalog
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: File type catalog mapping file extensions and MIME types to category definitions and icons.
+
 use std::path::Path;
 
 use base64::Engine;

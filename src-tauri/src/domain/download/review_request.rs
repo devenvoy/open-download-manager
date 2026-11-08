@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Download confirmation review payload used by frontend confirmation dialogs.
+
 use serde::Deserialize;
 
 use crate::domain::category::DownloadCategory;

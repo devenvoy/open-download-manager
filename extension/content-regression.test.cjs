@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keep raw URLs out of quality-row tooltips and add #6 regression coverage
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Regression tests verifying multi-video panels, SPA navigations, shadow DOM discovery, and keyboard focus.
+
 // Regression coverage for issue #6: multi-video pages, nested scrolling, SPA
 // video changes, chooser keyboard interaction and tooltip sanitization,
 // driven through the real content.js with a stubbed extension boundary.

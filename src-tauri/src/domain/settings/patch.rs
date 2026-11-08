@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Partial settings patch payload for atomic configuration updates from UI dialogs.
+
 use std::collections::BTreeMap;
 
 use serde::Deserialize;

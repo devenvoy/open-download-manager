@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: FTP protocol executor coordinating authentication, directory navigation, and file transfers.
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: fix(network): report proxy reconfiguration failures instead of silently saving (Closes #27) (#42)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying proxy reconfiguration functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},

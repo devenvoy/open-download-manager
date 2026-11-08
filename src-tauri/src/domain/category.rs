@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: refactor: integrate standard crates (mime_guess, sanitize-filename, tempfile, which) and FileType vector icon catalog
+// Description: Download classification categories and file extension / MIME type classification heuristics.
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

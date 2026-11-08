@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Composite download executor routing transfers to HTTP, FTP, HLS, or YouTube executors.
+
 use std::sync::{Arc, RwLock};
 
 use crate::{

@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Evaluator determining whether intercepted browser downloads match inclusion, exclusion, or confirmation rules.
+
 /* Shared capture rule evaluator for browser extension and native messaging */
 (function(root) {
   function matchesHost(host, pattern) {

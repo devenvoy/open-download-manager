@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: URL credential matcher selecting site authentication rules using longest prefix and port rules.
+
 use url::Url;
 
 use super::rule::{default_port_for_scheme, CredentialRule};

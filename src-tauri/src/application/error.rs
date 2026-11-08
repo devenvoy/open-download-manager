@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Description: Centralized application error type with stable diagnostic error codes and messages.
+
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]

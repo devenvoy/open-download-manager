@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(playlist): implement YouTube playlist discovery, model, and batch queue controls (#21)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Integration tests verifying playlist functionality, edge cases, and error recovery.
+
 use std::sync::Arc;
 use tempfile::tempdir;
 

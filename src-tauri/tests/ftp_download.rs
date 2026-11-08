@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying ftp download functionality, edge cases, and error recovery.
+
 use std::{
     collections::HashMap,
     net::SocketAddr,

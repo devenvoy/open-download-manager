@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): complete YouTube media pipeline, desktop quality selector, resilient download resumption, and native messaging registration
+// Last updated: 2026-11-08
+// Reason: feat(transfer): implement IDM-identical chunk rebalancing, recovery, and eager probing
+// Description: YouTube format executor acquiring streaming URLs and delegating to adaptive downloaders.
+
 use std::{
     path::PathBuf,
     sync::Arc,

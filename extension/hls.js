@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Browser-side HLS master playlist parser extracting variants, audio groupings, and resolution metadata.
+
 (function(root){
   function parseHlsMaster(text,baseUrl) {
     if(typeof text!=='string' || text.length>1048576 || !text.trimStart().startsWith('#EXTM3U')) throw new Error('Invalid or oversized HLS manifest.');

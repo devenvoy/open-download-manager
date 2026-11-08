@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: fix(extension,media): card identity isolation, hover linger prefetch, resilient yt-dlp fallback, and un-silenced errors
+// Description: YouTube page media extractor detecting player streaming formats and adaptive audio/video tracks.
+
 (function(root) {
   const MAX_URL=16384, MAX_FORMATS=150;
   const text=(value,max=200)=>String(value||'').slice(0,max);

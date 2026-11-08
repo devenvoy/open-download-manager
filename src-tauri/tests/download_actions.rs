@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying download actions functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},

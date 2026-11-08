@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Inbound download creation request carrying URLs, optional credentials, category, and options.
+
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};

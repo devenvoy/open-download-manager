@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-06
+// Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Description: Abstractions, traits, control signals, and cancellation error types for download executors.
+
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use tokio::sync::watch;

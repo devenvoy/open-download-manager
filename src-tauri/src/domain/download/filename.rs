@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(transfer): add FTP transfers with passive mode, authentication, and resume (Closes #28)
+// Description: Filename sanitization, reserved Windows name guards, and generic name detection helpers.
+
 use url::Url;
 
 use super::download_policy::{

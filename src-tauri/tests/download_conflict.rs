@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying download conflict functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},

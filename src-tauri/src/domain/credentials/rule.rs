@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Domain model for site-specific credential rules with hostname, port, and path prefix criteria.
+
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_HTTP_PORT: u16 = 80;

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Application service managing download history, record queries, state transitions, and filtering.
+
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};

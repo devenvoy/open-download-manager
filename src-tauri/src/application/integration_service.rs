@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Last updated: 2026-11-05
+// Reason: feat(integration): decouple from upstream Web Store, purge legacy IDs, and add macOS native messaging support
+// Description: Application service detecting installed browsers and registering native messaging manifests.
+
 use std::{
     path::PathBuf,
     sync::{

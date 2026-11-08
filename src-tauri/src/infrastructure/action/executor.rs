@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Last updated: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Description: System action executor handling process execution, timeout guards, audio playback, and power states.
+
 use std::{
     future::Future,
     path::{Path, PathBuf},

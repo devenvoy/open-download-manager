@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-07
+// Reason: refactor(core): elevate transfer architecture with ThroughputMeter, serialized queue pump mutex, centralized extension config, and connection progress metrics
+// Description: Manifest installation logic writing browser-specific native messaging JSON files.
+
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 

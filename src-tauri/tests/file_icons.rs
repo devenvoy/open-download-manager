@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(media): implement notifications, file icons, and adaptive dual-stream muxing (Phase E)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying file icons functionality, edge cases, and error recovery.
+
 use std::{
     collections::BTreeMap,
     path::PathBuf,

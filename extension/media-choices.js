@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Media format deduplication and sorting logic presenting available streams to the user.
+
 (function(root){
   function assetKey(value) {
     try {

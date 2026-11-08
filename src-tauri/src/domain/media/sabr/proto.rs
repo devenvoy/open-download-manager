@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: UMP (Universal Media Protocol) chunk framing and variable-length integer encoding.
+
 pub struct ProtoReader<'a> {
     pub data: &'a [u8],
 }

@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-10-24
+// Reason: Initial public release
+// Description: Unit tests verifying browser-side HLS master playlist parsing, separate audio pairing, and relative URL handling.
+
 const test=require('node:test');const assert=require('node:assert/strict');const {parseHlsMaster}=require('./hls.js');
 test('HLS master uses actual resolution bandwidth codecs and relative variants',()=>{
   const items=parseHlsMaster('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"\n720/video.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,AVERAGE-BANDWIDTH=2000000,RESOLUTION=1920x1080\nhttps://cdn.example/high.m3u8','https://example.com/master.m3u8');

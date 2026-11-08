@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(transfer): implement Phase 0-5 downloader improvement plan
+// Last updated: 2026-11-07
+// Reason: feat(transfer): implement Phase 0-5 downloader improvement plan
+// Description: Transfer performance metrics collector recording bandwidth, duration, and fallback occurrences.
+
 use std::time::Instant;
 
 #[derive(Debug, Clone)]

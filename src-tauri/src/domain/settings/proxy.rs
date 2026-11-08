@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Last updated: 2026-11-08
+// Reason: refactor(architecture): decouple proxy domain model from reqwest and encapsulate settings update orchestration
+// Description: Proxy server configuration entity supporting HTTP, HTTPS, and SOCKS5 proxy protocols.
+
 use serde::{Deserialize, Serialize};
 
 use super::validation_error::SettingsValidationError;

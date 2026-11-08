@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Description: Default configuration constants and boundary values for application settings.
+
 pub(super) const DEFAULT_MAX_CONCURRENT_DOWNLOADS: u8 = 3;
 pub(super) const DEFAULT_CONNECTIONS_PER_DOWNLOAD: u8 = 8;
 pub(super) const DEFAULT_SPEED_LIMIT_KBPS: u32 = 0;

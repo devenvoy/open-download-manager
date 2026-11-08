@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Integration tests verifying credential manager functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},

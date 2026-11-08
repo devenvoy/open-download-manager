@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Last updated: 2026-11-08
+// Reason: feat(transfer): offer explicit actions when destination file already exists (Closes #26) (#41)
+// Description: File conflict resolution policies (rename, overwrite, skip, cancel, ask) and collision-free naming.
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

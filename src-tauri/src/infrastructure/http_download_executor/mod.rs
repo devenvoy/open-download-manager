@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Core HTTP download executor supporting single-stream and multi-segmented transfers.
+
 use std::{
     collections::HashMap,
     path::PathBuf,

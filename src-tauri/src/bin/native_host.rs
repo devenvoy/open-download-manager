@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Browser native messaging host binary bridging Chrome/Firefox extensions to the desktop application.
+
 use std::{
     io::{self, Read, Write},
     path::PathBuf,

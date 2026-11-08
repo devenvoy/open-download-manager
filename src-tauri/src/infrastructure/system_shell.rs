@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Last updated: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Description: System shell implementation launching default browser, file reveals, and external utilities.
+
 use std::path::Path;
 
 use crate::application::{

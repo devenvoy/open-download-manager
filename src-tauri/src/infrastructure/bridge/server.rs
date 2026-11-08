@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Local loopback HTTP bridge server receiving intercepted downloads from browser extensions.
+
 use std::{
     path::PathBuf,
     sync::Arc,

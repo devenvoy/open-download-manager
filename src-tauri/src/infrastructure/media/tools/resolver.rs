@@ -1,3 +1,9 @@
+// Created: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: Path resolver locating installed system or sandboxed media tool binaries.
+
 use std::{path::PathBuf, sync::Arc};
 
 use crate::domain::media_tools::{MediaToolStatus, MediaToolType, ToolResolutionSource};

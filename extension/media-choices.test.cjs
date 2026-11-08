@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Unit tests verifying media format deduplication, paired audio retention, and extensionless stream handling.
+
 const test=require('node:test'),assert=require('node:assert/strict');
 const {mediaChoices}=require('./media-choices.js');
 test('choices keep only the matching tweet and deduplicate paired audio',()=>{

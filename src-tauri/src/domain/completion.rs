@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Last updated: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Description: Configurable post-download completion actions, execution ledger records, and power actions.
+
 use std::path::Path;
 use serde::{Deserialize, Serialize};
 

@@ -1,3 +1,9 @@
+// Created: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Unit tests verifying download capture evaluation across inclusion lists, exclusion lists, and confirmation modes.
+
 const { describe, it, expect } = require('bun:test');
 const { evaluateCapture, matchesHost, extractExtension } = require('./capture-evaluator.js');
 

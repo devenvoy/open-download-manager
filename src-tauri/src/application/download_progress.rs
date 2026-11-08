@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Description: Transfer progress metrics model encapsulating bytes downloaded, speeds, and segment statuses.
+
 use crate::domain::download::{DownloadSegmentProgress, TransferValidator};
 
 #[derive(Clone, Debug, Default)]
