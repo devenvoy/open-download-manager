@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Domain settings entity defining download directories, category mappings, and connection limits.
 
 pub mod connection_override;
@@ -12,6 +13,7 @@ mod patch;
 mod policy;
 pub mod proxy;
 pub mod proxy_discovery;
+pub mod theme;
 mod validation_error;
 pub mod window_limit;
 
@@ -21,6 +23,7 @@ pub use proxy::{ProxyProtocol, ProxySettings, ProxyTestResult, DEFAULT_PROXY_POR
 pub use proxy_discovery::{
     DetectedProxyConfig, DetectedProxyMode, ProtocolRoute, ProxySource,
 };
+pub use theme::AppTheme;
 pub use validation_error::SettingsValidationError;
 pub use window_limit::{Clock, DownloadWindowLimit, MockClock, SystemClock};
 
@@ -63,6 +66,8 @@ pub struct Settings {
     pub connection_overrides: Vec<ConnectionOverride>,
     #[serde(default)]
     pub window_limit: Option<DownloadWindowLimit>,
+    #[serde(default)]
+    pub theme: AppTheme,
 }
 
 impl Settings {
@@ -85,6 +90,7 @@ impl Settings {
             clipboard_monitoring: crate::domain::clipboard::ClipboardMonitoringSettings::default(),
             connection_overrides: Vec::new(),
             window_limit: None,
+            theme: AppTheme::System,
         }
     }
 
@@ -139,6 +145,7 @@ impl Settings {
         apply_if_some(&mut next.completion_actions, patch.completion_actions);
         apply_if_some(&mut next.clipboard_monitoring, patch.clipboard_monitoring);
         apply_if_some(&mut next.connection_overrides, patch.connection_overrides);
+        apply_if_some(&mut next.theme, patch.theme);
         if let Some(limit) = patch.window_limit {
             next.window_limit = Some(limit);
         }

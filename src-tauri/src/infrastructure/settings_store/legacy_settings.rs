@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Legacy configuration document adapter migrating older application settings schemas.
 
 use serde::Deserialize;
@@ -46,6 +47,7 @@ impl LegacySettings {
             clipboard_monitoring: None,
             connection_overrides: None,
             window_limit: None,
+            theme: None,
         }
     }
 }

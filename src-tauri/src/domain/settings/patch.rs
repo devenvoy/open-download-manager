@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Partial settings patch payload for atomic configuration updates from UI dialogs.
 
 use std::collections::BTreeMap;
@@ -35,4 +36,5 @@ pub struct SettingsPatch {
     pub clipboard_monitoring: Option<ClipboardMonitoringSettings>,
     pub connection_overrides: Option<Vec<super::ConnectionOverride>>,
     pub window_limit: Option<super::DownloadWindowLimit>,
+    pub theme: Option<super::AppTheme>,
 }

@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Human-scenario integration tests for per-site connection exceptions, redirects, rolling download limits, mock clock advances, and restart persistence.
 
 use std::{
@@ -379,6 +380,7 @@ fn human_scenario_quota_persistence_across_app_restarts() {
         clipboard_monitoring: None,
         connection_overrides: Some(vec![ConnectionOverride::new("slow.site.com", 1)]),
         window_limit: Some(limit.clone()),
+        theme: None,
     };
 
     let saved = service.update(patch).expect("save settings with limit");

@@ -7,6 +7,7 @@
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';

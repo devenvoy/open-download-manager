@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Integration tests verifying settings functionality, edge cases, and error recovery.
 
 use std::{
@@ -63,6 +64,7 @@ fn settings_update_is_validated_and_persisted() {
             clipboard_monitoring: None,
             connection_overrides: None,
             window_limit: None,
+            theme: None,
         })
         .expect("valid settings should save");
 
@@ -108,6 +110,7 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
         clipboard_monitoring: None,
         connection_overrides: None,
         window_limit: None,
+        theme: None,
     };
 
     let error = service
@@ -147,6 +150,7 @@ fn relative_category_directory_is_rejected() {
             clipboard_monitoring: None,
             connection_overrides: None,
             window_limit: None,
+            theme: None,
         })
         .expect_err("category directories must be absolute");
 

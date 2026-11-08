@@ -2,6 +2,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Last updated: 2026-11-08
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Human-scenario integration tests for clipboard monitoring, validation, duplicate suppression, and dismissal.
 
 use std::{

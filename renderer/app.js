@@ -9,6 +9,7 @@
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -31,6 +32,37 @@ if (integrationMode) document.title = "Browser integration";
 if (optionsMode) document.title = "Options";
 if (addMode) document.title = "Download File Info";
 if (schedulerMode) document.title = "Scheduler";
+
+let currentThemeSetting = "system";
+
+function getEffectiveTheme(themeSetting) {
+	if (themeSetting === "light" || themeSetting === "dark") {
+		return themeSetting;
+	}
+	return typeof window !== "undefined" &&
+		window.matchMedia &&
+		window.matchMedia("(prefers-color-scheme: dark)").matches
+		? "dark"
+		: "light";
+}
+
+function applyTheme(themeSetting = "system") {
+	currentThemeSetting = themeSetting || "system";
+	const effective = getEffectiveTheme(currentThemeSetting);
+	document.documentElement.setAttribute("data-theme", effective);
+	document.documentElement.setAttribute("data-theme-setting", currentThemeSetting);
+	document.documentElement.style.colorScheme = effective;
+}
+
+if (typeof window !== "undefined" && window.matchMedia) {
+	window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+		if (currentThemeSetting === "system") {
+			applyTheme("system");
+		}
+	});
+}
+
+applyTheme("system");
 let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },
 	selectedId = null,
 	selectionAnchorId = null,
@@ -648,6 +680,9 @@ function acceptSnapshot(snapshot) {
 		integration: snapshot.integration || state.integration,
 		fileIcons: snapshot.fileIcons || state.fileIcons,
 	};
+	if (state.settings?.theme) {
+		applyTheme(state.settings.theme);
+	}
 	const valid = new Set(state.downloads.map((d) => d.id));
 	for (const id of selectedIds) if (!valid.has(id)) selectedIds.delete(id);
 	if (!valid.has(selectedId))
@@ -1553,6 +1588,9 @@ function updateWindowLimitFieldsState() {
 
 function openSettings() {
 	const settings = state.settings;
+	if ($("#app-theme")) {
+		$("#app-theme").value = settings.theme || "system";
+	}
 	optionsCategoryDirectories = { ...(settings.categoryDirectories || {}) };
 	const currentCat = $("#options-category-select")?.value || "Archives";
 	if ($("#category-directory")) {
@@ -2936,6 +2974,12 @@ $("#add-form").addEventListener("submit", async (event) => {
 		$("#add-later").disabled = false;
 	}
 });
+$("#app-theme")?.addEventListener("change", (e) => {
+	applyTheme(e.target.value);
+});
+$("#settings-dialog")?.addEventListener("close", () => {
+	applyTheme(state.settings?.theme || "system");
+});
 $("#choose-directory").addEventListener("click", async () => {
 	try {
 		const path = await call("chooseDirectory");
@@ -3227,6 +3271,7 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			stoppedUntil: existingLimit.stoppedUntil || null,
 		};
 		await call("settings", {
+			theme: $("#app-theme")?.value || "system",
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
 			maxConcurrent: Number($("#max-concurrent").value),

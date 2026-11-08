@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
 // Description: Integration tests verifying category and temp directories functionality, edge cases, and error recovery.
 
 use std::{
@@ -557,6 +558,7 @@ fn options_settings_patch_supports_editing_and_resetting_category_and_temp_direc
             clipboard_monitoring: None,
             connection_overrides: None,
             window_limit: None,
+            theme: None,
         })
         .unwrap();
 
@@ -589,6 +591,7 @@ fn options_settings_patch_supports_editing_and_resetting_category_and_temp_direc
             clipboard_monitoring: None,
             connection_overrides: None,
             window_limit: None,
+            theme: None,
         })
         .unwrap();
 
