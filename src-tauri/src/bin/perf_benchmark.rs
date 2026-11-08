@@ -38,6 +38,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             category: None,
             directory: Some(format!("/Users/devansh/Downloads/folder_{}", i % 5)),
             path: Some(format!("/Users/devansh/Downloads/folder_{}/file_{i}.zip", i % 5)),
+            temp_directory: None,
             last_try: None,
             error: None,
             notice: None,

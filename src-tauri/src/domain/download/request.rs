@@ -21,6 +21,8 @@ pub struct DownloadRequest {
     pub urls: Vec<String>,
     pub filename: Option<String>,
     pub directory: Option<String>,
+    #[serde(default)]
+    pub temp_directory: Option<String>,
     pub category: Option<DownloadCategory>,
     pub description: Option<String>,
     #[serde(default)]
@@ -99,6 +101,16 @@ impl DownloadRequest {
             }
             None => default_directory,
         };
+        let temp_directory = match self.temp_directory {
+            Some(temp_dir) => {
+                let path = PathBuf::from(temp_dir);
+                if !path.is_absolute() {
+                    return Err("Choose an absolute temporary folder.".to_owned());
+                }
+                Some(path)
+            }
+            None => None,
+        };
         let description = self
             .description
             .map(|description| description.trim().to_owned());
@@ -149,6 +161,7 @@ impl DownloadRequest {
             urls,
             filename,
             directory,
+            temp_directory,
             category: self.category,
             description,
             queue_only: self.queue_only,

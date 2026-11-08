@@ -97,5 +97,6 @@ window.downloader = Object.freeze({
   saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
   deleteCredentialRule: id => invoke('delete_credential_rule', { id }),
   updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
-  retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id })
+  retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id }),
+  validateDirectory: path => invoke('validate_directory', { path })
 });

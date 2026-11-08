@@ -41,6 +41,8 @@ pub struct DownloadRecord {
     #[serde(default)]
     pub path: Option<String>,
     #[serde(default)]
+    pub temp_directory: Option<String>,
+    #[serde(default)]
     pub last_try: Option<String>,
     #[serde(default)]
     pub error: Option<String>,
@@ -154,6 +156,7 @@ impl DownloadRecord {
             category: self.category.as_ref(),
             directory: self.directory.as_deref(),
             path: self.path.as_deref(),
+            temp_directory: self.temp_directory.as_deref(),
             last_try: self.last_try.as_deref(),
             error: self.error.as_deref(),
             notice: self.notice.as_deref(),
@@ -195,6 +198,7 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub category: Option<&'a DownloadCategory>,
     pub directory: Option<&'a str>,
     pub path: Option<&'a str>,
+    pub temp_directory: Option<&'a str>,
     pub last_try: Option<&'a str>,
     pub error: Option<&'a str>,
     pub notice: Option<&'a str>,

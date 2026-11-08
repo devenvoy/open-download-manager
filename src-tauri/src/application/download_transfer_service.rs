@@ -179,6 +179,7 @@ impl DownloadTransferService {
 
     pub fn add(&self, request: DownloadRequest, settings: &Settings) -> AppResult<Vec<String>> {
         self.set_settings(settings.clone());
+        let request_has_explicit_directory = request.directory.is_some();
         let detected_category = request.category.or_else(|| {
             if let Some(ref filename) = request.filename {
                 return Some(DownloadCategory::from_path(std::path::Path::new(filename)));
@@ -202,7 +203,7 @@ impl DownloadTransferService {
         let request = request
             .validate(default_directory)
             .map_err(AppError::invalid_download)?;
-        let directory = request.directory.to_str().ok_or_else(|| {
+        let base_directory = request.directory.to_str().ok_or_else(|| {
             AppError::invalid_download(
                 "The download folder cannot be represented as a supported path.",
             )
@@ -277,6 +278,24 @@ impl DownloadTransferService {
                 let category = request.category.or_else(|| {
                     Some(DownloadCategory::from_path(std::path::Path::new(&filename)))
                 });
+                let item_directory = if request_has_explicit_directory {
+                    base_directory.to_owned()
+                } else {
+                    category
+                        .and_then(|cat| settings.category_directories.get(&cat))
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| base_directory.to_owned())
+                };
+                let item_temp_directory = request
+                    .temp_directory
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .or_else(|| {
+                        settings
+                            .temporary_directory
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().into_owned())
+                    });
                 DownloadRecord {
                     id: uuid::Uuid::new_v4().to_string(),
                     url: url.url().as_str().to_owned(),
@@ -296,8 +315,9 @@ impl DownloadTransferService {
                     scheduled_at: request.scheduled_at.clone(),
                     description: request.description.clone(),
                     category,
-                    directory: Some(directory.to_owned()),
+                    directory: Some(item_directory),
                     path: None,
+                    temp_directory: item_temp_directory,
                     last_try: None,
                     error: None,
                     notice: (request.urls.len() > 1)
@@ -367,11 +387,21 @@ impl DownloadTransferService {
         request: AddPlaylistDownloadsRequest,
         settings: &Settings,
     ) -> AppResult<usize> {
+        let category = request.common_category.unwrap_or(DownloadCategory::Video);
         let target_dir = request
             .common_directory
             .filter(|d| !d.trim().is_empty())
-            .unwrap_or_else(|| settings.default_directory.to_string_lossy().to_string());
-        let category = request.common_category.unwrap_or(DownloadCategory::Video);
+            .unwrap_or_else(|| {
+                settings
+                    .category_directories
+                    .get(&category)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| settings.default_directory.to_string_lossy().to_string())
+            });
+        let temp_dir = settings
+            .temporary_directory
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
 
         let selected_items: Vec<_> = request.items.into_iter().filter(|i| i.selected).collect();
         if selected_items.is_empty() {
@@ -410,6 +440,7 @@ impl DownloadTransferService {
                     category: Some(category),
                     directory: Some(target_dir.clone()),
                     path: None,
+                    temp_directory: temp_dir.clone(),
                     last_try: None,
                     error: None,
                     notice: Some(format!("Playlist item {} of {}.", idx + 1, total_count)),

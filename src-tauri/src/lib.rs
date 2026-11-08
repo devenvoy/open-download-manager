@@ -16,7 +16,7 @@ use presentation::{
         import_downloads_from_file, install_media_tool, list_credential_rules, register_browser,
         remove_completed, retry_download_actions, review_download, save_credential_rule,
         show_about_dialog, snapshot, test_proxy_connection, update_download_completion_actions,
-        update_settings,
+        update_settings, validate_directory,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
@@ -223,6 +223,7 @@ pub fn run() {
             download_action,
             remove_completed,
             update_settings,
+            validate_directory,
             open_progress_window,
             close_auxiliary_window,
             resize_progress_window,

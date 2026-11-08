@@ -554,6 +554,60 @@
 								Browse…
 							</button>
 						</div>
+
+						<div class="form-line" style="margin-top: 10px;">
+							<label for="options-category-select">Category destination folder:</label>
+							<select id="options-category-select">
+								<option value="Archives">Compressed / Archives</option>
+								<option value="Documents">Documents</option>
+								<option value="Audio">Music / Audio</option>
+								<option value="Programs">Programs</option>
+								<option value="Video">Video</option>
+								<option value="Other">Other</option>
+							</select>
+						</div>
+						<div class="directory-field">
+							<input
+								id="category-directory"
+								placeholder="Use default download folder" /><button
+								class="small-button"
+								id="choose-category-directory"
+								type="button">
+								Browse…
+							</button><button
+								class="small-button"
+								id="reset-category-directory"
+								type="button"
+								title="Reset this category to use the default download folder">
+								Reset
+							</button>
+						</div>
+						<p class="field-help" id="category-directory-hint">
+							Files in this category are automatically saved to this folder.
+						</p>
+
+						<label for="temporary-directory" style="margin-top: 10px; display: block;"
+							>Temporary parts directory:</label
+						>
+						<div class="directory-field">
+							<input
+								id="temporary-directory"
+								placeholder="Default (same volume / folder as download)" /><button
+								class="small-button"
+								id="choose-temporary-directory"
+								type="button">
+								Browse…
+							</button><button
+								class="small-button"
+								id="reset-temporary-directory"
+								type="button"
+								title="Reset to default download location">
+								Reset
+							</button>
+						</div>
+						<p class="field-help">
+							Temporary parts are downloaded here before final assembly into the destination folder.
+						</p>
 					</fieldset>
 					<fieldset>
 						<legend>Connection</legend>

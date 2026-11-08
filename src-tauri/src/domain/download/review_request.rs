@@ -8,6 +8,8 @@ pub struct ReviewDownloadRequest {
     pub id: String,
     pub filename: Option<String>,
     pub directory: Option<String>,
+    #[serde(default)]
+    pub temp_directory: Option<String>,
     pub category: Option<DownloadCategory>,
     pub description: Option<String>,
     #[serde(default)]

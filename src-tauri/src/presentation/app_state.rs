@@ -64,6 +64,20 @@ impl AppState {
         // 1. Prepare and validate candidate settings in memory without committing to disk
         let candidate = settings_lock.prepare_update(patch)?;
 
+        // Validate that default directory, category directories, and temporary directory are writable
+        crate::infrastructure::fs_utils::validate_directory_writable(&candidate.default_directory)
+            .map_err(AppError::invalid_settings)?;
+
+        for (category, dir) in &candidate.category_directories {
+            crate::infrastructure::fs_utils::validate_directory_writable(dir)
+                .map_err(|err| AppError::invalid_settings(format!("Invalid folder for category {}: {err}", category.as_str())))?;
+        }
+
+        if let Some(ref temp_dir) = candidate.temporary_directory {
+            crate::infrastructure::fs_utils::validate_directory_writable(temp_dir)
+                .map_err(|err| AppError::invalid_settings(format!("Invalid temporary parts folder: {err}")))?;
+        }
+
         // 2. If proxy configuration changed, reconfigure runtime transfer executor FIRST
         if candidate.proxy != settings_lock.settings().proxy {
             self.download_transfer.set_proxy(Some(&candidate.proxy))?;

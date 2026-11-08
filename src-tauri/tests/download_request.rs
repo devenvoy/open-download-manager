@@ -10,6 +10,7 @@ fn request(url: &str) -> DownloadRequest {
         urls: vec![url.to_owned()],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: false,

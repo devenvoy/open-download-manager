@@ -88,7 +88,13 @@ impl PairedDownloadExecutor {
             .map(PathBuf::from)
             .ok_or_else(|| AppError::download("Download directory is not set."))?;
 
-        let parts_dir = directory.join(format!(".open-download-manager-paired-{}", download.id));
+        let temp_dir = download
+            .temp_directory
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| directory.clone());
+
+        let parts_dir = temp_dir.join(format!(".open-download-manager-paired-{}", download.id));
         tokio::fs::create_dir_all(&parts_dir)
             .await
             .map_err(|e| AppError::download(format!("Could not create parts directory: {e}")))?;
@@ -395,7 +401,11 @@ impl PairedDownloadExecutor {
     }
 
     pub fn discard_partial(&self, download: &DownloadRecord) -> AppResult<()> {
-        if let Some(dir) = &download.directory {
+        let dir = download
+            .temp_directory
+            .as_deref()
+            .or(download.directory.as_deref());
+        if let Some(dir) = dir {
             let parts_dir = PathBuf::from(dir).join(format!(".open-download-manager-paired-{}", download.id));
             let _ = std::fs::remove_dir_all(parts_dir);
         }

@@ -388,6 +388,7 @@ fn create_test_record(id: &str, url: &str, filename: &str, dir: &str) -> Downloa
         category: None,
         directory: Some(dir.to_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,

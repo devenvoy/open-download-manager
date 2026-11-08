@@ -123,6 +123,12 @@ pub fn update_settings(
 }
 
 #[tauri::command]
+pub fn validate_directory(path: String) -> AppResult<()> {
+    crate::infrastructure::fs_utils::validate_directory_writable(std::path::Path::new(&path))
+        .map_err(AppError::invalid_settings)
+}
+
+#[tauri::command]
 pub async fn test_proxy_connection(
     proxy: ProxySettings,
     test_url: Option<String>,

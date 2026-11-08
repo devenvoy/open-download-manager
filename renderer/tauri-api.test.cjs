@@ -461,3 +461,19 @@ test('completion action methods invoke corresponding Rust commands', async () =>
   assert.equal(calls[1][0], 'retry_download_actions');
   assert.deepEqual(calls[1][1], { id: 'dl-1' });
 });
+
+test('validateDirectory invokes the Rust validate_directory command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.validateDirectory('/path/to/downloads');
+  assert.equal(calls[0][0], 'validate_directory');
+  assert.deepEqual(calls[0][1], { path: '/path/to/downloads' });
+});

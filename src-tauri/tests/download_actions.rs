@@ -38,6 +38,7 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         urls: vec![url],
         filename: Some(filename.to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: Some("fixture download".to_owned()),
         queue_only,

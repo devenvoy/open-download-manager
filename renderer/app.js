@@ -1255,6 +1255,14 @@ function resetProxyTestStatus() {
 
 function openSettings() {
 	const settings = state.settings;
+	optionsCategoryDirectories = { ...(settings.categoryDirectories || {}) };
+	const currentCat = $("#options-category-select")?.value || "Archives";
+	if ($("#category-directory")) {
+		$("#category-directory").value = optionsCategoryDirectories[currentCat] || "";
+	}
+	if ($("#temporary-directory")) {
+		$("#temporary-directory").value = settings.temporaryDirectory || "";
+	}
 	$("#start-with-windows").checked = settings.startWithWindows !== false;
 	$("#default-directory").value = settings.defaultDirectory || "";
 	$("#max-concurrent").value = settings.maxConcurrent || 3;
@@ -2334,6 +2342,50 @@ $("#choose-directory").addEventListener("click", async () => {
 		$("#settings-error").hidden = false;
 	}
 });
+$("#options-category-select")?.addEventListener("change", (e) => {
+	const cat = e.target.value;
+	$("#category-directory").value = optionsCategoryDirectories[cat] || "";
+});
+$("#category-directory")?.addEventListener("input", (e) => {
+	const cat = $("#options-category-select").value;
+	const val = e.target.value.trim();
+	if (val) {
+		optionsCategoryDirectories[cat] = val;
+	} else {
+		delete optionsCategoryDirectories[cat];
+	}
+});
+$("#choose-category-directory")?.addEventListener("click", async () => {
+	try {
+		const path = await call("chooseDirectory");
+		if (typeof path === "string" && path) {
+			const cat = $("#options-category-select").value;
+			optionsCategoryDirectories[cat] = path;
+			$("#category-directory").value = path;
+		}
+	} catch (error) {
+		$("#settings-error").textContent = messageOf(error);
+		$("#settings-error").hidden = false;
+	}
+});
+$("#reset-category-directory")?.addEventListener("click", () => {
+	const cat = $("#options-category-select").value;
+	delete optionsCategoryDirectories[cat];
+	$("#category-directory").value = "";
+});
+$("#choose-temporary-directory")?.addEventListener("click", async () => {
+	try {
+		const path = await call("chooseDirectory");
+		if (typeof path === "string" && path)
+			$("#temporary-directory").value = path;
+	} catch (error) {
+		$("#settings-error").textContent = messageOf(error);
+		$("#settings-error").hidden = false;
+	}
+});
+$("#reset-temporary-directory")?.addEventListener("click", () => {
+	$("#temporary-directory").value = "";
+});
 $("#proxy-enabled").addEventListener("change", () => {
 	updateProxyFieldsState();
 	resetProxyTestStatus();
@@ -2435,6 +2487,8 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			maxConcurrent: Number($("#max-concurrent").value),
 			connections: Number($("#connections").value),
 			speedLimitKbps: Number($("#speed-limit").value),
+			categoryDirectories: optionsCategoryDirectories,
+			temporaryDirectory: $("#temporary-directory").value.trim() || undefined,
 			proxy,
 			capturePolicy,
 			completionActions,

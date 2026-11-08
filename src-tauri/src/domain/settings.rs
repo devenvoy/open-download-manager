@@ -28,6 +28,7 @@ pub struct Settings {
     pub connections: u8,
     pub speed_limit_kbps: u32,
     pub category_directories: BTreeMap<DownloadCategory, PathBuf>,
+    pub temporary_directory: Option<PathBuf>,
     pub notify_on_complete: bool,
     pub reveal_on_complete: bool,
     pub confirm_browser_downloads: bool,
@@ -49,6 +50,7 @@ impl Settings {
             connections: DEFAULT_CONNECTIONS_PER_DOWNLOAD,
             speed_limit_kbps: DEFAULT_SPEED_LIMIT_KBPS,
             category_directories: BTreeMap::new(),
+            temporary_directory: None,
             notify_on_complete: DEFAULT_NOTIFY_ON_COMPLETE,
             reveal_on_complete: DEFAULT_REVEAL_ON_COMPLETE,
             confirm_browser_downloads: DEFAULT_CONFIRM_BROWSER_DOWNLOADS,
@@ -78,8 +80,17 @@ impl Settings {
         if let Some(category_directories) = patch.category_directories {
             next.category_directories = category_directories
                 .into_iter()
-                .map(|(category, path)| (category, PathBuf::from(path)))
+                .filter(|(_, path)| !path.trim().is_empty())
+                .map(|(category, path)| (category, PathBuf::from(path.trim())))
                 .collect();
+        }
+        if let Some(temporary_directory) = patch.temporary_directory {
+            let trimmed = temporary_directory.trim();
+            if trimmed.is_empty() {
+                next.temporary_directory = None;
+            } else {
+                next.temporary_directory = Some(PathBuf::from(trimmed));
+            }
         }
 
         apply_if_some(&mut next.notify_on_complete, patch.notify_on_complete);
@@ -106,6 +117,13 @@ impl Settings {
             return Err(SettingsValidationError::new(
                 "defaultDirectory must be an absolute path.",
             ));
+        }
+        if let Some(ref temp_dir) = self.temporary_directory {
+            if !temp_dir.is_absolute() {
+                return Err(SettingsValidationError::new(
+                    "temporaryDirectory must be an absolute path.",
+                ));
+            }
         }
         if !(1..=MAX_CONCURRENT_DOWNLOADS).contains(&self.max_concurrent) {
             return Err(SettingsValidationError::new(format!(

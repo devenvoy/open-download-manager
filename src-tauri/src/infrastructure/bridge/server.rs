@@ -400,6 +400,7 @@ async fn handle_bridge_connection(
             urls: valid_browser.urls.unwrap_or_else(|| vec![primary_url]),
             filename: valid_browser.filename,
             directory: None,
+            temp_directory: None,
             category: None,
             description: Some("Added via browser extension".to_owned()),
             queue_only,

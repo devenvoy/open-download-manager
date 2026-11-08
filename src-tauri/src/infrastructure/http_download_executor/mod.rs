@@ -182,14 +182,26 @@ impl HttpDownloadExecutor {
         );
         metrics.record_first_request();
 
-        let temporary = directory.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
+        let temp_dir = download
+            .temp_directory
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| directory.clone());
+
+        fs::create_dir_all(&temp_dir)
+            .await
+            .map_err(|error| {
+                AppError::download(format!("Could not create temporary directory: {error}"))
+            })?;
+
+        let temporary = temp_dir.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
         if download.connections > 1
             && !fs::try_exists(&temporary).await.map_err(|error| {
                 AppError::download(format!("Could not check the partial download: {error}"))
             })?
         {
             let existing_parts = assembler::has_segment_parts(
-                &directory,
+                &temp_dir,
                 &download.id,
             )
             .await?;
@@ -229,13 +241,13 @@ impl HttpDownloadExecutor {
                 let mut restart_notice = None;
                 if existing_parts {
                     if previous.is_none() {
-                        assembler::remove_segment_parts(&directory, &download.id).await?;
+                        assembler::remove_segment_parts(&temp_dir, &download.id).await?;
                         restart_notice = Some(
                             "The download could not be verified with a saved validator; restarted download from the beginning."
                                 .to_owned(),
                         );
                     } else if previous.as_ref() != Some(&validator) {
-                        assembler::remove_segment_parts(&directory, &download.id).await?;
+                        assembler::remove_segment_parts(&temp_dir, &download.id).await?;
                         restart_notice = Some(
                             "The remote file changed on the server; restarted download from the beginning."
                                 .to_owned(),
@@ -262,7 +274,7 @@ impl HttpDownloadExecutor {
                 let segments = segmented::segment_ranges(
                     validator.total,
                     download.connections,
-                    &directory,
+                    &temp_dir,
                     &download.id,
                     if download.connections_progress.is_empty() {
                         None
@@ -278,7 +290,7 @@ impl HttpDownloadExecutor {
                     &validator,
                     segments,
                     download.connections,
-                    &directory,
+                    &temp_dir,
                     &mut control,
                     rate_limiter.clone(),
                     &progress_handler,
@@ -291,7 +303,7 @@ impl HttpDownloadExecutor {
                         assembler::concat_segments(
                             &download.id,
                             &completed_segments,
-                            &directory,
+                            &temp_dir,
                             &temporary,
                             &mut control,
                         )
@@ -309,7 +321,7 @@ impl HttpDownloadExecutor {
                         )
                         .await?;
                         if let Err(error) = assembler::remove_segment_parts(
-                            &directory,
+                            &temp_dir,
                             &download.id,
                         )
                         .await
@@ -331,7 +343,7 @@ impl HttpDownloadExecutor {
                         // incomplete segment parts and seamlessly fall back to single stream from byte 0.
                         metrics.set_fallback(format!("segmented_range_failed: {}", error.message));
                         let _ = assembler::remove_segment_parts(
-                            &directory,
+                            &temp_dir,
                             &download.id,
                         )
                         .await;
@@ -353,7 +365,7 @@ impl HttpDownloadExecutor {
                 }
             } else if existing_parts {
                 assembler::remove_segment_parts(
-                    &directory,
+                    &temp_dir,
                     &download.id,
                 )
                 .await?;
@@ -424,10 +436,15 @@ impl DownloadExecutor for HttpDownloadExecutor {
         let Some(directory) = download.directory.as_deref() else {
             return Ok(());
         };
-        let temporary = PathBuf::from(directory)
+        let temp_dir = download
+            .temp_directory
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(directory));
+        let temporary = temp_dir
             .join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
         assembler::remove_partial_file(&temporary)?;
-        assembler::remove_all_segment_parts_sync(std::path::Path::new(directory), &download.id)?;
+        assembler::remove_all_segment_parts_sync(&temp_dir, &download.id)?;
         self.segment_validators
             .lock()
             .map_err(|_| AppError::storage("Download resume state is unavailable."))?

@@ -269,6 +269,13 @@ impl DownloadHistoryService {
             }
         }
 
+        if let Some(temp_dir) = &request.temp_directory {
+            let p = std::path::Path::new(temp_dir);
+            if !p.is_absolute() {
+                return Err(AppError::invalid_download("Choose an absolute temporary folder."));
+            }
+        }
+
         if let Some(desc) = &request.description {
             if desc.chars().count() > 4096 {
                 return Err(AppError::invalid_download("Description is too long."));
@@ -295,6 +302,9 @@ impl DownloadHistoryService {
         }
         if let Some(directory) = &request.directory {
             downloads[index].directory = Some(directory.clone());
+        }
+        if let Some(temp_directory) = &request.temp_directory {
+            downloads[index].temp_directory = Some(temp_directory.clone());
         }
         if let Some(category) = request.category {
             downloads[index].category = Some(category);

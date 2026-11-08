@@ -12,6 +12,7 @@ pub struct SettingsPatch {
     pub connections: Option<u8>,
     pub speed_limit_kbps: Option<u32>,
     pub category_directories: Option<BTreeMap<DownloadCategory, String>>,
+    pub temporary_directory: Option<String>,
     pub notify_on_complete: Option<bool>,
     pub reveal_on_complete: Option<bool>,
     pub confirm_browser_downloads: Option<bool>,

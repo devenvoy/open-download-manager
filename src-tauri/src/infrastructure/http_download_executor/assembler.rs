@@ -185,11 +185,22 @@ pub(crate) async fn finalize(
 
     match fs::rename(&temporary, &destination).await {
         Ok(()) => {}
-        Err(err) if err.raw_os_error() == Some(18) => {
-            fs::copy(&temporary, &destination).await.map_err(|error| {
-                AppError::download(format!("Could not move the download into place: {error}"))
-            })?;
-            let _ = fs::remove_file(&temporary).await;
+        Err(err)
+            if err.kind() == std::io::ErrorKind::CrossesDevices
+                || err.raw_os_error() == Some(18)
+                || err.raw_os_error() == Some(17) =>
+        {
+            let expected_len = fs::metadata(&temporary)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(downloaded);
+            crate::infrastructure::fs_utils::verified_cross_volume_copy(
+                &temporary,
+                &destination,
+                expected_len,
+                _id,
+            )
+            .await?;
         }
         Err(error) => {
             return Err(AppError::download(format!(

@@ -2622,6 +2622,7 @@ dependencies = [
  "chrono",
  "flate2",
  "image",
+ "libc",
  "mime_guess",
  "opener",
  "reqwest 0.12.28",
