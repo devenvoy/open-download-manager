@@ -6,6 +6,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -20,8 +21,8 @@ use infrastructure::{
 use presentation::{
     app_state::AppState,
     commands::{
-        add_download, add_playlist_downloads, browser_setup_action, check_destination_conflict,
-        check_for_updates, delete_credential_rule, dismiss_clipboard_candidate, download_action,
+        add_download, add_playlist_downloads, apply_detected_proxy, browser_setup_action, check_destination_conflict,
+        check_for_updates, delete_credential_rule, detect_proxy, dismiss_clipboard_candidate, download_action,
         export_downloads_to_file, get_integration_info, get_media_tools_status, get_playlist_info,
         get_video_formats, import_downloads_from_file, install_media_tool, list_credential_rules,
         register_browser, remove_completed, resolve_asx_playlist, retry_download_actions, review_download,
@@ -288,6 +289,8 @@ pub fn run() {
             get_media_tools_status,
             install_media_tool,
             test_proxy_connection,
+            detect_proxy,
+            apply_detected_proxy,
             list_credential_rules,
             save_credential_rule,
             delete_credential_rule,

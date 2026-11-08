@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Shared application state holding services, transfer handles, and runtime settings.
 
 use std::sync::{Arc, Mutex};
@@ -18,12 +19,14 @@ use crate::{
         download_transfer_service::DownloadTransferService,
         error::{AppError, AppResult},
         integration_service::IntegrationService,
+        proxy_discovery_service::ProxyDiscoveryService,
         settings_service::SettingsService,
         updater_service::UpdateService,
     },
-    domain::settings::{Settings, SettingsPatch},
+    domain::settings::{DetectedProxyConfig, Settings, SettingsPatch},
     infrastructure::{
         browser::PlatformAdvancedAdapter, file_icons::FileIconProvider, media::ytdlp::YtDlpTools,
+        proxy_discovery::SystemProxyDetector,
     },
 };
 
@@ -38,6 +41,7 @@ pub struct AppState {
     pub(super) ytdlp: Option<Arc<YtDlpTools>>,
     pub(super) clipboard: Option<Arc<ClipboardMonitoringService>>,
     pub(super) advanced_integration: Arc<AdvancedIntegrationService>,
+    pub(super) proxy_discovery: Arc<ProxyDiscoveryService>,
 }
 
 impl AppState {
@@ -52,6 +56,8 @@ impl AppState {
     ) -> Self {
         let advanced_adapter = Arc::new(PlatformAdvancedAdapter::new(std::env::temp_dir()));
         let advanced_integration = Arc::new(AdvancedIntegrationService::new(advanced_adapter));
+        let proxy_detector = Arc::new(SystemProxyDetector::new());
+        let proxy_discovery = Arc::new(ProxyDiscoveryService::new(proxy_detector));
         Self {
             settings: Mutex::new(settings),
             download_history,
@@ -63,6 +69,7 @@ impl AppState {
             ytdlp: YtDlpTools::new().map(Arc::new),
             clipboard: None,
             advanced_integration,
+            proxy_discovery,
         }
     }
 
@@ -82,6 +89,34 @@ impl AppState {
     ) -> Self {
         self.advanced_integration = advanced_integration;
         self
+    }
+
+    pub fn with_proxy_discovery(
+        mut self,
+        proxy_discovery: Arc<ProxyDiscoveryService>,
+    ) -> Self {
+        self.proxy_discovery = proxy_discovery;
+        self
+    }
+
+    pub fn apply_detected_proxy(&self, detected: DetectedProxyConfig) -> AppResult<Settings> {
+        if !detected.can_import {
+            return Err(AppError::invalid_settings(
+                "Detected proxy cannot be imported automatically.",
+            ));
+        }
+        let proxy_to_import = detected.import_settings.ok_or_else(|| {
+            AppError::invalid_settings("No importable proxy settings were found.")
+        })?;
+        proxy_to_import
+            .validate()
+            .map_err(|e| AppError::invalid_settings(e.message))?;
+
+        let patch = SettingsPatch {
+            proxy: Some(proxy_to_import),
+            ..Default::default()
+        };
+        self.update_settings(patch)
     }
 
     /// Atomically updates settings: validates candidate in memory, applies runtime

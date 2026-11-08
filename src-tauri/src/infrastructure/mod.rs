@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Infrastructure layer implementations for filesystem, networking, media, and external tools.
 
 pub mod action;
@@ -22,6 +23,7 @@ pub mod http_download_executor;
 pub mod media;
 pub mod metrics;
 pub mod mms;
+pub mod proxy_discovery;
 pub mod settings_store;
 pub mod system_shell;
 pub mod updater;

@@ -4,18 +4,23 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Domain settings entity defining download directories, category mappings, and connection limits.
 
 pub mod connection_override;
 mod patch;
 mod policy;
 pub mod proxy;
+pub mod proxy_discovery;
 mod validation_error;
 pub mod window_limit;
 
 pub use connection_override::{resolve_connections_for_host, ConnectionOverride};
 pub use patch::SettingsPatch;
 pub use proxy::{ProxyProtocol, ProxySettings, ProxyTestResult, DEFAULT_PROXY_PORT};
+pub use proxy_discovery::{
+    DetectedProxyConfig, DetectedProxyMode, ProtocolRoute, ProxySource,
+};
 pub use validation_error::SettingsValidationError;
 pub use window_limit::{Clock, DownloadWindowLimit, MockClock, SystemClock};
 

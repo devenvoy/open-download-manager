@@ -7,6 +7,7 @@
 // Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1365,6 +1366,141 @@ function resetProxyTestStatus() {
 	}
 }
 
+let currentDetectedProxyConfig = null;
+
+function formatProxyDisplay(proxy) {
+	if (!proxy || !proxy.enabled || proxy.protocol === "direct") {
+		return "Direct (No Proxy)";
+	}
+	const userPrefix = proxy.username ? `${proxy.username}@` : "";
+	return `${String(proxy.protocol || "http").toUpperCase()} ${userPrefix}${proxy.host}:${proxy.port}`;
+}
+
+function openProxyDiscoveryDialog(detected) {
+	currentDetectedProxyConfig = detected;
+	const dialog = $("#proxy-discovery-dialog");
+	if (!dialog) return;
+
+	// Source badge
+	const sourceBadge = $("#proxy-discovery-source-badge");
+	let sourceText = "System";
+	if (typeof detected.source === "string") {
+		sourceText = detected.source.charAt(0).toUpperCase() + detected.source.slice(1);
+	} else if (detected.source && typeof detected.source === "object") {
+		const key = Object.keys(detected.source)[0];
+		sourceText = detected.source[key] || "Browser";
+	}
+	if (sourceBadge) sourceBadge.textContent = sourceText;
+
+	// Mode badge
+	const modeBadge = $("#proxy-discovery-mode-badge");
+	const modeText =
+		detected.mode === "pac"
+			? "PAC Script"
+			: detected.mode === "manual"
+				? "Manual Proxy"
+				: "Direct Connection";
+	if (modeBadge) modeBadge.textContent = modeText;
+
+	// Auth badge & note
+	const authBadge = $("#proxy-discovery-auth-badge");
+	const authNote = $("#proxy-discovery-auth-note");
+	if (authBadge) authBadge.hidden = !detected.credentialsAvailable;
+	if (authNote) authNote.hidden = !detected.credentialsAvailable;
+
+	// PAC section
+	const pacSection = $("#proxy-discovery-pac-section");
+	const pacUrlEl = $("#proxy-discovery-pac-url");
+	if (detected.mode === "pac" && detected.pacUrl) {
+		if (pacSection) pacSection.hidden = false;
+		if (pacUrlEl) pacUrlEl.textContent = detected.pacUrl;
+	} else if (pacSection) {
+		pacSection.hidden = true;
+	}
+
+	// Routes list
+	const routesSection = $("#proxy-discovery-routes-section");
+	const routesList = $("#proxy-discovery-routes-list");
+	if (routesList) {
+		routesList.innerHTML = "";
+		if (Array.isArray(detected.routes) && detected.routes.length > 0) {
+			if (routesSection) routesSection.hidden = false;
+			for (const route of detected.routes) {
+				const li = document.createElement("li");
+				li.className = "proxy-route-item";
+				const textSpan = document.createElement("span");
+				textSpan.textContent = `${route.protocol.toUpperCase()}: ${route.host}:${route.port}`;
+				const badgeSpan = document.createElement("span");
+				badgeSpan.className = `proxy-route-badge ${route.supported ? "supported" : "unsupported"}`;
+				badgeSpan.textContent = route.supported
+					? "Supported"
+					: route.reason || "Unsupported";
+				li.appendChild(textSpan);
+				li.appendChild(badgeSpan);
+				routesList.appendChild(li);
+			}
+		} else if (routesSection) {
+			routesSection.hidden = detected.mode === "pac";
+		}
+	}
+
+	// Diff / Preview
+	const currentProxy = {
+		enabled: $("#proxy-enabled")?.checked === true,
+		protocol: $("#proxy-protocol")?.value || "http",
+		host: $("#proxy-host")?.value?.trim() || "",
+		port: Number($("#proxy-port")?.value) || 8080,
+		username: $("#proxy-username")?.value?.trim() || null,
+	};
+	const currentEl = $("#proxy-diff-current");
+	if (currentEl) currentEl.textContent = formatProxyDisplay(currentProxy);
+
+	const diffDiscovered = $("#proxy-diff-discovered");
+	if (diffDiscovered) {
+		if (detected.importSettings) {
+			diffDiscovered.textContent = formatProxyDisplay(detected.importSettings);
+		} else if (detected.mode === "pac") {
+			diffDiscovered.textContent = "PAC Script (Auto-routing unavailable)";
+		} else {
+			diffDiscovered.textContent = "Direct (No Proxy)";
+		}
+	}
+
+	// Unsupported warnings
+	const unsuppSection = $("#proxy-discovery-unsupported-section");
+	const unsuppList = $("#proxy-discovery-unsupported-list");
+	if (unsuppList) {
+		unsuppList.innerHTML = "";
+		if (
+			Array.isArray(detected.unsupportedFields) &&
+			detected.unsupportedFields.length > 0
+		) {
+			if (unsuppSection) unsuppSection.hidden = false;
+			for (const field of detected.unsupportedFields) {
+				const item = document.createElement("div");
+				item.textContent = `• ${field}`;
+				unsuppList.appendChild(item);
+			}
+		} else if (unsuppSection) {
+			unsuppSection.hidden = true;
+		}
+	}
+
+	// Error & import button state
+	const errorEl = $("#proxy-discovery-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	const importBtn = $("#proxy-discovery-import-btn");
+	if (importBtn) {
+		importBtn.disabled = !detected.canImport || !detected.importSettings;
+		importBtn.textContent = "Import Settings";
+	}
+
+	showDialog("#proxy-discovery-dialog");
+}
+
 let optionsConnectionOverrides = [];
 
 function renderSiteOverrides() {
@@ -2692,6 +2828,78 @@ $("#test-proxy-button").addEventListener("click", async () => {
 		statusEl.className = "proxy-test-status error";
 	} finally {
 		$("#test-proxy-button").disabled = !$("#proxy-enabled").checked;
+	}
+});
+
+$("#detect-proxy-button")?.addEventListener("click", async () => {
+	const btn = $("#detect-proxy-button");
+	const origText = btn.textContent;
+	btn.disabled = true;
+	btn.textContent = "Detecting…";
+	try {
+		const detected = await call("detectProxy");
+		openProxyDiscoveryDialog(detected);
+	} catch (err) {
+		const statusEl = $("#proxy-test-status");
+		if (statusEl) {
+			statusEl.textContent = `Discovery error: ${messageOf(err)}`;
+			statusEl.className = "proxy-test-status error";
+		}
+	} finally {
+		btn.disabled = false;
+		btn.textContent = origText;
+	}
+});
+
+$("#proxy-discovery-close-btn")?.addEventListener("click", () => {
+	$("#proxy-discovery-dialog")?.close();
+});
+
+$("#proxy-discovery-cancel-btn")?.addEventListener("click", () => {
+	$("#proxy-discovery-dialog")?.close();
+});
+
+$("#proxy-discovery-import-btn")?.addEventListener("click", async () => {
+	if (!currentDetectedProxyConfig || !currentDetectedProxyConfig.importSettings) return;
+	const btn = $("#proxy-discovery-import-btn");
+	const errorEl = $("#proxy-discovery-error");
+	btn.disabled = true;
+	btn.textContent = "Importing…";
+	if (errorEl) errorEl.hidden = true;
+
+	try {
+		const updated = await call("applyDetectedProxy", {
+			detected: currentDetectedProxyConfig,
+		});
+		const p =
+			(updated && updated.proxy) ||
+			currentDetectedProxyConfig.importSettings;
+		$("#proxy-enabled").checked = p.enabled === true;
+		$("#proxy-protocol").value = p.protocol || "http";
+		$("#proxy-host").value = p.host || "";
+		$("#proxy-port").value = p.port || 8080;
+		$("#proxy-username").value = p.username || "";
+		$("#proxy-password").value = "";
+		if ($("#proxy-resolve-dns-remotely")) {
+			$("#proxy-resolve-dns-remotely").checked =
+				p.resolveDnsRemotely === true;
+		}
+		updateProxyFieldsState();
+		resetProxyTestStatus();
+
+		$("#proxy-discovery-dialog")?.close();
+		const statusEl = $("#proxy-test-status");
+		if (statusEl) {
+			statusEl.textContent = "Discovered proxy settings applied.";
+			statusEl.className = "proxy-test-status success";
+		}
+	} catch (err) {
+		if (errorEl) {
+			errorEl.textContent = messageOf(err);
+			errorEl.hidden = false;
+		}
+		btn.disabled = false;
+		btn.textContent = "Import Settings";
 	}
 });
 $("#settings-form").addEventListener("submit", async (event) => {

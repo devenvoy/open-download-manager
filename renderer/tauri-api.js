@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -103,6 +104,8 @@ window.downloader = Object.freeze({
   getMediaToolsStatus: () => invoke('get_media_tools_status'),
   installMediaTool: tool => invoke('install_media_tool', { tool }),
   testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null }),
+  detectProxy: () => invoke('detect_proxy'),
+  applyDetectedProxy: ({ detected }) => invoke('apply_detected_proxy', { detected }),
   listCredentialRules: () => invoke('list_credential_rules'),
   saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
   deleteCredentialRule: id => invoke('delete_credential_rule', { id }),

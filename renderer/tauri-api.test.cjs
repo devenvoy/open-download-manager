@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
 
 'use strict';
@@ -105,6 +106,48 @@ test('testProxy invokes test_proxy_connection with proxy configuration', async (
   assert.deepEqual(calls[0][1], { proxy, testUrl: 'http://127.0.0.1:9090' });
   assert.equal(result.success, true);
   assert.equal(result.message, 'Proxy connection successful (HTTP 204)');
+});
+
+test('detectProxy and applyDetectedProxy invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const fakeDetected = {
+    source: 'system',
+    mode: 'manual',
+    pacUrl: null,
+    routes: [{ protocol: 'http', host: '10.0.0.1', port: 8080, supported: true, reason: null }],
+    credentialsAvailable: false,
+    unsupportedFields: [],
+    canImport: true,
+    importSettings: {
+      enabled: true,
+      protocol: 'http',
+      host: '10.0.0.1',
+      port: 8080,
+      username: null,
+      password: null,
+      resolveDnsRemotely: false
+    }
+  };
+
+  const api = loadApi({
+    core: {
+      invoke: async (cmd, args) => {
+        calls.push([cmd, args]);
+        if (cmd === 'detect_proxy') return fakeDetected;
+        if (cmd === 'apply_detected_proxy') return { proxy: fakeDetected.importSettings };
+        return {};
+      }
+    }
+  });
+
+  const detected = await api.detectProxy();
+  assert.equal(calls[0][0], 'detect_proxy');
+  assert.deepEqual(detected, fakeDetected);
+
+  const applied = await api.applyDetectedProxy({ detected });
+  assert.equal(calls[1][0], 'apply_detected_proxy');
+  assert.deepEqual(calls[1][1], { detected });
+  assert.equal(applied.proxy.host, '10.0.0.1');
 });
 
 test('download details use the native progress window commands', async () => {

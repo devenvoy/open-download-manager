@@ -5,6 +5,7 @@
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
 // Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Tauri IPC command handlers processing frontend requests for downloads, settings, and media.
 
 use std::sync::Arc;
@@ -147,6 +148,21 @@ pub async fn test_proxy_connection(
         test_url.as_deref(),
     )
     .await)
+}
+
+#[tauri::command]
+pub fn detect_proxy(
+    state: State<'_, AppState>,
+) -> AppResult<crate::domain::settings::DetectedProxyConfig> {
+    state.proxy_discovery.detect()
+}
+
+#[tauri::command]
+pub fn apply_detected_proxy(
+    state: State<'_, AppState>,
+    detected: crate::domain::settings::DetectedProxyConfig,
+) -> AppResult<crate::domain::settings::Settings> {
+    state.apply_detected_proxy(detected)
 }
 
 #[tauri::command]
