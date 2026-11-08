@@ -2,6 +2,7 @@
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Core HTTP download executor supporting single-stream and multi-segmented transfers.
 
 use std::{
@@ -27,7 +28,7 @@ use crate::{
         download::{
             sanitize_filename, DestinationAllocator, DownloadRecord, FileConflictPolicy,
         },
-        settings::ProxySettings,
+        settings::{ConnectionOverride, ProxySettings},
     },
 };
 
@@ -54,6 +55,7 @@ pub struct HttpDownloadExecutor {
     segment_validators: Arc<Mutex<HashMap<String, SegmentValidator>>>,
     allocator: DestinationAllocator,
     credential_store: Option<Arc<CredentialStore>>,
+    connection_overrides: Arc<RwLock<Vec<ConnectionOverride>>>,
 }
 
 impl HttpDownloadExecutor {
@@ -68,6 +70,7 @@ impl HttpDownloadExecutor {
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator: DestinationAllocator::new(),
             credential_store: None,
+            connection_overrides: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -77,6 +80,7 @@ impl HttpDownloadExecutor {
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator: DestinationAllocator::new(),
             credential_store: None,
+            connection_overrides: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -89,6 +93,7 @@ impl HttpDownloadExecutor {
             segment_validators: Arc::new(Mutex::new(HashMap::new())),
             allocator,
             credential_store: None,
+            connection_overrides: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -109,6 +114,15 @@ impl HttpDownloadExecutor {
         let new_client = create_http_client(proxy)?;
         *self.client.write().unwrap() = new_client;
         Ok(())
+    }
+
+    pub fn set_connection_overrides(&self, overrides: &[ConnectionOverride]) {
+        *self.connection_overrides.write().unwrap() = overrides.to_vec();
+    }
+
+    pub fn resolve_connections(&self, host: &str, fallback: u8) -> u8 {
+        let guard = self.connection_overrides.read().unwrap();
+        crate::domain::settings::resolve_connections_for_host(&guard, host, fallback)
     }
 
     async fn transfer(
@@ -200,8 +214,11 @@ impl HttpDownloadExecutor {
                 AppError::download(format!("Could not create temporary directory: {error}"))
             })?;
 
+        let initial_host = url.host_str().unwrap_or("");
+        let mut effective_connections = self.resolve_connections(initial_host, download.connections);
+
         let temporary = temp_dir.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
-        if download.connections > 1
+        if effective_connections > 1
             && !fs::try_exists(&temporary).await.map_err(|error| {
                 AppError::download(format!("Could not check the partial download: {error}"))
             })?
@@ -214,160 +231,170 @@ impl HttpDownloadExecutor {
             let range_info =
                 segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref()).await?;
             if let Some(discovery) = range_info {
-                let validator = discovery.validator;
-                if let Some(better_name) = discovery.cd_filename {
-                    let current_stem = destination
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("");
-                    if crate::domain::download::is_generic_filename(current_stem) {
-                        let sanitized_better = sanitize_filename(&better_name);
-                        if !sanitized_better.is_empty() {
-                            if download.conflict_policy == Some(FileConflictPolicy::Rename) {
-                                destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
-                            } else {
-                                destination = directory.join(sanitized_better);
+                let final_host = discovery.final_url.host_str().unwrap_or("");
+                effective_connections = self.resolve_connections(final_host, effective_connections);
+                if effective_connections > 1 {
+                    let validator = discovery.validator;
+                    if let Some(better_name) = discovery.cd_filename {
+                        let current_stem = destination
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("");
+                        if crate::domain::download::is_generic_filename(current_stem) {
+                            let sanitized_better = sanitize_filename(&better_name);
+                            if !sanitized_better.is_empty() {
+                                if download.conflict_policy == Some(FileConflictPolicy::Rename) {
+                                    destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
+                                } else {
+                                    destination = directory.join(sanitized_better);
+                                }
                             }
                         }
                     }
-                }
-                metrics.range_supported = true;
-                metrics.known_total = Some(validator.total);
-                let previous = self
-                    .segment_validators
-                    .lock()
-                    .map_err(|_| AppError::storage("Download resume state is unavailable."))?
-                    .get(&download.id)
-                    .cloned()
-                    .or_else(|| {
-                        download
-                            .resume_validator()
-                            .map(|v| SegmentValidator::new(v, validator.total))
-                    });
-                let mut restart_notice = None;
-                if existing_parts {
-                    if previous.is_none() {
-                        assembler::remove_segment_parts(&temp_dir, &download.id).await?;
-                        restart_notice = Some(
-                            "The download could not be verified with a saved validator; restarted download from the beginning."
-                                .to_owned(),
-                        );
-                    } else if previous.as_ref() != Some(&validator) {
-                        assembler::remove_segment_parts(&temp_dir, &download.id).await?;
-                        restart_notice = Some(
-                            "The remote file changed on the server; restarted download from the beginning."
-                                .to_owned(),
-                        );
-                    }
-                }
-                self.segment_validators
-                    .lock()
-                    .map_err(|_| AppError::storage("Download resume state is unavailable."))?
-                    .insert(download.id.clone(), validator.clone());
-                if let Some(notice) = restart_notice {
-                    progress_handler(DownloadProgress {
-                        downloaded: 0,
-                        total: Some(validator.total),
-                        bytes_per_second: 0,
-                        connections_progress: Vec::new(),
-                        notice: Some(notice),
-                        transfer_kind: Some("segmented_http".to_string()),
-                        effective_concurrency: Some(download.connections),
-                        etag: Some(validator.value().to_string()),
-                        validator: Some(validator.validator.clone()),
-                    });
-                }
-                let segments = segmented::segment_ranges(
-                    validator.total,
-                    download.connections,
-                    &temp_dir,
-                    &download.id,
-                    if download.connections_progress.is_empty() {
-                        None
-                    } else {
-                        Some(&download.connections_progress)
-                    },
-                )
-                .await?;
-                let download_res = segmented::download_segments(
-                    self.client(),
-                    &download.id,
-                    discovery.final_url,
-                    &validator,
-                    segments,
-                    download.connections,
-                    &temp_dir,
-                    &mut control,
-                    rate_limiter.clone(),
-                    &progress_handler,
-                    discovery.auth_header,
-                )
-                .await;
-
-                match download_res {
-                    Ok(completed_segments) => {
-                        assembler::concat_segments(
-                            &download.id,
-                            &completed_segments,
-                            &temp_dir,
-                            &temporary,
-                            &mut control,
-                        )
-                        .await?;
-                        self.segment_validators
-                            .lock()
-                            .map_err(|_| AppError::storage("Download resume state is unavailable."))?
-                            .remove(&download.id);
-                        let result = assembler::finalize(
-                            &download.id,
-                            temporary,
-                            destination,
-                            validator.total,
-                            Some(validator.total),
-                        )
-                        .await?;
-                        if let Err(error) = assembler::remove_segment_parts(
-                            &temp_dir,
-                            &download.id,
-                        )
-                        .await
-                        {
-                            eprintln!(
-                                "Could not remove completed segment files for {}: {}",
-                                download.id, error.message
+                    metrics.range_supported = true;
+                    metrics.known_total = Some(validator.total);
+                    let previous = self
+                        .segment_validators
+                        .lock()
+                        .map_err(|_| AppError::storage("Download resume state is unavailable."))?
+                        .get(&download.id)
+                        .cloned()
+                        .or_else(|| {
+                            download
+                                .resume_validator()
+                                .map(|v| SegmentValidator::new(v, validator.total))
+                        });
+                    let mut restart_notice = None;
+                    if existing_parts {
+                        if previous.is_none() {
+                            assembler::remove_segment_parts(&temp_dir, &download.id).await?;
+                            restart_notice = Some(
+                                "The download could not be verified with a saved validator; restarted download from the beginning."
+                                    .to_owned(),
+                            );
+                        } else if previous.as_ref() != Some(&validator) {
+                            assembler::remove_segment_parts(&temp_dir, &download.id).await?;
+                            restart_notice = Some(
+                                "The remote file changed on the server; restarted download from the beginning."
+                                    .to_owned(),
                             );
                         }
-                        metrics.record_completion(result.downloaded);
-                        return Ok(result);
                     }
-                    Err(error) if matches!(error.code, "download_paused" | "download_cancelled") => {
-                        return Err(error);
-                    }
-                    Err(error) => {
-                        // Safe Segmented Fallback (IDM-style):
-                        // On range inconsistency or mid-stream segment failure, clean up
-                        // incomplete segment parts and seamlessly fall back to single stream from byte 0.
-                        metrics.set_fallback(format!("segmented_range_failed: {}", error.message));
-                        let _ = assembler::remove_segment_parts(
-                            &temp_dir,
-                            &download.id,
-                        )
-                        .await;
+                    self.segment_validators
+                        .lock()
+                        .map_err(|_| AppError::storage("Download resume state is unavailable."))?
+                        .insert(download.id.clone(), validator.clone());
+                    if let Some(notice) = restart_notice {
                         progress_handler(DownloadProgress {
                             downloaded: 0,
                             total: Some(validator.total),
                             bytes_per_second: 0,
                             connections_progress: Vec::new(),
-                            notice: Some(
-                                "Segmented range requests were not honored by the server; restarted as single stream."
-                                    .to_owned(),
-                            ),
-                            transfer_kind: Some("single_http".to_string()),
-                            effective_concurrency: Some(1),
-                            etag: None,
-                            validator: None,
+                            notice: Some(notice),
+                            transfer_kind: Some("segmented_http".to_string()),
+                            effective_concurrency: Some(effective_connections),
+                            etag: Some(validator.value().to_string()),
+                            validator: Some(validator.validator.clone()),
                         });
                     }
+                    let segments = segmented::segment_ranges(
+                        validator.total,
+                        effective_connections,
+                        &temp_dir,
+                        &download.id,
+                        if download.connections_progress.is_empty() {
+                            None
+                        } else {
+                            Some(&download.connections_progress)
+                        },
+                    )
+                    .await?;
+                    let download_res = segmented::download_segments(
+                        self.client(),
+                        &download.id,
+                        discovery.final_url,
+                        &validator,
+                        segments,
+                        effective_connections,
+                        &temp_dir,
+                        &mut control,
+                        rate_limiter.clone(),
+                        &progress_handler,
+                        discovery.auth_header,
+                    )
+                    .await;
+
+                    match download_res {
+                        Ok(completed_segments) => {
+                            assembler::concat_segments(
+                                &download.id,
+                                &completed_segments,
+                                &temp_dir,
+                                &temporary,
+                                &mut control,
+                            )
+                            .await?;
+                            self.segment_validators
+                                .lock()
+                                .map_err(|_| AppError::storage("Download resume state is unavailable."))?
+                                .remove(&download.id);
+                            let result = assembler::finalize(
+                                &download.id,
+                                temporary,
+                                destination,
+                                validator.total,
+                                Some(validator.total),
+                            )
+                            .await?;
+                            if let Err(error) = assembler::remove_segment_parts(
+                                &temp_dir,
+                                &download.id,
+                            )
+                            .await
+                            {
+                                eprintln!(
+                                    "Could not remove completed segment files for {}: {}",
+                                    download.id, error.message
+                                );
+                            }
+                            metrics.record_completion(result.downloaded);
+                            return Ok(result);
+                        }
+                        Err(error) if matches!(error.code, "download_paused" | "download_cancelled") => {
+                            return Err(error);
+                        }
+                        Err(error) => {
+                            // Safe Segmented Fallback (IDM-style):
+                            // On range inconsistency or mid-stream segment failure, clean up
+                            // incomplete segment parts and seamlessly fall back to single stream from byte 0.
+                            metrics.set_fallback(format!("segmented_range_failed: {}", error.message));
+                            let _ = assembler::remove_segment_parts(
+                                &temp_dir,
+                                &download.id,
+                            )
+                            .await;
+                            progress_handler(DownloadProgress {
+                                downloaded: 0,
+                                total: Some(validator.total),
+                                bytes_per_second: 0,
+                                connections_progress: Vec::new(),
+                                notice: Some(
+                                    "Segmented range requests were not honored by the server; restarted as single stream."
+                                        .to_owned(),
+                                ),
+                                transfer_kind: Some("single_http".to_string()),
+                                effective_concurrency: Some(1),
+                                etag: None,
+                                validator: None,
+                            });
+                        }
+                    }
+                } else if existing_parts {
+                    assembler::remove_segment_parts(
+                        &temp_dir,
+                        &download.id,
+                    )
+                    .await?;
                 }
             } else if existing_parts {
                 assembler::remove_segment_parts(
@@ -460,5 +487,13 @@ impl DownloadExecutor for HttpDownloadExecutor {
 
     fn set_proxy(&self, proxy: Option<&ProxySettings>) -> AppResult<()> {
         self.set_proxy(proxy)
+    }
+
+    fn set_connection_overrides(
+        &self,
+        overrides: &[crate::domain::settings::ConnectionOverride],
+        _default_connections: u8,
+    ) {
+        self.set_connection_overrides(overrides);
     }
 }

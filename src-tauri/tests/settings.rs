@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Integration tests verifying settings functionality, edge cases, and error recovery.
 
 use std::{
@@ -60,6 +61,8 @@ fn settings_update_is_validated_and_persisted() {
             capture_policy: None,
             completion_actions: None,
             clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
         })
         .expect("valid settings should save");
 
@@ -103,6 +106,8 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
         capture_policy: None,
         completion_actions: None,
         clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
     };
 
     let error = service
@@ -140,6 +145,8 @@ fn relative_category_directory_is_rejected() {
             capture_policy: None,
             completion_actions: None,
             clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
         })
         .expect_err("category directories must be absolute");
 

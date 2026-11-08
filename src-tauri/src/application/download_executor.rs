@@ -1,7 +1,8 @@
 // Created: 2026-11-05
 // Reason: refactor: modularize native download architecture
-// Last updated: 2026-11-06
+// Last updated: 2026-11-08
 // Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Abstractions, traits, control signals, and cancellation error types for download executors.
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -80,5 +81,12 @@ pub trait DownloadExecutor: Send + Sync {
 
     fn set_proxy(&self, _proxy: Option<&crate::domain::settings::ProxySettings>) -> AppResult<()> {
         Ok(())
+    }
+
+    fn set_connection_overrides(
+        &self,
+        _overrides: &[crate::domain::settings::ConnectionOverride],
+        _default_connections: u8,
+    ) {
     }
 }

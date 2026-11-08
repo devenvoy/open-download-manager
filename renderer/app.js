@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1272,6 +1273,54 @@ function resetProxyTestStatus() {
 	}
 }
 
+let optionsConnectionOverrides = [];
+
+function renderSiteOverrides() {
+	const container = $("#site-overrides-list");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!Array.isArray(optionsConnectionOverrides) || optionsConnectionOverrides.length === 0) {
+		const empty = document.createElement("div");
+		empty.className = "field-help";
+		empty.textContent = "No site exceptions configured.";
+		container.appendChild(empty);
+		return;
+	}
+	optionsConnectionOverrides.forEach((rule, index) => {
+		const row = document.createElement("div");
+		row.className = "site-override-row";
+
+		const patternSpan = document.createElement("span");
+		patternSpan.className = "site-override-pattern";
+		patternSpan.textContent = rule.hostPattern;
+
+		const connsSpan = document.createElement("span");
+		connsSpan.className = "site-override-conns";
+		connsSpan.textContent = `${rule.connections} conn${rule.connections === 1 ? "" : "s"}`;
+
+		const removeBtn = document.createElement("button");
+		removeBtn.type = "button";
+		removeBtn.className = "small-button remove-override-button";
+		removeBtn.dataset.index = index;
+		removeBtn.textContent = "Remove";
+
+		row.appendChild(patternSpan);
+		row.appendChild(connsSpan);
+		row.appendChild(removeBtn);
+		container.appendChild(row);
+	});
+}
+
+function updateWindowLimitFieldsState() {
+	const enabled = $("#window-limit-enabled")?.checked === true;
+	const container = $("#window-limit-fields");
+	if (container) {
+		container.classList.toggle("disabled", !enabled);
+	}
+	if ($("#window-limit-max-mb")) $("#window-limit-max-mb").disabled = !enabled;
+	if ($("#window-limit-hours")) $("#window-limit-hours").disabled = !enabled;
+}
+
 function openSettings() {
 	const settings = state.settings;
 	optionsCategoryDirectories = { ...(settings.categoryDirectories || {}) };
@@ -1293,6 +1342,36 @@ function openSettings() {
 	$("#max-concurrent").value = settings.maxConcurrent || 3;
 	$("#connections").value = settings.connections || 8;
 	$("#speed-limit").value = settings.speedLimitKbps || 0;
+
+	optionsConnectionOverrides = Array.isArray(settings.connectionOverrides)
+		? [...settings.connectionOverrides]
+		: [];
+	renderSiteOverrides();
+
+	const windowLimit = settings.windowLimit || {};
+	if ($("#window-limit-enabled")) {
+		$("#window-limit-enabled").checked = windowLimit.enabled === true;
+		$("#window-limit-max-mb").value = windowLimit.maxBytes
+			? Math.round(windowLimit.maxBytes / (1024 * 1024))
+			: 2048;
+		$("#window-limit-hours").value = windowLimit.windowHours || 12;
+		updateWindowLimitFieldsState();
+
+		const statusEl = $("#window-limit-status");
+		if (statusEl) {
+			if (windowLimit.enabled) {
+				const currentMb = ((windowLimit.currentBytes || 0) / (1024 * 1024)).toFixed(1);
+				const maxMb = ((windowLimit.maxBytes || 0) / (1024 * 1024)).toFixed(0);
+				let text = `Current usage: ${currentMb} / ${maxMb} MB in rolling window.`;
+				if (windowLimit.stoppedUntil) {
+					text += ` (Quota exceeded; auto-resumes at ${windowLimit.stoppedUntil})`;
+				}
+				statusEl.textContent = text;
+			} else {
+				statusEl.textContent = "";
+			}
+		}
+	}
 
 	const proxy = settings.proxy || {};
 	$("#proxy-enabled").checked = proxy.enabled === true;
@@ -2420,6 +2499,37 @@ $("#clipboard-monitoring-enabled")?.addEventListener("change", () => {
 		$("#clipboard-auto-enqueue").disabled = !$("#clipboard-monitoring-enabled").checked;
 	}
 });
+$("#add-override-button")?.addEventListener("click", () => {
+	const hostInput = $("#new-override-host");
+	const connsInput = $("#new-override-connections");
+	if (!hostInput || !connsInput) return;
+	let host = hostInput.value.trim().toLowerCase().replace(/^https?:\/\//, "");
+	if (host.includes("/")) host = host.split("/")[0];
+	if (host.includes(":")) host = host.split(":")[0];
+	const conns = Math.max(1, Math.min(32, Number(connsInput.value) || 1));
+
+	if (!host) {
+		alert("Please enter a valid host pattern (e.g. example.com or *.domain.com)");
+		return;
+	}
+
+	optionsConnectionOverrides.push({ hostPattern: host, connections: conns });
+	hostInput.value = "";
+	connsInput.value = "1";
+	renderSiteOverrides();
+});
+$("#site-overrides-list")?.addEventListener("click", (e) => {
+	const button = e.target.closest(".remove-override-button");
+	if (!button) return;
+	const index = Number(button.dataset.index);
+	if (!isNaN(index) && index >= 0 && index < optionsConnectionOverrides.length) {
+		optionsConnectionOverrides.splice(index, 1);
+		renderSiteOverrides();
+	}
+});
+$("#window-limit-enabled")?.addEventListener("change", () => {
+	updateWindowLimitFieldsState();
+});
 $("#proxy-enabled").addEventListener("change", () => {
 	updateProxyFieldsState();
 	resetProxyTestStatus();
@@ -2536,6 +2646,18 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			enabled: Boolean($("#clipboard-monitoring-enabled")?.checked),
 			autoEnqueue: Boolean($("#clipboard-auto-enqueue")?.checked),
 		};
+		const windowLimitEnabled = Boolean($("#window-limit-enabled")?.checked);
+		const maxMb = Number($("#window-limit-max-mb")?.value) || 2048;
+		const windowHours = Number($("#window-limit-hours")?.value) || 12;
+		const existingLimit = state.settings?.windowLimit || {};
+		const windowLimit = {
+			enabled: windowLimitEnabled,
+			windowHours,
+			maxBytes: maxMb * 1024 * 1024,
+			windowAnchor: existingLimit.windowAnchor || new Date().toISOString(),
+			currentBytes: existingLimit.currentBytes || 0,
+			stoppedUntil: existingLimit.stoppedUntil || null,
+		};
 		await call("settings", {
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
@@ -2548,6 +2670,8 @@ $("#settings-form").addEventListener("submit", async (event) => {
 			capturePolicy,
 			completionActions,
 			clipboardMonitoring,
+			connectionOverrides: optionsConnectionOverrides,
+			windowLimit,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");

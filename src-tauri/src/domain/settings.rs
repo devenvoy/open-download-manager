@@ -3,16 +3,21 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Domain settings entity defining download directories, category mappings, and connection limits.
 
+pub mod connection_override;
 mod patch;
 mod policy;
 pub mod proxy;
 mod validation_error;
+pub mod window_limit;
 
+pub use connection_override::{resolve_connections_for_host, ConnectionOverride};
 pub use patch::SettingsPatch;
 pub use proxy::{ProxyProtocol, ProxySettings, ProxyTestResult, DEFAULT_PROXY_PORT};
 pub use validation_error::SettingsValidationError;
+pub use window_limit::{Clock, DownloadWindowLimit, MockClock, SystemClock};
 
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -49,6 +54,10 @@ pub struct Settings {
     pub completion_actions: Vec<crate::domain::completion::CompletionAction>,
     #[serde(default)]
     pub clipboard_monitoring: crate::domain::clipboard::ClipboardMonitoringSettings,
+    #[serde(default)]
+    pub connection_overrides: Vec<ConnectionOverride>,
+    #[serde(default)]
+    pub window_limit: Option<DownloadWindowLimit>,
 }
 
 impl Settings {
@@ -69,7 +78,13 @@ impl Settings {
             capture_policy: crate::domain::browser::CapturePolicy::default(),
             completion_actions: Vec::new(),
             clipboard_monitoring: crate::domain::clipboard::ClipboardMonitoringSettings::default(),
+            connection_overrides: Vec::new(),
+            window_limit: None,
         }
+    }
+
+    pub fn connections_for_host(&self, host: &str) -> u8 {
+        resolve_connections_for_host(&self.connection_overrides, host, self.connections)
     }
 
     pub fn updated(&self, patch: SettingsPatch) -> Result<Self, SettingsValidationError> {
@@ -118,6 +133,10 @@ impl Settings {
         apply_if_some(&mut next.capture_policy, patch.capture_policy);
         apply_if_some(&mut next.completion_actions, patch.completion_actions);
         apply_if_some(&mut next.clipboard_monitoring, patch.clipboard_monitoring);
+        apply_if_some(&mut next.connection_overrides, patch.connection_overrides);
+        if let Some(limit) = patch.window_limit {
+            next.window_limit = Some(limit);
+        }
 
         next.validate()?;
         Ok(next)
@@ -165,6 +184,12 @@ impl Settings {
             if let Err(msg) = action.validate() {
                 return Err(SettingsValidationError::new(msg));
             }
+        }
+        for connection_override in &self.connection_overrides {
+            connection_override.validate()?;
+        }
+        if let Some(ref limit) = self.window_limit {
+            limit.validate()?;
         }
         Ok(())
     }

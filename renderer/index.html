@@ -705,6 +705,72 @@
 						</div>
 					</fieldset>
 					<fieldset>
+						<legend>Site Connection Exceptions</legend>
+						<p class="field-help">
+							Configure per-domain connection limits (exact host or *.domain.com).
+							Tip: Use 1 connection for servers that do not support resume.
+						</p>
+						<div class="form-line site-override-inputs">
+							<input
+								type="text"
+								id="new-override-host"
+								placeholder="example.com or *.domain.com" />
+							<input
+								type="number"
+								id="new-override-connections"
+								min="1"
+								max="32"
+								value="1"
+								title="Connections" />
+							<button
+								type="button"
+								id="add-override-button"
+								class="small-button">
+								Add Exception
+							</button>
+						</div>
+						<div
+							id="site-overrides-list"
+							class="site-overrides-list"></div>
+					</fieldset>
+					<fieldset>
+						<legend>Rolling Download Limits</legend>
+						<label
+							class="checkbox-label"
+							for="window-limit-enabled">
+							<input
+								type="checkbox"
+								id="window-limit-enabled" />
+							Limit download volume over rolling time window
+						</label>
+						<div
+							id="window-limit-fields"
+							class="window-limit-fields">
+							<div class="form-line">
+								<label for="window-limit-max-mb">Max data volume (MB):</label>
+								<input
+									type="number"
+									id="window-limit-max-mb"
+									min="1"
+									placeholder="2048" />
+							</div>
+							<div class="form-line">
+								<label for="window-limit-hours">Time window (hours):</label>
+								<input
+									type="number"
+									id="window-limit-hours"
+									min="1"
+									max="8760"
+									placeholder="12" />
+							</div>
+							<div
+								id="window-limit-status-line"
+								class="field-help window-limit-status-line">
+								<span id="window-limit-status"></span>
+							</div>
+						</div>
+					</fieldset>
+					<fieldset>
 						<legend>Proxy</legend>
 						<label
 							class="checkbox-label"

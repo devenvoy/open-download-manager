@@ -2,6 +2,7 @@
 // Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
 // Last updated: 2026-11-08
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Composite download executor routing transfers to HTTP, FTP, HLS, or YouTube executors.
 
 use std::sync::{Arc, RwLock};
@@ -153,5 +154,13 @@ impl DownloadExecutor for CompositeDownloadExecutor {
         self.http_executor.set_proxy(proxy)?;
         *self.client.write().unwrap() = new_client;
         Ok(())
+    }
+
+    fn set_connection_overrides(
+        &self,
+        overrides: &[crate::domain::settings::ConnectionOverride],
+        _default_connections: u8,
+    ) {
+        self.http_executor.set_connection_overrides(overrides);
     }
 }

@@ -4,6 +4,7 @@
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
 // Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Integration tests verifying proxy reconfiguration functionality, edge cases, and error recovery.
 
 use std::{
@@ -190,6 +191,8 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
         capture_policy: None,
         completion_actions: None,
         clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
     };
 
     let err = update_settings(state.clone(), invalid_patch)
@@ -226,6 +229,8 @@ async fn invalid_proxy_host_or_port_fails_validation_and_leaves_settings_untouch
         capture_policy: None,
         completion_actions: None,
         clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
     };
 
     let err = update_settings(state.clone(), invalid_port_patch)
@@ -311,6 +316,8 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         capture_policy: None,
         completion_actions: None,
         clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
     };
 
     let err = update_settings(state.clone(), bad_proxy_patch)
@@ -403,6 +410,8 @@ async fn successful_proxy_update_persists_settings_and_updates_runtime() {
         capture_policy: None,
         completion_actions: None,
         clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
     };
 
     let result = update_settings(state.clone(), patch).expect("valid proxy configuration should succeed");

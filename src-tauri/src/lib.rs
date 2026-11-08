@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -61,8 +62,9 @@ pub fn run() {
                 .download_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
             let data_directory = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let settings_store = SettingsStore::new(data_directory.clone());
             let settings = SettingsService::new(
-                SettingsStore::new(data_directory.clone()),
+                settings_store.clone(),
                 default_download_directory.clone(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
@@ -101,6 +103,7 @@ pub fn run() {
                 crate::infrastructure::system_shell::SystemShellService::new(),
                 allocator,
             );
+            download_transfer.set_settings_repository(std::sync::Arc::new(settings_store));
             download_transfer.set_settings(settings.settings().clone());
             download_transfer.set_speed_limit(settings.settings().speed_limit_kbps);
             download_transfer.start_scheduler();

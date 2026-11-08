@@ -941,6 +941,58 @@ legend {
 #settings-dialog input[type="number"] {
 	max-width: 105px;
 }
+.site-override-inputs {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	margin-top: 6px;
+}
+.site-override-inputs input[type="text"] {
+	flex: 1;
+	min-width: 0;
+}
+.site-override-inputs input[type="number"] {
+	max-width: 60px;
+}
+.site-overrides-list {
+	margin-top: 6px;
+	max-height: 110px;
+	overflow-y: auto;
+	border: 1px solid #ccc;
+	background: #fff;
+	padding: 2px 4px;
+}
+.site-override-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 3px 4px;
+	border-bottom: 1px solid #eee;
+}
+.site-override-row:last-child {
+	border-bottom: none;
+}
+.site-override-pattern {
+	font-family: monospace;
+	font-size: 11px;
+}
+.site-override-conns {
+	color: #666;
+	font-size: 11px;
+	margin-left: auto;
+	margin-right: 8px;
+}
+.window-limit-fields {
+	margin-top: 6px;
+}
+.window-limit-fields.disabled {
+	opacity: 0.55;
+	pointer-events: none;
+}
+.window-limit-status-line {
+	margin-top: 4px;
+	color: #1a73e8;
+}
 .proxy-fields {
 	margin-top: 8px;
 }

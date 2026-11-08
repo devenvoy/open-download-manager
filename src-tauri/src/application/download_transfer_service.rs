@@ -2,6 +2,7 @@
 // Reason: feat: add native HTTP download engine
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -26,6 +27,8 @@ use crate::{
             SCHEDULER_POLL_INTERVAL_MILLISECONDS,
         },
         error::{AppError, AppResult},
+        quota_service::{QuotaEnforcementService, QuotaStatus},
+        settings_service::SettingsRepository,
         shell_service::ShellService,
     },
     domain::{
@@ -56,6 +59,8 @@ pub struct DownloadTransferService {
     allocator: DestinationAllocator,
     action_executor: Arc<dyn ActionExecutor>,
     settings: Arc<std::sync::RwLock<Option<Settings>>>,
+    quota_service: Arc<QuotaEnforcementService>,
+    settings_repository: Arc<std::sync::RwLock<Option<Arc<dyn SettingsRepository>>>>,
 }
 
 impl DownloadTransferService {
@@ -123,6 +128,8 @@ impl DownloadTransferService {
             allocator,
             action_executor: Arc::new(action_executor),
             settings: Arc::new(std::sync::RwLock::new(None)),
+            quota_service: Arc::new(QuotaEnforcementService::new(None)),
+            settings_repository: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -134,9 +141,34 @@ impl DownloadTransferService {
         self
     }
 
+    pub fn with_quota_service(mut self, quota_service: Arc<QuotaEnforcementService>) -> Self {
+        self.quota_service = quota_service;
+        self
+    }
+
+    pub fn with_settings_repository(self, repo: Arc<dyn SettingsRepository>) -> Self {
+        *self.settings_repository.write().unwrap() = Some(repo);
+        self
+    }
+
+    pub fn set_settings_repository(&self, repo: Arc<dyn SettingsRepository>) {
+        if let Ok(mut lock) = self.settings_repository.write() {
+            *lock = Some(repo);
+        }
+    }
+
+    pub fn quota_service(&self) -> Arc<QuotaEnforcementService> {
+        self.quota_service.clone()
+    }
+
     pub fn set_settings(&self, settings: Settings) {
         if let Ok(mut lock) = self.settings.write() {
-            *lock = Some(settings);
+            *lock = Some(settings.clone());
+        }
+        self.executor.set_connection_overrides(&settings.connection_overrides, settings.connections);
+        self.quota_service.update_limit(settings.window_limit.clone());
+        if !self.quota_service.is_quota_exceeded().0 {
+            self.resume_quota_paused_downloads();
         }
     }
 
@@ -349,7 +381,7 @@ impl DownloadTransferService {
                     connections: if request.audio_url.is_some() {
                         2
                     } else {
-                        settings.connections
+                        settings.connections_for_host(url.url().host_str().unwrap_or(""))
                     },
                     connections_progress: Vec::new(),
                     audio_url: request.audio_url.clone(),
@@ -431,6 +463,11 @@ impl DownloadTransferService {
                     format!("{clean_title}.mp4")
                 };
 
+                let item_host = url::Url::parse(&item.url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()))
+                    .unwrap_or_default();
+
                 DownloadRecord {
                     id: uuid::Uuid::new_v4().to_string(),
                     url: item.url,
@@ -454,7 +491,7 @@ impl DownloadTransferService {
                     kind: Some("youtube".to_owned()),
                     resumable: Some(NEW_DOWNLOAD_IS_RESUMABLE),
                     duration: None,
-                    connections: settings.connections,
+                    connections: settings.connections_for_host(&item_host),
                     connections_progress: Vec::new(),
                     audio_url: None,
                     sabr: None,
@@ -518,7 +555,14 @@ impl DownloadTransferService {
 
     pub fn action(&self, id: &str, action: DownloadAction) -> AppResult<()> {
         match action {
-            DownloadAction::Resume => self.start_download(id, false),
+            DownloadAction::Resume => {
+                let (exceeded, explanation) = self.quota_service.is_quota_exceeded();
+                if exceeded {
+                    let msg = explanation.unwrap_or_else(|| "Download limit reached.".to_string());
+                    return Err(AppError::download(format!("Cannot resume download: {msg}")));
+                }
+                self.start_download(id, false)
+            }
             DownloadAction::Retry => self.start_download(id, true),
             DownloadAction::Pause => self.stop_download(id, DownloadStopReason::Pause),
             DownloadAction::Cancel => self.stop_download(id, DownloadStopReason::Cancel),
@@ -609,6 +653,9 @@ impl DownloadTransferService {
     }
 
     pub fn pump_queue(&self) {
+        if self.quota_service.is_quota_exceeded().0 {
+            return;
+        }
         let _guard = match self.queue_pump_lock.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
@@ -651,6 +698,10 @@ impl DownloadTransferService {
             ));
             loop {
                 interval.tick().await;
+                if service.quota_service.check_window_roll() {
+                    service.resume_quota_paused_downloads();
+                    service.persist_quota_state();
+                }
                 if let Err(error) = service.start_due_downloads() {
                     eprintln!("Could not start scheduled downloads: {}", error.message);
                 }
@@ -683,6 +734,11 @@ impl DownloadTransferService {
     }
 
     fn start_download(&self, id: &str, retry: bool) -> AppResult<()> {
+        let (exceeded, explanation) = self.quota_service.is_quota_exceeded();
+        if exceeded {
+            let msg = explanation.unwrap_or_else(|| "Download limit reached.".to_string());
+            return Err(AppError::download(format!("Cannot start download: {msg}")));
+        }
         let mut controls = self
             .controls
             .lock()
@@ -703,6 +759,7 @@ impl DownloadTransferService {
     }
 
     fn stop_download(&self, id: &str, reason: DownloadStopReason) -> AppResult<()> {
+        self.quota_service.remove_download_tracker(id);
         let controls = self
             .controls
             .lock()
@@ -787,6 +844,7 @@ impl DownloadTransferService {
                     }
                 }
             }
+            service.quota_service.remove_download_tracker(&id);
             match service.controls.lock() {
                 Ok(mut controls) => {
                     controls.remove(&id);
@@ -823,7 +881,14 @@ impl DownloadTransferService {
 
         let history = self.history.clone();
         let download_id = id.clone();
+        let quota_service = self.quota_service.clone();
+        let self_for_quota = self.clone();
         let progress_handler: DownloadProgressHandler = Arc::new(move |progress| {
+            let quota_status = quota_service.record_progress(&download_id, progress.downloaded);
+            if let QuotaStatus::Exceeded { explanation, .. } = quota_status {
+                self_for_quota.pause_active_for_quota(&explanation);
+                self_for_quota.persist_quota_state();
+            }
             if let Err(error) = history.update_active_download(&download_id, |download| {
                 download.status = DownloadStatus::Downloading;
                 download.downloaded = progress.downloaded;
@@ -859,6 +924,7 @@ impl DownloadTransferService {
             .executor
             .execute(record, progress_handler, control, self.rate_limiter.clone())
             .await?;
+        self.quota_service.remove_download_tracker(&id);
         let _permit = permit;
         self.history.update_active_download(&id, |download| {
             download.status = DownloadStatus::Completed;
@@ -1204,6 +1270,55 @@ impl DownloadTransferService {
             download.error = Some(message);
         }) {
             eprintln!("Could not save failed download {id}: {}", error.message);
+        }
+    }
+
+    pub fn pause_active_for_quota(&self, explanation: &str) {
+        let active_ids = match self.history.with_downloads(|downloads| {
+            downloads
+                .iter()
+                .filter(|d| {
+                    matches!(
+                        d.status,
+                        DownloadStatus::Downloading
+                            | DownloadStatus::Connecting
+                            | DownloadStatus::Assembling
+                    )
+                })
+                .map(|d| d.id.clone())
+                .collect::<Vec<_>>()
+        }) {
+            Ok(ids) => ids,
+            Err(_) => return,
+        };
+
+        for id in active_ids {
+            self.quota_service.mark_quota_paused(&id);
+            let _ = self.stop_download(&id, DownloadStopReason::Pause);
+            let _ = self.history.update_active_download(&id, |d| {
+                d.notice = Some(explanation.to_string());
+            });
+        }
+    }
+
+    pub fn resume_quota_paused_downloads(&self) {
+        let paused_ids = self.quota_service.drain_quota_paused();
+        for id in paused_ids {
+            let _ = self.history.update_active_download(&id, |d| {
+                d.notice = None;
+                d.status = DownloadStatus::Queued;
+            });
+        }
+        self.pump_queue();
+    }
+
+    pub fn persist_quota_state(&self) {
+        if let (Some(mut settings), Some(repo)) = (
+            self.settings.read().ok().and_then(|g| g.clone()),
+            self.settings_repository.read().ok().and_then(|g| g.clone()),
+        ) {
+            settings.window_limit = self.quota_service.current_limit();
+            let _ = repo.save(&settings);
         }
     }
 }

@@ -3,6 +3,7 @@
 // Last updated: 2026-11-08
 // Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
 // Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
 // Description: Integration tests verifying category and temp directories functionality, edge cases, and error recovery.
 
 use std::{
@@ -548,6 +549,8 @@ fn options_settings_patch_supports_editing_and_resetting_category_and_temp_direc
             capture_policy: None,
             completion_actions: None,
             clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
         })
         .unwrap();
 
@@ -578,6 +581,8 @@ fn options_settings_patch_supports_editing_and_resetting_category_and_temp_direc
             capture_policy: None,
             completion_actions: None,
             clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
         })
         .unwrap();
 
