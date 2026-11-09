@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-06
+// Reason: perf: eliminate eager cloning across history queries and apply zero-copy serialization
+// Description: Thread-safe persistent download history store serializing records to JSON.
+
 mod document;
 mod policy;
 

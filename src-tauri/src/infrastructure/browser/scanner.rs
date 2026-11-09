@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Last updated: 2026-11-07
+// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Description: Filesystem scanner locating browser binary paths and user profile extension directories.
+
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -9,7 +15,7 @@ use crate::{
     infrastructure::browser::registration::BrowserType,
 };
 
-pub const EXTENSION_ID: Option<&str> = None;
+pub const EXTENSION_ID: Option<&str> = Some(super::registration::DEFAULT_CHROME_EXTENSION_ID);
 pub const STORE_URL: Option<&str> = None;
 pub const FIREFOX_EXTENSION_ID: &str = "open-download-manager@opendownloadmanager.local";
 
@@ -64,6 +70,22 @@ pub fn resolve_host_exe(integration_root: &Path) -> PathBuf {
                 return candidate;
             }
         }
+    }
+
+    let root_target_debug = integration_root
+        .join("target")
+        .join("debug")
+        .join(bin_name);
+    if root_target_debug.exists() {
+        return root_target_debug;
+    }
+
+    let root_target_release = integration_root
+        .join("target")
+        .join("release")
+        .join(bin_name);
+    if root_target_release.exists() {
+        return root_target_release;
     }
 
     let target_debug = integration_root
@@ -145,15 +167,23 @@ pub fn find_browser_executable(browser: BrowserType) -> Option<PathBuf> {
             ],
             BrowserType::Edge => &[
                 "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                "~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
             ],
             BrowserType::Brave => &[
                 "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+                "~/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
             ],
             BrowserType::Opera => &[
                 "/Applications/Opera.app/Contents/MacOS/Opera",
+                "~/Applications/Opera.app/Contents/MacOS/Opera",
             ],
             BrowserType::Firefox => &[
                 "/Applications/Firefox.app/Contents/MacOS/firefox",
+                "~/Applications/Firefox.app/Contents/MacOS/firefox",
+                "/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox",
+                "~/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox",
+                "/Applications/Firefox Nightly.app/Contents/MacOS/firefox",
+                "~/Applications/Firefox Nightly.app/Contents/MacOS/firefox",
             ],
         };
 
@@ -173,18 +203,29 @@ pub fn find_browser_executable(browser: BrowserType) -> Option<PathBuf> {
 
     #[cfg(all(not(windows), not(target_os = "macos")))]
     {
-        let bin = match browser {
-            BrowserType::Chrome => "google-chrome",
-            BrowserType::Edge => "microsoft-edge",
-            BrowserType::Brave => "brave-browser",
-            BrowserType::Opera => "opera",
-            BrowserType::Firefox => "firefox",
+        let bins: &[&str] = match browser {
+            BrowserType::Chrome => &[
+                "google-chrome",
+                "google-chrome-stable",
+                "chromium",
+                "chromium-browser",
+            ],
+            BrowserType::Edge => &[
+                "microsoft-edge",
+                "microsoft-edge-stable",
+                "microsoft-edge-dev",
+            ],
+            BrowserType::Brave => &["brave-browser", "brave"],
+            BrowserType::Opera => &["opera", "opera-beta"],
+            BrowserType::Firefox => &["firefox", "firefox-esr", "firefox-bin"],
         };
-        if let Ok(output) = Command::new("which").arg(bin).output() {
-            if output.status.success() {
-                let s = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-                if !s.is_empty() {
-                    return Some(PathBuf::from(s));
+        for &bin in bins {
+            if let Ok(output) = Command::new("which").arg(bin).output() {
+                if output.status.success() {
+                    let s = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                    if !s.is_empty() {
+                        return Some(PathBuf::from(s));
+                    }
                 }
             }
         }
@@ -232,7 +273,19 @@ pub fn get_user_data_dir(browser: BrowserType) -> Option<PathBuf> {
         let home = user_home_dir()?;
         let config = home.join(".config");
         match browser {
-            BrowserType::Chrome => Some(config.join("google-chrome")),
+            BrowserType::Chrome => {
+                let google_chrome = config.join("google-chrome");
+                if google_chrome.exists() {
+                    Some(google_chrome)
+                } else {
+                    let chromium = config.join("chromium");
+                    if chromium.exists() {
+                        Some(chromium)
+                    } else {
+                        Some(google_chrome)
+                    }
+                }
+            }
             BrowserType::Edge => Some(config.join("microsoft-edge")),
             BrowserType::Brave => Some(config.join("BraveSoftware/Brave-Browser")),
             BrowserType::Opera => Some(config.join("opera")),
@@ -321,19 +374,28 @@ pub fn inspect_profile(profile_dir: &Path) -> (bool, String) {
 }
 
 pub fn inspect_firefox_profile(profile_dir: &Path) -> bool {
+    inspect_firefox_profile_status(profile_dir).0
+}
+
+pub fn inspect_firefox_profile_status(profile_dir: &Path) -> (bool, String) {
     let extensions_json = profile_dir.join("extensions.json");
     if let Ok(content) = std::fs::read_to_string(&extensions_json) {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
             if let Some(addons) = json.get("addons").and_then(|a| a.as_array()) {
-                return addons.iter().any(|addon| {
-                    addon.get("id").and_then(|s| s.as_str()) == Some(FIREFOX_EXTENSION_ID)
-                        && addon.get("active").and_then(|b| b.as_bool()) != Some(false)
-                        && addon.get("appDisabled").and_then(|b| b.as_bool()) != Some(true)
-                });
+                for addon in addons {
+                    if addon.get("id").and_then(|s| s.as_str()) == Some(FIREFOX_EXTENSION_ID) {
+                        let is_disabled = addon.get("active").and_then(|b| b.as_bool()) == Some(false)
+                            || addon.get("appDisabled").and_then(|b| b.as_bool()) == Some(true);
+                        if is_disabled {
+                            return (false, "disabled".to_owned());
+                        }
+                        return (true, "connected".to_owned());
+                    }
+                }
             }
         }
     }
-    false
+    (false, "missing".to_owned())
 }
 
 pub fn scan_browsers(
@@ -365,16 +427,25 @@ pub fn scan_browsers(
 
         if let Some(data_root) = get_user_data_dir(b_type) {
             if b_type.is_firefox() {
+                let mut states = Vec::new();
                 if let Ok(entries) = std::fs::read_dir(&data_root) {
                     for entry in entries.flatten() {
-                        if entry.path().is_dir() && inspect_firefox_profile(&entry.path()) {
-                            connected = true;
-                            profiles_count += 1;
+                        if entry.path().is_dir() {
+                            let (conn, state) = inspect_firefox_profile_status(&entry.path());
+                            if conn {
+                                connected = true;
+                                profiles_count += 1;
+                            }
+                            states.push(state);
                         }
                     }
                 }
                 if connected {
                     setup_state = "connected".to_owned();
+                } else if states.iter().any(|s| s == "disabled") {
+                    setup_state = "disabled".to_owned();
+                } else {
+                    setup_state = "missing".to_owned();
                 }
             } else {
                 let mut profile_dirs = Vec::new();

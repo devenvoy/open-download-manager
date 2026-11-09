@@ -1,6 +1,14 @@
+// Created: 2026-11-05
+// Reason: feat: add native HTTP download engine
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Integration tests verifying download request functionality, edge cases, and error recovery.
+
 use std::path::PathBuf;
 
 use open_download_manager_lib::domain::download::{
+    filename_from_url, is_generic_filename, parse_content_disposition_filename,
     redact_download_url, sanitize_filename, DownloadProtocol, DownloadRequest,
 };
 
@@ -9,27 +17,36 @@ fn request(url: &str) -> DownloadRequest {
         urls: vec![url.to_owned()],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
+        conflict_policy: None,
+        credentials: None,
+        completion_actions: None,
     }
 }
 
 #[test]
-fn accepts_http_and_https_addresses_and_uses_default_directory() {
+fn accepts_http_and_https_and_ftp_addresses_and_uses_default_directory() {
     for (url, protocol) in [
         ("http://example.test/file.bin", DownloadProtocol::Http),
         ("https://example.test/file.bin", DownloadProtocol::Https),
+        ("ftp://example.test/file.bin", DownloadProtocol::Ftp),
+        ("ftp://user:secret@example.test/file.bin", DownloadProtocol::Ftp),
     ] {
         let valid = request(url)
             .validate(PathBuf::from("/tmp/downloads"))
-            .expect("HTTP and HTTPS should be supported");
+            .expect("HTTP, HTTPS, and FTP should be supported");
         assert_eq!(valid.directory, PathBuf::from("/tmp/downloads"));
         assert_eq!(valid.urls.len(), 1);
         assert_eq!(valid.urls[0].protocol(), protocol);
@@ -40,9 +57,9 @@ fn accepts_http_and_https_addresses_and_uses_default_directory() {
 fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
     for url in [
         "file:///etc/passwd",
+        "gopher://example.test/file.bin",
         "https://user:password@example.test/file.bin",
         "https://example.test/video.mpd",
-        "https://youtube.com/watch?v=private",
     ] {
         assert!(
             request(url)
@@ -51,6 +68,14 @@ fn rejects_unsupported_schemes_embedded_credentials_and_media_streams() {
             "{url} should be rejected"
         );
     }
+}
+
+#[test]
+fn accepts_youtube_addresses() {
+    let valid = request("https://www.youtube.com/watch?v=wLdZWyLOJCI")
+        .validate(PathBuf::from("/tmp/downloads"))
+        .expect("YouTube address should be accepted");
+    assert_eq!(valid.kind, Some("youtube".to_owned()));
 }
 
 #[test]
@@ -106,6 +131,18 @@ fn redacts_credentials_queries_and_fragments_from_urls() {
         redact_download_url("https://user:password@example.test/file?token=private#section"),
         "https://example.test/file"
     );
+    assert_eq!(
+        redact_download_url("ftp://user:password@example.test/file.bin"),
+        "ftp://******:******@example.test/file.bin"
+    );
+    assert_eq!(
+        redact_download_url("ftp://user:password@example.test:2121/dir/file.bin?q=1#frag"),
+        "ftp://******:******@example.test:2121/dir/file.bin"
+    );
+    assert_eq!(
+        redact_download_url("ftp://example.test/file.bin"),
+        "ftp://example.test/file.bin"
+    );
 }
 
 #[test]
@@ -114,4 +151,46 @@ fn malformed_url_is_not_exposed_in_a_snapshot() {
         redact_download_url("https://user:password@bad host/file?token=private"),
         "Invalid URL"
     );
+}
+
+#[test]
+fn generic_filenames_are_identified_and_rejected() {
+    assert!(is_generic_filename("watch"));
+    assert!(is_generic_filename("video"));
+    assert!(is_generic_filename("videoplayback"));
+    assert!(is_generic_filename("stream"));
+    assert!(is_generic_filename("download"));
+    assert!(is_generic_filename("file"));
+    assert!(is_generic_filename(""));
+    assert!(!is_generic_filename("my_document.pdf"));
+    assert!(!is_generic_filename("my_video.mp4"));
+}
+
+#[test]
+fn content_disposition_header_parsing_extracts_and_sanitizes() {
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename=\"report_2026.pdf\""),
+        Some("report_2026.pdf".to_string())
+    );
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename*=UTF-8''my%20archive%2Ezip"),
+        Some("my archive.zip".to_string())
+    );
+    // Generic names in content-disposition are discarded
+    assert_eq!(
+        parse_content_disposition_filename("attachment; filename=\"video\""),
+        None
+    );
+}
+
+#[test]
+fn filename_from_url_derives_meaningful_names_and_avoids_watch_or_empty() {
+    let yt_url = url::Url::parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ").unwrap();
+    assert_eq!(filename_from_url(&yt_url), "YouTube Video dQw4w9WgXcQ.mp4");
+
+    let query_url = url::Url::parse("https://example.com/download?filename=archive_v1.zip").unwrap();
+    assert_eq!(filename_from_url(&query_url), "archive_v1.zip");
+
+    let generic_url = url::Url::parse("https://files.example.com/download").unwrap();
+    assert_eq!(filename_from_url(&generic_url), "download_files_example_com");
 }

@@ -1,5 +1,23 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: HTTP Live Streaming (HLS) playlist resolver parsing master/media playlists and byte-range segments.
+
 use std::collections::HashMap;
 use url::Url;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HlsByteRange {
+    pub offset: u64,
+    pub length: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HlsSegment {
+    pub url: String,
+    pub byte_range: Option<HlsByteRange>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HlsVariant {
@@ -18,9 +36,11 @@ pub struct HlsMasterPlaylist {
 #[derive(Clone, Debug, PartialEq)]
 pub struct HlsMediaPlaylist {
     pub urls: Vec<String>,
+    pub segments: Vec<HlsSegment>,
     pub duration: f64,
     pub extension: &'static str,
     pub init_map: Option<String>,
+    pub init_byte_range: Option<HlsByteRange>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -77,6 +97,34 @@ fn resolve_url(relative_or_absolute: &str, base: &str) -> Result<String, String>
     Ok(resolved.to_string())
 }
 
+fn parse_byte_range_str(
+    val: &str,
+    last_end: Option<u64>,
+    same_resource: bool,
+) -> Result<HlsByteRange, String> {
+    let clean = val.trim().trim_matches('"');
+    let (len_str, offset_str) = match clean.split_once('@') {
+        Some((l, o)) => (l.trim(), Some(o.trim())),
+        None => (clean, None),
+    };
+
+    let length = len_str
+        .parse::<u64>()
+        .map_err(|_| format!("Invalid HLS byte-range length: {len_str}"))?;
+
+    let offset = if let Some(o_str) = offset_str {
+        o_str
+            .parse::<u64>()
+            .map_err(|_| format!("Invalid HLS byte-range offset: {o_str}"))?
+    } else if same_resource {
+        last_end.unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(HlsByteRange { offset, length })
+}
+
 pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
     if !text.trim_start().starts_with("#EXTM3U") {
         return Err("The server did not return an HLS playlist.".to_owned());
@@ -84,11 +132,16 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
     let mut variants = Vec::new();
     let mut segments = Vec::new();
     let mut pending_variant: Option<HashMap<String, String>> = None;
+    let mut pending_byte_range: Option<String> = None;
     let mut duration = 0.0_f64;
     let mut init_map: Option<String> = None;
+    let mut init_byte_range: Option<HlsByteRange> = None;
     let mut encrypted = false;
     let mut has_endlist = false;
     let mut audio_groups: HashMap<String, String> = HashMap::new();
+
+    let mut last_segment_url: Option<String> = None;
+    let mut last_byte_range_end: Option<u64> = None;
 
     for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
         if line == "#EXT-X-ENDLIST" {
@@ -112,12 +165,10 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
                 encrypted = true;
             }
         } else if line.starts_with("#EXT-X-BYTERANGE:") {
-            return Err("HLS byte-range playlists are not supported yet.".to_owned());
+            let range_str = line.strip_prefix("#EXT-X-BYTERANGE:").unwrap_or("").trim();
+            pending_byte_range = Some(range_str.to_string());
         } else if line.starts_with("#EXT-X-MAP:") {
             let attrs = parse_attributes(line);
-            if attrs.contains_key("BYTERANGE") {
-                return Err("HLS byte-range initialization is not supported yet.".to_owned());
-            }
             if let Some(uri) = attrs.get("URI") {
                 let resolved = resolve_url(uri, base)?;
                 if let Some(existing) = &init_map {
@@ -129,6 +180,9 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
                     }
                 }
                 init_map = Some(resolved);
+            }
+            if let Some(br_str) = attrs.get("BYTERANGE") {
+                init_byte_range = Some(parse_byte_range_str(br_str, None, false)?);
             }
         } else if line.starts_with("#EXTINF:") {
             let duration_str = line.strip_prefix("#EXTINF:").unwrap_or("");
@@ -157,7 +211,22 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
                     audio_url: None,
                 });
             } else {
-                segments.push(url);
+                let byte_range = if let Some(br_val) = pending_byte_range.take() {
+                    let same_res = last_segment_url.as_deref() == Some(&url);
+                    let parsed_range = parse_byte_range_str(&br_val, last_byte_range_end, same_res)?;
+                    last_byte_range_end = Some(parsed_range.offset + parsed_range.length);
+                    last_segment_url = Some(url.clone());
+                    Some(parsed_range)
+                } else {
+                    last_segment_url = Some(url.clone());
+                    last_byte_range_end = None;
+                    None
+                };
+
+                segments.push(HlsSegment {
+                    url,
+                    byte_range,
+                });
             }
         }
     }
@@ -188,16 +257,28 @@ pub fn parse_hls(text: &str, base: &str) -> Result<ParsedHls, String> {
 
     let extension = if init_map.is_some() { ".mp4" } else { ".ts" };
     let mut urls = Vec::new();
+    let mut all_segments = Vec::new();
+
     if let Some(init) = &init_map {
         urls.push(init.clone());
+        all_segments.push(HlsSegment {
+            url: init.clone(),
+            byte_range: init_byte_range,
+        });
     }
-    urls.extend(segments);
+
+    for seg in &segments {
+        urls.push(seg.url.clone());
+    }
+    all_segments.extend(segments);
 
     Ok(ParsedHls::Media(HlsMediaPlaylist {
         urls,
+        segments: all_segments,
         duration,
         extension,
         init_map,
+        init_byte_range,
     }))
 }
 

@@ -1,3 +1,10 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-06
+// Reason: feat(network): implement HTTP and HTTPS proxy support with reachability test (fixes #11)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Description: Integration tests verifying settings store functionality, edge cases, and error recovery.
+
 use std::fs;
 
 use open_download_manager_lib::{
@@ -143,16 +150,5 @@ fn invalid_legacy_settings_fail_without_replacing_the_history_or_creating_settin
 }
 
 fn empty_patch() -> SettingsPatch {
-    SettingsPatch {
-        default_directory: None,
-        max_concurrent: None,
-        connections: None,
-        speed_limit_kbps: None,
-        category_directories: None,
-        notify_on_complete: None,
-        reveal_on_complete: None,
-        confirm_browser_downloads: None,
-        start_with_windows: None,
-        hide_completion_dialog: None,
-    }
+    SettingsPatch::default()
 }

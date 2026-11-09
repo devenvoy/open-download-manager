@@ -1,3 +1,11 @@
+// Created: 2026-11-05
+// Reason: feat: add native messaging host, loopback bridge, and browser registration
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: fix(browser): classify browser m3u8 requests as HLS even when audio_url is present
+// Description: Local loopback HTTP bridge server receiving intercepted downloads from browser extensions.
+
 use std::{
     path::PathBuf,
     sync::Arc,
@@ -13,13 +21,14 @@ use crate::{
     application::{
         download_transfer_service::DownloadTransferService,
         error::{AppError, AppResult},
+        settings_service::SettingsRepository,
     },
     domain::{
         browser::{sanitize_browser_request, BrowserIncomingMessage},
         download::DownloadRequest,
         settings::Settings,
     },
-    infrastructure::media::ytdlp::YtDlpTools,
+    infrastructure::{media::ytdlp::YtDlpTools, settings_store::SettingsStore},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -27,6 +36,8 @@ pub struct BridgeConfig {
     pub port: u16,
     pub token: String,
 }
+
+pub type OnDownloadCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
 
 pub struct LoopbackBridge {
     pub config: BridgeConfig,
@@ -39,6 +50,7 @@ impl LoopbackBridge {
         data_directory: PathBuf,
         transfer_service: DownloadTransferService,
         settings: Settings,
+        on_download: Option<OnDownloadCallback>,
     ) -> AppResult<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -75,8 +87,10 @@ impl LoopbackBridge {
         let transfer_service = Arc::new(transfer_service);
         let settings = Arc::new(settings);
         let ytdlp = YtDlpTools::new().map(Arc::new);
+        let data_dir_arc = Arc::new(data_directory.clone());
 
         tokio::spawn(run_bridge_server(
+            data_dir_arc,
             listener,
             port,
             token,
@@ -84,6 +98,7 @@ impl LoopbackBridge {
             transfer_service,
             settings,
             ytdlp,
+            on_download,
         ));
 
         Ok(Self {
@@ -101,6 +116,7 @@ impl LoopbackBridge {
 }
 
 async fn run_bridge_server(
+    data_directory: Arc<PathBuf>,
     listener: TcpListener,
     port: u16,
     expected_token: String,
@@ -108,6 +124,7 @@ async fn run_bridge_server(
     transfer_service: Arc<DownloadTransferService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
+    on_download: Option<OnDownloadCallback>,
 ) {
     loop {
         let (mut socket, _) = tokio::select! {
@@ -120,19 +137,23 @@ async fn run_bridge_server(
             }
         };
 
+        let data_directory = data_directory.clone();
         let expected_token = expected_token.clone();
         let transfer_service = transfer_service.clone();
         let settings = settings.clone();
         let ytdlp = ytdlp.clone();
+        let on_download = on_download.clone();
 
         tokio::spawn(async move {
             handle_bridge_connection(
                 &mut socket,
+                data_directory,
                 port,
                 &expected_token,
                 transfer_service,
                 settings,
                 ytdlp,
+                on_download,
             )
             .await;
         });
@@ -141,11 +162,13 @@ async fn run_bridge_server(
 
 async fn handle_bridge_connection(
     socket: &mut tokio::net::TcpStream,
+    data_directory: Arc<PathBuf>,
     port: u16,
     expected_token: &str,
     transfer_service: Arc<DownloadTransferService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
+    on_download: Option<OnDownloadCallback>,
 ) {
     let mut header_buf = [0u8; 8192];
     let mut total_read = 0;
@@ -227,6 +250,22 @@ async fn handle_bridge_connection(
         return;
     }
 
+    let active_settings = if data_directory.join("settings.json").exists() {
+        SettingsStore::new(&*data_directory)
+            .load(settings.default_directory.clone())
+            .unwrap_or_else(|_| (*settings).clone())
+    } else {
+        (*settings).clone()
+    };
+
+    if (method == "GET" || method == "POST") && path == "/policy" {
+        let _ = send_json_response(socket, 200, &serde_json::json!({
+            "ok": true,
+            "policy": active_settings.capture_policy,
+        })).await;
+        return;
+    }
+
     if method != "POST" || !matches!(path, "/downloads" | "/formats") {
         let _ = send_json_response(socket, 404, &serde_json::json!({"error": "Not found."})).await;
         return;
@@ -279,21 +318,21 @@ async fn handle_bridge_connection(
         };
 
         if let Some(tools) = ytdlp {
-            match tools.fetch_formats(&parsed.url).await {
+            match tools.fetch_site_formats(&parsed.url).await {
                 Ok(items) => {
                     let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": items})).await;
                 }
-                Err(e) => {
-                    let _ = send_json_response(socket, 400, &serde_json::json!({"error": e.message})).await;
+                Err(_) => {
+                    let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
                 }
             }
         } else {
-            let _ = send_json_response(socket, 501, &serde_json::json!({"error": "yt-dlp is not available."})).await;
+            let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
         }
         return;
     }
 
-    if path == "/downloads" {
+    if path == "/downloads" || path == "/downloads/refresh" {
         let msg: BrowserIncomingMessage = match serde_json::from_slice(&body) {
             Ok(m) => m,
             Err(e) => {
@@ -310,25 +349,94 @@ async fn handle_bridge_connection(
             }
         };
 
-        let review_only = !valid_browser.start_now && settings.confirm_browser_downloads;
-        let is_paired = valid_browser.audio_url.is_some();
+        if valid_browser.action == "refresh" || path == "/downloads/refresh" {
+            if let Some(ref target_id) = valid_browser.download_id {
+                let norm_sabr = valid_browser.sabr.as_ref().and_then(|s| crate::domain::media::sabr::normalize_sabr_session(s).ok());
+                match transfer_service.refresh_download(
+                    target_id,
+                    Some(valid_browser.url.clone()),
+                    valid_browser.audio_url.clone(),
+                    norm_sabr,
+                ) {
+                    Ok(id) => {
+                        let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "id": id})).await;
+                    }
+                    Err(e) => {
+                        let _ = send_json_response(socket, 400, &serde_json::json!({"error": e.message})).await;
+                    }
+                }
+                return;
+            }
+        }
+
+        let decision = active_settings.capture_policy.evaluate(&valid_browser.url, valid_browser.filename.as_deref());
+        match &decision {
+            crate::domain::browser::CaptureDecision::ExcludedHost(reason)
+            | crate::domain::browser::CaptureDecision::ExcludedAddress(reason) => {
+                let _ = send_json_response(
+                    socket,
+                    403,
+                    &serde_json::json!({
+                        "error": format!("Download excluded by browser capture policy: {reason}"),
+                        "decision": decision.decision_str(),
+                    }),
+                )
+                .await;
+                return;
+            }
+            _ => {}
+        }
+
+        let is_confirmation_required = matches!(decision, crate::domain::browser::CaptureDecision::ConfirmationRequired(_));
+        let confirm = active_settings.confirm_browser_downloads || is_confirmation_required;
+        let review_only = (!valid_browser.start_now || is_confirmation_required) && confirm;
+        let queue_only = review_only;
+        let is_hls = valid_browser.url.ends_with(".m3u8")
+            || valid_browser.url.contains(".m3u8?");
+        let is_paired = !is_hls && valid_browser.audio_url.is_some();
+        let is_raw_youtube_page = crate::domain::media::youtube_url(&valid_browser.url).is_some();
+        let primary_url = valid_browser.url.clone();
+        let referer = valid_browser.canonical_url.clone().or(valid_browser.referer.clone());
+        let kind = if valid_browser.sabr.is_some() {
+            Some("sabr".to_owned())
+        } else if is_hls {
+            Some("hls".to_owned())
+        } else if is_paired {
+            Some("paired".to_owned())
+        } else if is_raw_youtube_page {
+            Some("youtube".to_owned())
+        } else {
+            None
+        };
         let download_req = DownloadRequest {
-            urls: valid_browser.urls.unwrap_or_else(|| vec![valid_browser.url]),
+            urls: valid_browser.urls.unwrap_or_else(|| vec![primary_url]),
             filename: valid_browser.filename,
             directory: None,
+            temp_directory: None,
             category: None,
             description: Some("Added via browser extension".to_owned()),
-            queue_only: !valid_browser.start_now,
+            queue_only,
             review_only: Some(review_only),
             scheduled_at: None,
+            queue_id: None,
             audio_url: valid_browser.audio_url,
-            kind: if is_paired { Some("paired".to_owned()) } else { None },
+            kind,
             sabr: valid_browser.sabr,
             reuse_active: Some(true),
+            referer,
+            youtube_format: valid_browser.youtube_format,
+            conflict_policy: None,
+            credentials: None,
+            completion_actions: None,
         };
 
-        match transfer_service.add(download_req, &settings) {
+        match transfer_service.add(download_req, &active_settings) {
             Ok(ids) => {
+                if let Some(ref cb) = on_download {
+                    if let Some(first_id) = ids.first() {
+                        cb(first_id.clone());
+                    }
+                }
                 let _ = send_json_response(socket, 201, &serde_json::json!({"ok": true, "ids": ids})).await;
             }
             Err(e) => {

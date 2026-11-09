@@ -1,3 +1,9 @@
+// Created: 2026-11-06
+// Reason: extension: keyboard navigation for the quality chooser
+// Last updated: 2026-11-06
+// Reason: extension: keyboard navigation for the quality chooser
+// Description: Keyboard navigation handler for the media panel quality selection popup menu.
+
 (function (root) {
   // Roving-focus keyboard navigation for the quality chooser rows.
   const deltas = { ArrowDown: 1, ArrowUp: -1 };

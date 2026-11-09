@@ -56,7 +56,7 @@ prerequisite is ready.
 | --- | --- |
 | [Linux #6](https://github.com/devenvoy/open-download-manager/issues/6) | Shared adapters #14 → runtime/integration #22 → packaging/validation #23 |
 | [macOS #7](https://github.com/devenvoy/open-download-manager/issues/7) | Shared adapters #14 → runtime/integration #24 → packaging/validation #25 |
-| [Windows ARM64 #8](https://github.com/devenvoy/open-download-manager/issues/8) | Shared adapters #14 → runtime/dependencies #26 → installer/hardware validation #27 |
+| [Windows ARM64 #19](https://github.com/devenvoy/open-download-manager/issues/19) | Build/packaging implemented; physical ARM64 hardware validation tracked in #19 |
 | [Firefox #10](https://github.com/devenvoy/open-download-manager/issues/10) | Capture/integration #28 → persistent installation/setup #29 |
 | [YouTube playlists #21](https://github.com/devenvoy/open-download-manager/issues/21) | Discovery/model #30 → selection/queue/batch controls #31 |
 

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: integrate standard crates (mime_guess, sanitize-filename, tempfile, which) and FileType vector icon catalog
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: File type catalog mapping file extensions and MIME types to category definitions and icons.
+
 use std::path::Path;
 
 use base64::Engine;
@@ -288,7 +294,8 @@ impl FileType {
                 Some(Self::Image)
             }
             "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "wma" | "opus" => Some(Self::Audio),
-            "mp4" | "mov" | "avi" | "mkv" | "webm" | "m4v" | "flv" | "wmv" | "ts" => {
+            "mp4" | "mov" | "avi" | "mkv" | "webm" | "m4v" | "flv" | "wmv" | "ts" | "mpg"
+            | "mpeg" | "f4v" | "divx" | "asf" | "wvx" | "3gp" | "3g2" | "ogv" => {
                 Some(Self::Video)
             }
             "woff2" | "woff" | "ttf" | "otf" | "eot" => Some(Self::Font),

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(updater): implement auto-updater, periodic background checks, and active transfer safety guard (Phase F)
+// Last updated: 2026-11-06
+// Reason: perf: eliminate eager cloning across history queries and apply zero-copy serialization
+// Description: Updater presentation controller managing update confirmation dialogs and progress.
+
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 

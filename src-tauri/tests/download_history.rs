@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Integration tests verifying download history functionality, edge cases, and error recovery.
+
 use std::fs;
 
 use open_download_manager_lib::{

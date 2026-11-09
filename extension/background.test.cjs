@@ -1,22 +1,28 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Description: Unit tests verifying background service worker download interception, tab caching, and native messaging handoff.
+
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
 function harness({initialData={},webRequest={}}={}) {
-  const events={},specs={},nativeRequests=[],downloadCalls=[];
+  const events={},specs={},nativeRequests=[],downloadCalls=[],badges=[];
   const event=name=>({addListener(fn,filter,spec){events[name]=fn;specs[name]=spec;}});
   const data=structuredClone(initialData),downloads=new Map();
   const storage={async get(key){return structuredClone({[key]:data[key]});},async set(value){Object.assign(data,structuredClone(value));},async remove(key){delete data[key];}};
-  const browser={runtime:{id:'extension-id',onMessage:event('message'),onInstalled:event('installed'),async sendNativeMessage(host,payload){nativeRequests.push(structuredClone(payload));return {ok:true};}},storage:{session:storage,local:storage},webRequest:{...webRequest,onHeadersReceived:event('response'),onBeforeRequest:event('beforeRequest'),onBeforeSendHeaders:event('requestHeaders')},tabs:{onRemoved:event('removed'),onUpdated:event('updated')},contextMenus:{onClicked:event('context'),async removeAll(){},create(){}},downloads:{onCreated:event('download')},action:{}};
+  const browser={runtime:{id:'extension-id',onMessage:event('message'),onInstalled:event('installed'),async sendNativeMessage(host,payload){nativeRequests.push(structuredClone(payload));return {ok:true};}},storage:{session:storage,local:storage},webRequest:{...webRequest,onHeadersReceived:event('response'),onBeforeRequest:event('beforeRequest'),onBeforeSendHeaders:event('requestHeaders')},tabs:{onRemoved:event('removed'),onUpdated:event('updated')},contextMenus:{onClicked:event('context'),async removeAll(){},create(){}},downloads:{onCreated:event('download')},action:{async setBadgeText(info){badges.push(info);}}};
   Object.assign(browser.downloads,{
     async pause(id){downloadCalls.push(['pause',id]);downloads.get(id).state='paused';},
     async resume(id){downloadCalls.push(['resume',id]);downloads.get(id).state='in_progress';},
     async cancel(id){downloadCalls.push(['cancel',id]);downloads.delete(id);}
   });
   browser.tabs.sendMessage=async()=>({ok:true});
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'background.js'),'utf8'),{browser,URL,URLSearchParams,Uint8Array,btoa:value=>Buffer.from(value,'binary').toString('base64'),youtubeMedia:require('./youtube-media.js')});
-  return {events,specs,data,nativeRequests,downloadCalls,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'background.js'),'utf8'),{browser,URL,URLSearchParams,Uint8Array,btoa:value=>Buffer.from(value,'binary').toString('base64'),youtubeMedia:require('./youtube-media.js'),captureEvaluator:require('./capture-evaluator.js')});
+  return {events,specs,data,nativeRequests,downloadCalls,badges,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
 }
 test('video selection forwards explicit one-click download intent',async()=>{
   const h=harness(),sender={id:'extension-id',tab:{id:3}};
@@ -24,6 +30,21 @@ test('video selection forwards explicit one-click download intent',async()=>{
   assert.equal(h.nativeRequests[0].startNow,true);
   await h.request({action:'download',item:{url:'https://example.com/video.mp4'}},sender);
   assert.equal(h.nativeRequests[1].startNow,false);
+});
+test('generic format discovery forwards the current HTTP page to the native extractor',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:31,url:'https://vkvideo.ru/video-211472768_456240796'}};
+ const result=await h.request({action:'extractFormats'},sender);
+ assert.equal(result.ok,true);
+ assert.deepEqual(h.nativeRequests,[{action:'formats',url:'https://vkvideo.ru/video-211472768_456240796'}]);
+});
+test('later page-source reports do not erase captured media metadata',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:32,url:'https://player.example/watch'}};
+ const url='https://cdn.example/stream?id=video';
+ h.events.response({tabId:32,url,statusCode:200,type:'media',responseHeaders:[{name:'Content-Type',value:'video/mp4'}]});
+ await h.request({action:'remember',items:[{url,title:'Captured video',media:true}]},sender);
+ const result=await h.request({action:'listForFrame'},sender);
+ assert.equal(result.items[0].mime,'video/mp4');
+ assert.equal(result.items[0].media,true);
 });
 test('YouTube menu uses captured player formats without a desktop discovery request',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:7,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
@@ -85,10 +106,10 @@ test('captured YouTube session survives a service worker restart',async()=>{
  await restarted.request({action:'download',item:{...item,startNow:true}},sender);
  assert.equal(restarted.nativeRequests[0].sabr.requestBody,'AQID');
 });
-test('SABR choices are hidden until the browser captures a usable session',async()=>{
+test('SABR choices are available immediately from player metadata',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:29,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
  await h.request({action:'playerResponse',data:{videoId:'wLdZWyLOJCI',title:'Captured',sabr:true,sabrUrl:'https://r1.googlevideo.com/videoplayback?id=asset&sabr=1&expire=9999999999',ustreamerConfig:'AQID',clientName:1,clientVersion:'2.20261022.00.00',formats:[{itag:137,mimeType:'video/mp4',height:1080,qualityLabel:'1080p',bitrate:3000000},{itag:140,mimeType:'audio/mp4',bitrate:128000}]}},sender);
- const result=await h.request({action:'listForFrame'},sender);assert.equal(result.items.length,0);assert.match(result.notice,/captured/i);
+ const result=await h.request({action:'listForFrame'},sender);assert.ok(result.items.length>0);assert.equal(result.items[0].quality,'1080p');
 });
 test('duplicate browser downloads share one native handoff',async()=>{
  const h=harness();
@@ -162,4 +183,86 @@ test('media cache is bounded, deduplicated, and cleared on navigation',async()=>
   assert.equal(result.items.length,100); assert.equal(new Set(result.items.map(i=>i.url)).size,100);
   h.events.updated(9,{status:'loading'});
   result=await h.request({action:'listForFrame'},sender); assert.equal(result.items.length,0);
+});
+
+test('real human scenario: context menu download on allowed link forwards intent and sets OK badge', async () => {
+  const policy = {
+    enabled: true,
+    fileTypes: ['iso', 'zip', 'mp4'],
+    excludedHosts: ['*.internal.corp'],
+    excludedAddresses: ['192.168.1.100'],
+    confirmationMode: 'askForUnknown'
+  };
+  const h = harness({ initialData: { capturePolicy: policy } });
+  const tab = { id: 10, url: 'https://releases.ubuntu.com/' };
+
+  // Real human right-clicks link and clicks "Download with Open Download Manager"
+  await h.events.context({ menuItemId: 'odm-link', linkUrl: 'https://releases.ubuntu.com/noble.iso' }, tab);
+
+  assert.equal(h.nativeRequests.length, 1);
+  assert.equal(h.nativeRequests[0].url, 'https://releases.ubuntu.com/noble.iso');
+  assert.equal(h.nativeRequests[0].startNow, true);
+  assert.deepEqual(h.badges[h.badges.length - 1], { tabId: 10, text: 'OK' });
+});
+
+test('real human scenario: context menu download on excluded corporate host is blocked before dispatch', async () => {
+  const policy = {
+    enabled: true,
+    fileTypes: ['iso', 'zip', 'mp4'],
+    excludedHosts: ['*.internal.corp', 'secret.bank.com'],
+    excludedAddresses: [],
+    confirmationMode: 'askForUnknown'
+  };
+  const h = harness({ initialData: { capturePolicy: policy } });
+  const tab = { id: 11, url: 'https://portal.internal.corp/' };
+
+  // Real human right-clicks an intranet internal link
+  await h.events.context({ menuItemId: 'odm-link', linkUrl: 'https://dev.internal.corp/firmware.zip' }, tab);
+
+  // Must NOT trigger native messaging
+  assert.equal(h.nativeRequests.length, 0);
+  // Last error must describe the exclusion
+  assert.match(h.data.lastError, /Host 'dev\.internal\.corp' matches exclusion '\*\.internal\.corp'/);
+  // Badge must show '!' error indicator
+  assert.deepEqual(h.badges[h.badges.length - 1], { tabId: 11, text: '!' });
+});
+
+test('real human scenario: context menu on excluded address or path prefix is blocked', async () => {
+  const policy = {
+    enabled: true,
+    fileTypes: ['zip', 'exe'],
+    excludedHosts: [],
+    excludedAddresses: ['10.0.0.1', 'https://example.com/confidential/'],
+    confirmationMode: 'askForUnknown'
+  };
+  const h = harness({ initialData: { capturePolicy: policy } });
+  const tab = { id: 12, url: 'https://example.com/' };
+
+  // Real human right-clicks confidential link
+  await h.events.context({ menuItemId: 'odm-link', linkUrl: 'https://example.com/confidential/keys.zip' }, tab);
+
+  assert.equal(h.nativeRequests.length, 0);
+  assert.match(h.data.lastError, /Address matches exclusion/);
+  assert.deepEqual(h.badges[h.badges.length - 1], { tabId: 12, text: '!' });
+});
+
+test('real human scenario: context menu on unrecognized file extension in askForUnknown mode sets startNow=false for desktop review', async () => {
+  const policy = {
+    enabled: true,
+    fileTypes: ['zip', 'mp4'],
+    excludedHosts: [],
+    excludedAddresses: [],
+    confirmationMode: 'askForUnknown'
+  };
+  const h = harness({ initialData: { capturePolicy: policy } });
+  const tab = { id: 13, url: 'https://downloads.example.com/' };
+
+  // Real human right-clicks on an unfamiliar .xyz file
+  await h.events.context({ menuItemId: 'odm-link', linkUrl: 'https://downloads.example.com/installer.xyz' }, tab);
+
+  assert.equal(h.nativeRequests.length, 1);
+  assert.equal(h.nativeRequests[0].url, 'https://downloads.example.com/installer.xyz');
+  // startNow must be false so the desktop client opens the confirmation/review dialog rather than downloading silently
+  assert.equal(h.nativeRequests[0].startNow, false);
+  assert.deepEqual(h.badges[h.badges.length - 1], { tabId: 13, text: 'OK' });
 });

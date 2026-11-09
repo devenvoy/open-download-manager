@@ -1,8 +1,14 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Integration tests verifying media domain functionality, edge cases, and error recovery.
+
 use std::collections::HashMap;
 
 use open_download_manager_lib::domain::media::{
-    calculate_stream_progress, choices_from_info, parse_hls, scoped_headers, youtube_error,
-    youtube_url, ParsedHls, StreamSegment,
+    calculate_stream_progress, choices_from_info, parse_hls, scoped_headers,
+    site_choices_from_info, youtube_error, youtube_url, ParsedHls, StreamSegment,
 };
 
 #[test]
@@ -58,7 +64,7 @@ fn hls_rejects_unsupported_formats_and_pairs_audio_group() {
     )
     .is_err());
     assert!(parse_hls(
-        "#EXTM3U\n#EXT-X-BYTERANGE:100@0\na.ts\n#EXT-X-ENDLIST",
+        "#EXTM3U\n#EXT-X-BYTERANGE:invalid@offset\na.ts\n#EXT-X-ENDLIST",
         "https://example.com/a"
     )
     .is_err());
@@ -210,4 +216,67 @@ fn youtube_formats_pair_audio_and_provide_mp3() {
     assert_eq!(choices[0].quality, "1080p");
     assert_eq!(choices[1].format, "MP3");
     assert_eq!(choices[1].youtube_format, "audio:140");
+}
+
+#[test]
+fn generic_site_formats_pair_supported_containers_and_provide_audio() {
+    let info = serde_json::json!({
+        "title": "Public video",
+        "duration": 30.0,
+        "formats": [
+            {
+                "format_id": "audio-m4a",
+                "ext": "m4a",
+                "vcodec": "none",
+                "acodec": "mp4a.40.2",
+                "abr": 128.0,
+                "url": "https://cdn.example/audio.m4a",
+                "protocol": "https",
+                "filesize": 20
+            },
+            {
+                "format_id": "video-mp4",
+                "ext": "mp4",
+                "vcodec": "avc1",
+                "acodec": "none",
+                "height": 720,
+                "url": "https://cdn.example/video.mp4",
+                "protocol": "https",
+                "filesize": 100
+            },
+            {
+                "format_id": "video-webm",
+                "ext": "webm",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 1080,
+                "url": "https://cdn.example/video.webm",
+                "protocol": "https",
+                "filesize": 200
+            },
+            {
+                "format_id": "audio-webm",
+                "ext": "webm",
+                "vcodec": "none",
+                "acodec": "opus",
+                "abr": 160.0,
+                "url": "https://cdn.example/audio.webm",
+                "protocol": "https",
+                "filesize": 30
+            }
+        ]
+    });
+
+    let choices = site_choices_from_info(&info, "https://video.example/watch/1").unwrap();
+    assert_eq!(choices.len(), 3);
+    assert_eq!(choices[0].format, "WEBM");
+    assert_eq!(choices[0].youtube_format, "video-webm+audio-webm");
+    assert_eq!(choices[0].output_format, "webm");
+    assert_eq!(choices[1].format, "MP4");
+    assert_eq!(choices[1].youtube_format, "video-mp4+audio-m4a");
+    assert_eq!(choices[1].estimated_size, 120);
+    assert_eq!(choices[2].format, "MP3");
+    assert_eq!(choices[2].youtube_format, "audio:audio-webm");
+    assert_eq!(choices[2].provider, "extractor");
+    assert!(choices.iter().all(|choice| choice.url == "https://video.example/watch/1"));
 }

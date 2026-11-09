@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: add segmented transfers, pause/resume, scheduling, and rate limiting
+// Last updated: 2026-11-07
+// Reason: feat(media): complete YouTube media pipeline, desktop quality selector, resilient download resumption, and native messaging registration
+// Description: Token bucket rate limiter enforcing bandwidth caps across active download transfers.
+
 use std::{
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
     time::{Duration, Instant},
@@ -18,6 +24,10 @@ impl DownloadRateLimiter {
             next_allowed_nanos: AtomicU64::new(0),
             limit_kbps: AtomicU32::new(limit_kbps),
         }
+    }
+
+    pub fn limit_kbps(&self) -> u32 {
+        self.limit_kbps.load(Ordering::Acquire)
     }
 
     pub fn set_limit_kbps(&self, limit_kbps: u32) {

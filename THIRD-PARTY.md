@@ -24,12 +24,35 @@ The browser-capture download path uses `googlevideo` 5.0.1, an MIT-licensed libr
 
 Source and license: https://github.com/LuanRT/GoogleVideo
 
-# YouTube extraction
+# YouTube extraction (legacy Electron preview)
 
-The Windows build includes yt-dlp 2026.08.19 from its official GitHub release,
+The previously published Electron Windows build includes yt-dlp 2026.08.19 from
+its official GitHub release,
 SHA-256 `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a`.
 Source: https://github.com/yt-dlp/yt-dlp/tree/2026.08.19 . The core is public domain;
 the Windows executable includes additional components under their own licenses.
 Full upstream notices are included in `vendor/LICENSE.txt` and
 `vendor/THIRD_PARTY_LICENSES.txt`, copied to the packaged `resources/tools` folder.
 This is an independent extractor, not recovered IDM implementation code.
+
+# Tauri media tool downloads
+
+The Tauri application can install media tools on demand into the current user's
+`.open-download-manager/tools` directory:
+
+- **yt-dlp**: downloaded from the official `yt-dlp/yt-dlp` GitHub release for the
+  host architecture (`yt-dlp.exe`, `yt-dlp_arm64.exe`, `yt-dlp_macos`,
+  `yt-dlp_linux`, `yt-dlp_linux_aarch64`). Public domain core; bundled
+  components keep their own licenses.
+- **FFmpeg**:
+  - Windows x64: GyanD `codexffmpeg` essentials build (GPL).
+  - Windows ARM64: BtbN FFmpeg-Builds `winarm64` GPL build.
+  - macOS: evermeet.cx release.
+  - Linux x64: johnvansickle static build.
+  - Linux ARM64: not downloaded automatically.
+
+FFmpeg is a separate executable. Redistributors that bundle or mirror these
+binaries are responsible for the corresponding source offer, license text, and
+build provenance. The project does not currently ship FFmpeg or yt-dlp inside
+the Tauri installer. See `docs/cross-platform-packaging.md` for current
+resolution and licensing details.

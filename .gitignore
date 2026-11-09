@@ -27,9 +27,11 @@ test-results/
 output/
 build/browser-setup-helper.exe
 graphify-out/
-reference/
+/reference/
 target/
 src-tauri/target/
 src-tauri/gen/
 .DS_Store
 issues/
+pr/
+.agents/

@@ -1,3 +1,10 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Description: Integration tests verifying commands instrumentation functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -24,8 +31,10 @@ use open_download_manager_lib::{
     presentation::{
         app_state::AppState,
         commands::{
-            add_download, browser_setup_action, download_action, get_integration_info,
-            register_browser, remove_completed, review_download, snapshot,
+            add_download, browser_setup_action, disable_advanced_integration, download_action,
+            enable_advanced_integration, get_advanced_integration_capability, get_integration_info,
+            get_media_tools_status, register_browser, remove_completed, repair_advanced_integration,
+            review_download, snapshot,
         },
     },
 };
@@ -106,10 +115,18 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
         true,
     );
 
+    let cred_store = std::sync::Arc::new(
+        open_download_manager_lib::infrastructure::credentials::CredentialStore::new(data_dir),
+    );
+    let cred_service = std::sync::Arc::new(
+        open_download_manager_lib::application::credential_service::CredentialService::new(cred_store),
+    );
+
     let app_state = AppState::new(
         settings,
         history,
         transfer,
+        cred_service,
         integration,
         file_icons,
         update_service,
@@ -129,6 +146,7 @@ async fn commands_add_and_snapshot_lifecycle() {
         urls: vec!["http://127.0.0.1/test.zip".to_owned()],
         filename: Some("test.zip".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: Some("cmd test".to_owned()),
         queue_only: true,
@@ -159,6 +177,7 @@ async fn commands_remove_action_removes_from_snapshot() {
         urls: vec!["http://127.0.0.1/item.bin".to_owned()],
         filename: Some("item.bin".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
@@ -200,6 +219,7 @@ async fn commands_open_and_open_with_through_tauri_state() {
         urls: vec!["http://127.0.0.1/doc".to_owned()],
         filename: Some("finished.doc".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
@@ -254,6 +274,7 @@ async fn commands_reveal_through_tauri_state() {
         urls: vec!["http://127.0.0.1/video.mp4".to_owned()],
         filename: Some("video.mp4".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
@@ -302,6 +323,7 @@ async fn commands_remove_completed_through_tauri_state() {
         urls: vec!["http://127.0.0.1/1".to_owned()],
         filename: Some("1.bin".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
@@ -315,6 +337,7 @@ async fn commands_remove_completed_through_tauri_state() {
         urls: vec!["http://127.0.0.1/2".to_owned()],
         filename: Some("2.bin".to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
@@ -359,6 +382,7 @@ async fn commands_review_download_through_tauri_state() {
         urls: vec!["http://127.0.0.1/needs-confirm".to_owned()],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: false,
@@ -382,10 +406,13 @@ async fn commands_review_download_through_tauri_state() {
         id: id.clone(),
         filename: Some("confirmed_by_command.bin".to_owned()),
         directory: Some(dir.to_string_lossy().into_owned()),
+        temp_directory: None,
         category: None,
         description: Some("Reviewed via command".to_owned()),
         queue_only: Some(true),
         scheduled_at: None,
+        conflict_policy: None,
+        credentials: None,
     };
 
     let result = review_download(state.clone(), rev_req).unwrap();
@@ -430,4 +457,58 @@ async fn commands_integration_info_and_browser_setup_through_tauri_state() {
         "abcdefghijklmnopabcdefghijklmnop".to_owned(),
     ).await;
     assert!(reg_result.is_ok());
+}
+
+#[tokio::test]
+async fn commands_media_tools_status() {
+    let statuses = get_media_tools_status().expect("get_media_tools_status succeeds");
+    assert_eq!(statuses.len(), 2);
+    assert_eq!(
+        statuses[0].tool_type,
+        open_download_manager_lib::domain::media_tools::MediaToolType::Ffmpeg
+    );
+    assert_eq!(
+        statuses[1].tool_type,
+        open_download_manager_lib::domain::media_tools::MediaToolType::YtDlp
+    );
+}
+
+#[tokio::test]
+async fn commands_advanced_integration_lifecycle() {
+    let dir = temporary_directory();
+    let shell = RecordingShellService::default();
+    let app = create_test_app(&dir, shell);
+    let state = app.state::<AppState>();
+
+    // 1. Initial capability is disabled
+    let cap = get_advanced_integration_capability(state.clone()).expect("get capability succeeds");
+    assert_eq!(
+        cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Disabled
+    );
+
+    // 2. Enable without consent fails
+    let no_consent = enable_advanced_integration(state.clone(), false);
+    assert!(no_consent.is_err());
+
+    // 3. Enable with consent succeeds
+    let active_cap = enable_advanced_integration(state.clone(), true).expect("enable succeeds");
+    assert_eq!(
+        active_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Active
+    );
+
+    // 4. Disable returns to disabled
+    let disabled_cap = disable_advanced_integration(state.clone()).expect("disable succeeds");
+    assert_eq!(
+        disabled_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Disabled
+    );
+
+    // 5. Repair works
+    let repaired_cap = repair_advanced_integration(state.clone()).expect("repair succeeds");
+    assert_eq!(
+        repaired_cap.state,
+        open_download_manager_lib::domain::browser::AdvancedIntegrationState::Active
+    );
 }

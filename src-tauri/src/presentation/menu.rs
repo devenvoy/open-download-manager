@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase D window management, menus, and text file import/export
+// Last updated: 2026-11-06
+// Reason: perf: eliminate eager cloning across history queries and apply zero-copy serialization
+// Description: Desktop application menu bar structure, accelerator shortcuts, and menu action dispatchers.
+
 use std::path::PathBuf;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase B desktop shell, system tray, and autostart
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: System tray icon controller managing tray menu, minimization to tray, and background status.
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,

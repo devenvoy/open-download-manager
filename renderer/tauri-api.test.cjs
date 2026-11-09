@@ -1,6 +1,18 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Description: Frontend tests verifying the Tauri API bridge command serialization and event handling.
+
 'use strict';
 
-const assert = require('node:assert/strict');
+const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -53,13 +65,134 @@ test('settings passes a typed patch to the Rust command', async () => {
       }
     }
   });
-  const patch = { maxConcurrent: 4 };
+  const patch = {
+    maxConcurrent: 4,
+    theme: 'dark',
+    capturePolicy: {
+      enabled: true,
+      confirmationMode: 'askForUnknown',
+      fileTypes: ['zip', 'exe'],
+      excludedHosts: ['example.com'],
+      excludedAddresses: ['192.168.1.1']
+    }
+  };
 
   const updated = await api.settings(patch);
 
   assert.deepEqual(updated, { maxConcurrent: 4 });
   assert.equal(calls[0][0], 'update_settings');
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ patch }));
+});
+
+test('testProxy invokes test_proxy_connection with proxy configuration', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { success: true, message: 'Proxy connection successful (HTTP 204)' };
+      }
+    }
+  });
+  const proxy = {
+    enabled: true,
+    protocol: 'http',
+    host: '127.0.0.1',
+    port: 8080,
+    username: 'user',
+    password: 'password'
+  };
+
+  const result = await api.testProxy({ proxy, testUrl: 'http://127.0.0.1:9090' });
+
+  assert.equal(calls[0][0], 'test_proxy_connection');
+  assert.deepEqual(calls[0][1], { proxy, testUrl: 'http://127.0.0.1:9090' });
+  assert.equal(result.success, true);
+  assert.equal(result.message, 'Proxy connection successful (HTTP 204)');
+});
+
+test('detectProxy and applyDetectedProxy invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const fakeDetected = {
+    source: 'system',
+    mode: 'manual',
+    pacUrl: null,
+    routes: [{ protocol: 'http', host: '10.0.0.1', port: 8080, supported: true, reason: null }],
+    credentialsAvailable: false,
+    unsupportedFields: [],
+    canImport: true,
+    importSettings: {
+      enabled: true,
+      protocol: 'http',
+      host: '10.0.0.1',
+      port: 8080,
+      username: null,
+      password: null,
+      resolveDnsRemotely: false
+    }
+  };
+
+  const api = loadApi({
+    core: {
+      invoke: async (cmd, args) => {
+        calls.push([cmd, args]);
+        if (cmd === 'detect_proxy') return fakeDetected;
+        if (cmd === 'apply_detected_proxy') return { proxy: fakeDetected.importSettings };
+        return {};
+      }
+    }
+  });
+
+  const detected = await api.detectProxy();
+  assert.equal(calls[0][0], 'detect_proxy');
+  assert.deepEqual(detected, fakeDetected);
+
+  const applied = await api.applyDetectedProxy({ detected });
+  assert.equal(calls[1][0], 'apply_detected_proxy');
+  assert.deepEqual(calls[1][1], { detected });
+  assert.equal(applied.proxy.host, '10.0.0.1');
+});
+
+test('queue methods invoke corresponding Rust queue commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (cmd, args) => {
+        calls.push([cmd, args]);
+        if (cmd === 'list_queues') return [{ id: 'default', name: 'Default Queue' }];
+        if (cmd === 'create_queue') return { id: 'queue-1', name: args.name };
+        return {};
+      }
+    }
+  });
+
+  const queues = await api.listQueues();
+  assert.equal(calls[0][0], 'list_queues');
+  assert.equal(queues[0].id, 'default');
+
+  const created = await api.createQueue({ name: 'Nightly', concurrencyLimit: 2, speedLimitKbps: 500, schedule: null });
+  assert.equal(calls[1][0], 'create_queue');
+  assert.equal(created.name, 'Nightly');
+
+  await api.startQueue({ id: 'queue-1' });
+  assert.equal(calls[2][0], 'start_queue');
+  assert.deepEqual(calls[2][1], { id: 'queue-1' });
+
+  await api.pauseQueue({ id: 'queue-1' });
+  assert.equal(calls[3][0], 'pause_queue');
+  assert.deepEqual(calls[3][1], { id: 'queue-1' });
+
+  await api.assignDownloadToQueue({ downloadId: 'dl-1', queueId: 'queue-1' });
+  assert.equal(calls[4][0], 'assign_download_to_queue');
+  assert.deepEqual(calls[4][1], { downloadId: 'dl-1', queueId: 'queue-1' });
+
+  await api.reorderQueueItems({ queueId: 'queue-1', itemIds: ['dl-2', 'dl-1'] });
+  assert.equal(calls[5][0], 'reorder_queue_items');
+  assert.deepEqual(calls[5][1], { queueId: 'queue-1', itemIds: ['dl-2', 'dl-1'] });
+
+  await api.deleteQueue({ id: 'queue-1', disposition: 'moveToDefault' });
+  assert.equal(calls[6][0], 'delete_queue');
+  assert.deepEqual(calls[6][1], { id: 'queue-1', disposition: 'moveToDefault' });
 });
 
 test('download details use the native progress window commands', async () => {
@@ -75,11 +208,13 @@ test('download details use the native progress window commands', async () => {
 
   await api.openProgress({ id: 'download-123' });
   await api.resizeProgress({ expanded: true });
+  await api.resizeAuxiliaryWindow({ height: 350 });
   await api.closeProgress();
 
   assert.equal(JSON.stringify(calls), JSON.stringify([
     ['open_progress_window', { id: 'download-123' }],
     ['resize_progress_window', { expanded: true }],
+    ['resize_auxiliary_window', { height: 350 }],
     ['close_auxiliary_window', undefined]
   ]));
 });
@@ -195,6 +330,23 @@ test('review invokes review_download Rust command with request', async () => {
   assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ request }));
 });
 
+test('checkDestinationConflict invokes check_destination_conflict Rust command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { type: 'resolved', path: '/downloads/test.zip', policy: 'overwrite' };
+      }
+    }
+  });
+
+  const result = await api.checkDestinationConflict({ directory: '/downloads', filename: 'test.zip' });
+  assert.deepEqual(result, { type: 'resolved', path: '/downloads/test.zip', policy: 'overwrite' });
+  assert.equal(calls[0][0], 'check_destination_conflict');
+  assert.equal(JSON.stringify(calls[0][1]), JSON.stringify({ directory: '/downloads', filename: 'test.zip' }));
+});
+
 test('integration invokes get_integration_info Rust command', async () => {
   const calls = [];
   const api = loadApi({
@@ -283,6 +435,9 @@ test('playlist methods invoke get_playlist_info and add_playlist_downloads', asy
         if (args[0] === 'get_playlist_info') {
           return { id: 'PL12345', title: 'Test Playlist', entries: [] };
         }
+        if (args[0] === 'resolve_asx_playlist') {
+          return { title: 'ASX Playlist', entries: [{ href: 'http://example.com/stream.wmv' }] };
+        }
         if (args[0] === 'add_playlist_downloads') {
           return 5;
         }
@@ -296,18 +451,176 @@ test('playlist methods invoke get_playlist_info and add_playlist_downloads', asy
   assert.equal(calls[0][0], 'get_playlist_info');
   assert.deepEqual(calls[0][1], { url: 'https://www.youtube.com/playlist?list=PL12345' });
 
+  const asx = await api.resolveAsxPlaylist('http://example.com/playlist.asx');
+  assert.equal(asx.title, 'ASX Playlist');
+  assert.equal(calls[1][0], 'resolve_asx_playlist');
+  assert.deepEqual(calls[1][1], { urlOrContent: 'http://example.com/playlist.asx' });
+
   const added = await api.addPlaylistDownloads({
     playlistId: 'PL12345',
     playlistTitle: 'Test Playlist',
     items: [{ id: 'abc', url: 'https://youtube.com/watch?v=abc', title: 'Video', selected: true }]
   });
   assert.equal(added, 5);
-  assert.equal(calls[1][0], 'add_playlist_downloads');
-  assert.deepEqual(calls[1][1], {
+  assert.equal(calls[2][0], 'add_playlist_downloads');
+  assert.deepEqual(calls[2][1], {
     request: {
       playlistId: 'PL12345',
       playlistTitle: 'Test Playlist',
       items: [{ id: 'abc', url: 'https://youtube.com/watch?v=abc', title: 'Video', selected: true }]
     }
   });
+});
+
+test('media tools methods invoke get_media_tools_status and install_media_tool', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        if (args[0] === 'get_media_tools_status') {
+          return [
+            { toolType: 'ffmpeg', isAvailable: true, path: '/usr/local/bin/ffmpeg', source: 'system-path' },
+            { toolType: 'yt-dlp', isAvailable: false, path: null, source: null }
+          ];
+        }
+        if (args[0] === 'install_media_tool') {
+          return { toolType: args[1].tool, isAvailable: true, path: '/home/user/.open-download-manager/tools/' + args[1].tool, source: 'managed-user-data' };
+        }
+        return null;
+      }
+    }
+  });
+
+  const statuses = await api.getMediaToolsStatus();
+  assert.equal(statuses.length, 2);
+  assert.equal(statuses[0].toolType, 'ffmpeg');
+  assert.equal(statuses[0].isAvailable, true);
+  assert.equal(calls[0][0], 'get_media_tools_status');
+
+  const installed = await api.installMediaTool('yt-dlp');
+  assert.equal(installed.toolType, 'yt-dlp');
+  assert.equal(installed.isAvailable, true);
+  assert.equal(calls[1][0], 'install_media_tool');
+  assert.deepEqual(calls[1][1], { tool: 'yt-dlp' });
+});
+
+test('credential rules methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        if (args[0] === 'list_credential_rules') {
+          return [
+            { id: 'rule-1', scheme: 'https', host: 'site.test', pathPrefix: '/team/', username: 'alice', secret: '******' }
+          ];
+        }
+        if (args[0] === 'save_credential_rule') {
+          return { id: 'rule-2', ...args[1].rule, secret: '******' };
+        }
+        return null;
+      }
+    }
+  });
+
+  const rules = await api.listCredentialRules();
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].host, 'site.test');
+  assert.equal(calls[0][0], 'list_credential_rules');
+
+  const saved = await api.saveCredentialRule({
+    scheme: 'https',
+    host: 'site2.test',
+    pathPrefix: '/',
+    username: 'bob',
+    secret: 'password123'
+  });
+  assert.equal(saved.username, 'bob');
+  assert.equal(calls[1][0], 'save_credential_rule');
+  assert.equal(calls[1][1].rule.username, 'bob');
+
+  await api.deleteCredentialRule('rule-1');
+  assert.equal(calls[2][0], 'delete_credential_rule');
+  assert.deepEqual(calls[2][1], { id: 'rule-1' });
+});
+
+test('completion action methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  const actions = [
+    { type: 'antivirusScan', executable: '/usr/bin/scanner', arguments: ['--scan', '{file}'] }
+  ];
+
+  await api.updateDownloadCompletionActions({ id: 'dl-1', actions });
+  assert.equal(calls[0][0], 'update_download_completion_actions');
+  assert.deepEqual(calls[0][1], { id: 'dl-1', actions });
+
+  await api.retryDownloadActions({ id: 'dl-1' });
+  assert.equal(calls[1][0], 'retry_download_actions');
+  assert.deepEqual(calls[1][1], { id: 'dl-1' });
+});
+
+test('validateDirectory invokes the Rust validate_directory command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.validateDirectory('/path/to/downloads');
+  assert.equal(calls[0][0], 'validate_directory');
+  assert.deepEqual(calls[0][1], { path: '/path/to/downloads' });
+});
+
+test('dismissClipboardCandidate invokes the Rust dismiss_clipboard_candidate command', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.dismissClipboardCandidate('https://example.com/file.zip');
+  assert.equal(calls[0][0], 'dismiss_clipboard_candidate');
+  assert.deepEqual(calls[0][1], { url: 'https://example.com/file.zip' });
+});
+
+test('advanced integration methods invoke corresponding Rust commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return { state: { state: 'disabled' } };
+      }
+    }
+  });
+
+  await api.getAdvancedIntegration();
+  await api.enableAdvancedIntegration({ consent: true });
+  await api.disableAdvancedIntegration();
+  await api.repairAdvancedIntegration();
+
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0][0], 'get_advanced_integration_capability');
+  assert.equal(calls[1][0], 'enable_advanced_integration');
+  assert.deepEqual(calls[1][1], { consent: true });
+  assert.equal(calls[2][0], 'disable_advanced_integration');
+  assert.equal(calls[3][0], 'repair_advanced_integration');
 });

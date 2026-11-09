@@ -1,3 +1,11 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Core download entity representing active/completed transfers, validators, and file paths.
+
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +41,8 @@ pub struct DownloadRecord {
     #[serde(default)]
     pub scheduled_at: Option<String>,
     #[serde(default)]
+    pub queue_id: Option<String>,
+    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub category: Option<DownloadCategory>,
@@ -40,6 +50,8 @@ pub struct DownloadRecord {
     pub directory: Option<String>,
     #[serde(default)]
     pub path: Option<String>,
+    #[serde(default)]
+    pub temp_directory: Option<String>,
     #[serde(default)]
     pub last_try: Option<String>,
     #[serde(default)]
@@ -60,8 +72,26 @@ pub struct DownloadRecord {
     pub connections_progress: Vec<DownloadSegmentProgress>,
     #[serde(default)]
     pub audio_url: Option<String>,
+    #[serde(default)]
+    pub referer: Option<String>,
+    #[serde(default)]
+    pub youtube_format: Option<String>,
+    #[serde(default)]
+    pub transfer_kind: Option<String>,
+    #[serde(default)]
+    pub etag: Option<String>,
+    #[serde(default, deserialize_with = "super::validator::deserialize_optional_transfer_validator")]
+    pub validator: Option<super::validator::TransferValidator>,
+    #[serde(default)]
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(default)]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    #[serde(default)]
+    pub action_ledger: Vec<crate::domain::completion::ActionLedgerEntry>,
     #[serde(skip)]
     pub sabr: Option<NormalizedSabrSession>,
+    #[serde(skip)]
+    pub credentials_override: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -78,6 +108,18 @@ impl DownloadRecord {
     pub fn prepare_for_restart(&mut self) {
         self.status = self.status.clone().after_restart();
         self.speed = 0;
+    }
+
+    pub fn resume_validator(&self) -> Option<super::validator::TransferValidator> {
+        if let Some(ref val) = self.validator {
+            return Some(val.clone());
+        }
+        if let Some(ref etag) = self.etag {
+            if !etag.starts_with("W/") && etag.starts_with('"') && etag.ends_with('"') {
+                return Some(super::validator::TransferValidator::ETag(etag.clone()));
+            }
+        }
+        None
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -124,8 +166,9 @@ impl DownloadRecord {
             category: self.category.as_ref(),
             directory: self.directory.as_deref(),
             path: self.path.as_deref(),
+            temp_directory: self.temp_directory.as_deref(),
             last_try: self.last_try.as_deref(),
-            error: self.error.as_deref(),
+            error: self.error.as_deref().map(super::filename::sanitize_diagnostic_text),
             notice: self.notice.as_deref(),
             estimated: self.estimated,
             kind: self.kind.as_deref(),
@@ -133,7 +176,17 @@ impl DownloadRecord {
             duration: self.duration,
             connections: self.connections,
             connections_progress: &self.connections_progress,
-            audio_url: self.audio_url.as_deref(),
+            audio_url: self.audio_url.as_deref().map(super::filename::redact_download_url),
+            referer: self.referer.as_deref().map(super::filename::redact_download_url),
+            transfer_kind: self.transfer_kind.as_deref(),
+            etag: self.etag.as_deref().or_else(|| match self.validator.as_ref() {
+                Some(super::validator::TransferValidator::ETag(e)) => Some(e.as_str()),
+                _ => None,
+            }),
+            validator: self.validator.as_ref(),
+            conflict_policy: self.conflict_policy,
+            completion_actions: self.completion_actions.as_deref(),
+            action_ledger: &self.action_ledger,
         }
     }
 }
@@ -155,8 +208,9 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub category: Option<&'a DownloadCategory>,
     pub directory: Option<&'a str>,
     pub path: Option<&'a str>,
+    pub temp_directory: Option<&'a str>,
     pub last_try: Option<&'a str>,
-    pub error: Option<&'a str>,
+    pub error: Option<String>,
     pub notice: Option<&'a str>,
     pub estimated: bool,
     pub kind: Option<&'a str>,
@@ -164,5 +218,14 @@ pub struct SerializableDownloadRecordRef<'a> {
     pub duration: Option<f64>,
     pub connections: u8,
     pub connections_progress: &'a [DownloadSegmentProgress],
-    pub audio_url: Option<&'a str>,
+    pub audio_url: Option<String>,
+    pub referer: Option<String>,
+    pub transfer_kind: Option<&'a str>,
+    pub etag: Option<&'a str>,
+    pub validator: Option<&'a super::validator::TransferValidator>,
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_actions: Option<&'a [crate::domain::completion::CompletionAction]>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub action_ledger: &'a [crate::domain::completion::ActionLedgerEntry],
 }

@@ -1,3 +1,9 @@
+// Created: 2026-10-29
+// Reason: Release Awesome Downloader 0.1.1
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Unit tests verifying quality menu open/close behavior, desktop handoff dispatch, and error display.
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

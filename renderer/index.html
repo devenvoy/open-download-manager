@@ -285,12 +285,53 @@
 			id="toast"
 			role="status"
 			hidden>
-			<span id="toast-text"></span
-			><button
+			<span id="toast-text"></span>
+			<button
+				id="toast-action"
+				class="toast-action-btn"
+				type="button"
+				hidden>
+				View Details
+			</button>
+			<button
 				id="dismiss-toast"
 				aria-label="Dismiss notification">
 				×
 			</button>
+		</div>
+
+		<div
+			class="clipboard-prompt"
+			id="clipboard-prompt"
+			role="alert"
+			hidden>
+			<div class="clipboard-prompt-header">
+				<strong id="clipboard-prompt-title">Download Link Detected</strong>
+				<button
+					id="clipboard-prompt-close"
+					class="close-button"
+					type="button"
+					aria-label="Dismiss">
+					×
+				</button>
+			</div>
+			<div class="clipboard-prompt-body">
+				<span id="clipboard-prompt-desc"></span>
+			</div>
+			<div class="clipboard-prompt-actions">
+				<button
+					id="clipboard-prompt-add"
+					class="small-button primary"
+					type="button">
+					Add to downloads
+				</button>
+				<button
+					id="clipboard-prompt-dismiss"
+					class="small-button"
+					type="button">
+					Dismiss
+				</button>
+			</div>
 		</div>
 
 		<dialog
@@ -319,6 +360,12 @@
 							Select Videos…
 						</button>
 					</div>
+					<div id="video-banner" class="banner-notice" hidden>
+						<span>YouTube video detected!</span>
+						<button type="button" class="button" id="video-banner-btn">
+							Choose Quality / Format…
+						</button>
+					</div>
 					<div class="form-line">
 						<label for="download-category">Category:</label
 						><select id="download-category">
@@ -329,6 +376,12 @@
 							<option>Documents</option>
 							<option>Programs</option>
 							<option>Other</option>
+						</select>
+					</div>
+					<div class="form-line">
+						<label for="download-queue">Queue:</label>
+						<select id="download-queue">
+							<option value="default">Default Queue</option>
 						</select>
 					</div>
 					<div class="form-line">
@@ -363,6 +416,16 @@
 							type="datetime-local" /><span class="field-help"
 							>Optional</span
 						>
+					</div>
+					<div class="form-line auth-toggle-line">
+						<label class="checkbox-label" for="add-auth-enabled">
+							<input type="checkbox" id="add-auth-enabled" />
+							Use basic authentication for this download
+						</label>
+					</div>
+					<div id="add-auth-fields" class="form-line auth-fields" hidden style="display: flex; gap: 8px;">
+						<input type="text" id="add-auth-user" placeholder="Username" autocomplete="off" style="flex: 1;" />
+						<input type="password" id="add-auth-pass" placeholder="Password" autocomplete="off" style="flex: 1;" />
 					</div>
 					<p
 						class="form-error"
@@ -451,6 +514,41 @@
 		</dialog>
 
 		<dialog
+			id="video-formats-dialog"
+			aria-labelledby="video-formats-title">
+			<form id="video-formats-form">
+				<div class="dialog-title">
+					<strong id="video-formats-title">Choose Quality / Format</strong>
+					<button
+						type="button"
+						class="close-button"
+						data-close
+						aria-label="Close">
+						×
+					</button>
+				</div>
+				<div class="dialog-body">
+					<div class="playlist-header">
+						<div class="playlist-meta">
+							<h3 id="video-formats-name">YouTube Video</h3>
+							<p id="video-formats-details" class="field-help"></p>
+						</div>
+					</div>
+					<p id="video-formats-error" class="error-notice" hidden></p>
+					<div class="form-line">
+						<label for="video-format-select">Format:</label>
+						<select id="video-format-select" class="full-width" style="padding: 6px;"></select>
+					</div>
+				</div>
+				<div class="dialog-footer">
+					<span class="spacer"></span>
+					<button type="button" class="button" data-close>Cancel</button>
+					<button type="submit" class="button primary" id="video-formats-apply">Select Format</button>
+				</div>
+			</form>
+		</dialog>
+
+		<dialog
 			id="settings-dialog"
 			aria-labelledby="settings-title">
 			<form id="settings-form">
@@ -465,6 +563,20 @@
 					</button>
 				</div>
 				<div class="dialog-body">
+					<fieldset>
+						<legend>Appearance</legend>
+						<div class="form-line">
+							<label for="app-theme">Theme:</label>
+							<select id="app-theme">
+								<option value="system">System (Match OS)</option>
+								<option value="light">Light</option>
+								<option value="dark">Dark</option>
+							</select>
+						</div>
+						<p class="field-help">
+							System dynamically tracks your operating system light/dark mode. Light and Dark use a fixed high-contrast palette.
+						</p>
+					</fieldset>
 					<fieldset>
 						<legend>General</legend>
 						<label
@@ -482,6 +594,30 @@
 						</p>
 					</fieldset>
 					<fieldset>
+						<legend>Clipboard Monitoring</legend>
+						<label
+							class="checkbox-label"
+							for="clipboard-monitoring-enabled"
+							><input
+								type="checkbox"
+								id="clipboard-monitoring-enabled" />
+							Monitor clipboard for downloadable links (HTTP / HTTPS)</label
+						>
+						<p class="field-help">
+							When enabled, Open Download Manager detects copied download links and prompts you to add them. Clipboard contents are never logged, stored, or sent across the network.
+						</p>
+						<div id="clipboard-suboptions" style="margin-left: 20px; margin-top: 6px;">
+							<label
+								class="checkbox-label"
+								for="clipboard-auto-enqueue"
+								><input
+									type="checkbox"
+									id="clipboard-auto-enqueue" />
+								Automatically add detected links without confirmation prompt</label
+							>
+						</div>
+					</fieldset>
+					<fieldset>
 						<legend>Save to</legend>
 						<label for="default-directory"
 							>Default download folder:</label
@@ -496,6 +632,60 @@
 								Browse…
 							</button>
 						</div>
+
+						<div class="form-line" style="margin-top: 10px;">
+							<label for="options-category-select">Category destination folder:</label>
+							<select id="options-category-select">
+								<option value="Archives">Compressed / Archives</option>
+								<option value="Documents">Documents</option>
+								<option value="Audio">Music / Audio</option>
+								<option value="Programs">Programs</option>
+								<option value="Video">Video</option>
+								<option value="Other">Other</option>
+							</select>
+						</div>
+						<div class="directory-field">
+							<input
+								id="category-directory"
+								placeholder="Use default download folder" /><button
+								class="small-button"
+								id="choose-category-directory"
+								type="button">
+								Browse…
+							</button><button
+								class="small-button"
+								id="reset-category-directory"
+								type="button"
+								title="Reset this category to use the default download folder">
+								Reset
+							</button>
+						</div>
+						<p class="field-help" id="category-directory-hint">
+							Files in this category are automatically saved to this folder.
+						</p>
+
+						<label for="temporary-directory" style="margin-top: 10px; display: block;"
+							>Temporary parts directory:</label
+						>
+						<div class="directory-field">
+							<input
+								id="temporary-directory"
+								placeholder="Default (same volume / folder as download)" /><button
+								class="small-button"
+								id="choose-temporary-directory"
+								type="button">
+								Browse…
+							</button><button
+								class="small-button"
+								id="reset-temporary-directory"
+								type="button"
+								title="Reset to default download location">
+								Reset
+							</button>
+						</div>
+						<p class="field-help">
+							Temporary parts are downloaded here before final assembly into the destination folder.
+						</p>
 					</fieldset>
 					<fieldset>
 						<legend>Connection</legend>
@@ -534,6 +724,313 @@
 								required />
 						</div>
 					</fieldset>
+					<fieldset>
+						<legend>Site Connection Exceptions</legend>
+						<p class="field-help">
+							Configure per-domain connection limits (exact host or *.domain.com).
+							Tip: Use 1 connection for servers that do not support resume.
+						</p>
+						<div class="form-line site-override-inputs">
+							<input
+								type="text"
+								id="new-override-host"
+								placeholder="example.com or *.domain.com" />
+							<input
+								type="number"
+								id="new-override-connections"
+								min="1"
+								max="32"
+								value="1"
+								title="Connections" />
+							<button
+								type="button"
+								id="add-override-button"
+								class="small-button">
+								Add Exception
+							</button>
+						</div>
+						<div
+							id="site-overrides-list"
+							class="site-overrides-list"></div>
+					</fieldset>
+					<fieldset>
+						<legend>Rolling Download Limits</legend>
+						<label
+							class="checkbox-label"
+							for="window-limit-enabled">
+							<input
+								type="checkbox"
+								id="window-limit-enabled" />
+							Limit download volume over rolling time window
+						</label>
+						<div
+							id="window-limit-fields"
+							class="window-limit-fields">
+							<div class="form-line">
+								<label for="window-limit-max-mb">Max data volume (MB):</label>
+								<input
+									type="number"
+									id="window-limit-max-mb"
+									min="1"
+									placeholder="2048" />
+							</div>
+							<div class="form-line">
+								<label for="window-limit-hours">Time window (hours):</label>
+								<input
+									type="number"
+									id="window-limit-hours"
+									min="1"
+									max="8760"
+									placeholder="12" />
+							</div>
+							<div
+								id="window-limit-status-line"
+								class="field-help window-limit-status-line">
+								<span id="window-limit-status"></span>
+							</div>
+						</div>
+					</fieldset>
+					<fieldset>
+						<legend>Proxy</legend>
+						<div class="proxy-header-actions">
+							<label
+								class="checkbox-label"
+								for="proxy-enabled"
+								><input
+									type="checkbox"
+									id="proxy-enabled" />
+								Use proxy server for downloads</label
+							>
+							<button
+								class="small-button"
+								id="detect-proxy-button"
+								type="button">
+								Detect System Proxy…
+							</button>
+						</div>
+						<div
+							id="proxy-fields"
+							class="proxy-fields">
+							<div class="form-line">
+								<label for="proxy-protocol">Protocol:</label>
+								<select id="proxy-protocol">
+									<option value="http">HTTP</option>
+									<option value="https">HTTPS</option>
+									<option value="socks5">SOCKS5</option>
+									<option value="direct">Direct (No Proxy)</option>
+								</select>
+							</div>
+							<div class="form-line">
+								<label for="proxy-host">Proxy server (host):</label>
+								<input
+									type="text"
+									id="proxy-host"
+									placeholder="127.0.0.1 or proxy.example.com" />
+							</div>
+							<div class="form-line">
+								<label for="proxy-port">Port:</label>
+								<input
+									type="number"
+									id="proxy-port"
+									min="1"
+									max="65535"
+									placeholder="8080" />
+							</div>
+							<div
+								id="proxy-dns-group"
+								class="form-line proxy-dns-line">
+								<label
+									class="checkbox-label"
+									for="proxy-resolve-dns-remotely">
+									<input
+										type="checkbox"
+										id="proxy-resolve-dns-remotely" />
+									Resolve DNS through proxy (Remote DNS)
+								</label>
+							</div>
+							<div class="form-line">
+								<label for="proxy-username">Username (optional):</label>
+								<input
+									type="text"
+									id="proxy-username"
+									autocomplete="off" />
+							</div>
+							<div class="form-line">
+								<label for="proxy-password">Password (optional):</label>
+								<input
+									type="password"
+									id="proxy-password"
+									autocomplete="off" />
+							</div>
+							<div class="form-line proxy-test-line">
+								<button
+									class="small-button"
+									id="test-proxy-button"
+									type="button">
+									Test Connection
+								</button>
+								<span
+									id="proxy-test-status"
+									class="proxy-test-status"
+									role="status"
+									aria-live="polite"></span>
+							</div>
+						</div>
+					</fieldset>
+					<fieldset>
+						<legend>File Types &amp; Browser Capture</legend>
+						<label
+							class="checkbox-label"
+							for="capture-enabled"
+							><input
+								type="checkbox"
+								id="capture-enabled" />
+							Automatically capture downloads from browser</label
+						>
+						<div class="form-line">
+							<label for="capture-mode">Confirmation mode:</label>
+							<select id="capture-mode">
+								<option value="askForUnknown">Ask confirmation for unknown types</option>
+								<option value="automatic">Automatic (allow recognized types only)</option>
+								<option value="alwaysAsk">Always show confirmation dialog</option>
+							</select>
+						</div>
+						<div class="form-line">
+							<label for="capture-file-types">Automatically capture following file types:</label>
+							<input
+								type="text"
+								id="capture-file-types"
+								placeholder="3GP 7Z APK AVI DMG EXE ISO MKV MP4 PDF ZIP ..." />
+						</div>
+						<div class="form-line">
+							<label for="capture-excluded-hosts">Don't capture from the following sites (comma-separated):</label>
+							<input
+								type="text"
+								id="capture-excluded-hosts"
+								placeholder="blocked.com, *.internal.corp" />
+						</div>
+						<div class="form-line">
+							<label for="capture-excluded-addresses">Don't capture from the following addresses/prefixes:</label>
+							<input
+								type="text"
+								id="capture-excluded-addresses"
+								placeholder="192.168.1.100, /sensitive/, https://internal..." />
+						</div>
+					</fieldset>
+					<fieldset id="credentials-fieldset">
+						<legend>Site Logins &amp; Passwords</legend>
+						<p class="field-help">
+							Manage saved credentials for protected HTTP and FTP downloads. Longest-prefix matching will automatically select the right credentials without leaking across hosts or out-of-scope paths.
+						</p>
+						<div class="credentials-manager">
+							<div class="credentials-table-wrapper" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); margin-bottom: 8px;">
+								<table class="credentials-table" id="credentials-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+									<thead>
+										<tr style="background: var(--bg-secondary, #f3f4f6); text-align: left;">
+											<th style="padding: 4px;">Scheme</th>
+											<th style="padding: 4px;">Host</th>
+											<th style="padding: 4px;">Port</th>
+											<th style="padding: 4px;">Path Prefix</th>
+											<th style="padding: 4px;">User</th>
+											<th style="padding: 4px;">Password</th>
+											<th style="padding: 4px;">Action</th>
+										</tr>
+									</thead>
+									<tbody id="credentials-list">
+									</tbody>
+								</table>
+							</div>
+							<div class="credentials-add-form" id="credentials-add-form" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+								<select id="cred-scheme" style="font-size: 11px; padding: 2px;">
+									<option value="https">https</option>
+									<option value="http">http</option>
+									<option value="ftp">ftp</option>
+								</select>
+								<input type="text" id="cred-host" placeholder="Host (e.g. site.com)" style="font-size: 11px; padding: 2px; width: 110px;" />
+								<input type="number" id="cred-port" placeholder="Port" min="1" max="65535" style="font-size: 11px; padding: 2px; width: 50px;" />
+								<input type="text" id="cred-path" placeholder="Path (e.g. /team/)" value="/" style="font-size: 11px; padding: 2px; width: 80px;" />
+								<input type="text" id="cred-user" placeholder="User" style="font-size: 11px; padding: 2px; width: 80px;" autocomplete="off" />
+								<input type="password" id="cred-pass" placeholder="Password" style="font-size: 11px; padding: 2px; width: 80px;" autocomplete="off" />
+								<button type="button" class="small-button" id="cred-save-btn">Add Rule</button>
+							</div>
+							<span id="cred-status" class="field-help" style="display: block; margin-top: 4px;"></span>
+						</div>
+					</fieldset>
+					<fieldset>
+						<legend>Media Tools</legend>
+						<div class="media-tool-line">
+							<div class="media-tool-meta">
+								<strong>FFmpeg</strong>
+								<span id="ffmpeg-status" class="field-help">Checking…</span>
+							</div>
+							<button class="small-button" id="install-ffmpeg-btn" type="button">Install</button>
+						</div>
+						<div class="media-tool-line">
+							<div class="media-tool-meta">
+								<strong>yt-dlp</strong>
+								<span id="ytdlp-status" class="field-help">Checking…</span>
+							</div>
+							<button class="small-button" id="install-ytdlp-btn" type="button">Install</button>
+						</div>
+						<p class="field-help">
+							Media tools are managed automatically by Open Download Manager to combine video and audio streams.
+						</p>
+					</fieldset>
+					<fieldset>
+						<legend>Post-Download Actions</legend>
+						<label class="checkbox-label" for="settings-play-sound">
+							<input type="checkbox" id="settings-play-sound" />
+							Play sound on download completion
+						</label>
+						<div class="form-line" id="sound-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<label for="settings-sound-file">Custom sound file (optional):</label>
+							<input type="text" id="settings-sound-file" placeholder="Default chime" />
+						</div>
+
+						<label class="checkbox-label" for="settings-scan-antivirus">
+							<input type="checkbox" id="settings-scan-antivirus" />
+							Scan completed downloads with antivirus
+						</label>
+						<div id="antivirus-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<div class="form-line">
+								<label for="settings-scanner-executable">Scanner executable:</label>
+								<input type="text" id="settings-scanner-executable" placeholder="e.g. /usr/bin/clamscan or MpCmdRun.exe" />
+							</div>
+							<div class="form-line">
+								<label for="settings-scanner-args">Arguments (use {file} for path):</label>
+								<input type="text" id="settings-scanner-args" placeholder="--scan {file}" />
+							</div>
+						</div>
+
+						<label class="checkbox-label" for="settings-post-command">
+							<input type="checkbox" id="settings-post-command" />
+							Execute custom command after completion
+						</label>
+						<div id="post-command-options-group" style="margin-left: 20px; margin-bottom: 8px;">
+							<div class="form-line">
+								<label for="settings-command-executable">Command executable:</label>
+								<input type="text" id="settings-command-executable" placeholder="e.g. /usr/local/bin/script.sh" />
+							</div>
+							<div class="form-line">
+								<label for="settings-command-args">Arguments (use {file} for path):</label>
+								<input type="text" id="settings-command-args" placeholder="{file}" />
+							</div>
+						</div>
+
+						<div class="form-line" style="margin-top: 8px;">
+							<label for="settings-power-action">When all downloads finish:</label>
+							<select id="settings-power-action">
+								<option value="none">Do nothing</option>
+								<option value="sleep">Sleep</option>
+								<option value="hibernate">Hibernate</option>
+								<option value="shutdown">Shut down computer</option>
+							</select>
+						</div>
+						<label class="checkbox-label" for="settings-power-confirm" style="margin-left: 20px;">
+							<input type="checkbox" id="settings-power-confirm" />
+							Require explicit confirmation for power action
+						</label>
+					</fieldset>
 					<p
 						class="form-error"
 						id="settings-error"
@@ -557,43 +1054,80 @@
 
 		<dialog
 			id="scheduler-dialog"
+			class="scheduler-dialog"
 			aria-labelledby="scheduler-title">
 			<div class="dialog-title">
-				<strong id="scheduler-title">Scheduler</strong
-				><button
+				<strong id="scheduler-title">Scheduler &amp; Queues</strong>
+				<button
 					class="close-button"
 					data-close
 					aria-label="Close">
 					×
 				</button>
 			</div>
+			<div class="dialog-tabs" role="tablist">
+				<button
+					id="tab-scheduler-queues"
+					class="tab active-tab"
+					role="tab"
+					aria-selected="true"
+					type="button">
+					Download Queues
+				</button>
+				<button
+					id="tab-scheduler-oneoff"
+					class="tab"
+					role="tab"
+					aria-selected="false"
+					type="button">
+					One-off Schedules
+				</button>
+			</div>
 			<div class="dialog-body">
-				<fieldset>
-					<legend>Scheduled downloads</legend>
-					<div
-						id="scheduled-list"
-						class="scheduled-list"></div>
-				</fieldset>
-				<p class="field-help">
-					Scheduled downloads start at the chosen local time while
-					this app is running. Start Queue starts paused and scheduled
-					downloads immediately. Stop Queue pauses active and waiting
-					downloads.
-				</p>
-				<div class="scheduler-actions">
-					<button
-						class="button"
-						id="schedule-new">
-						Add scheduled download…</button
-					><button
-						class="button"
-						id="scheduler-start">
-						Start Queue</button
-					><button
-						class="button"
-						id="scheduler-stop">
-						Stop Queue
-					</button>
+				<div id="scheduler-queues-panel" class="scheduler-panel">
+					<div class="queues-toolbar">
+						<button
+							class="button primary"
+							id="queue-create-btn"
+							type="button">
+							+ Create Queue…
+						</button>
+					</div>
+					<div id="queues-list-container" class="queues-list-container">
+						<!-- Queue cards rendered here -->
+					</div>
+				</div>
+				<div id="scheduler-oneoff-panel" class="scheduler-panel" hidden>
+					<fieldset>
+						<legend>Scheduled downloads</legend>
+						<div
+							id="scheduled-list"
+							class="scheduled-list"></div>
+					</fieldset>
+					<p class="field-help">
+						Scheduled downloads start at the chosen local time while
+						this app is running.
+					</p>
+					<div class="scheduler-actions">
+						<button
+							class="button"
+							id="schedule-new"
+							type="button">
+							Add scheduled download…
+						</button>
+						<button
+							class="button"
+							id="scheduler-start"
+							type="button">
+							Start Default Queue
+						</button>
+						<button
+							class="button"
+							id="scheduler-stop"
+							type="button">
+							Stop Default Queue
+						</button>
+					</div>
 				</div>
 			</div>
 			<div class="dialog-footer">
@@ -603,6 +1137,91 @@
 					Close
 				</button>
 			</div>
+		</dialog>
+
+		<dialog
+			id="queue-edit-dialog"
+			class="queue-edit-dialog"
+			aria-labelledby="queue-edit-title">
+			<form id="queue-edit-form">
+				<div class="dialog-title">
+					<strong id="queue-edit-title">Download Queue</strong>
+					<button
+						class="close-button"
+						id="queue-edit-close-btn"
+						type="button"
+						aria-label="Close">
+						×
+					</button>
+				</div>
+				<div class="dialog-body">
+					<input type="hidden" id="queue-edit-id" />
+					<div class="form-line">
+						<label for="queue-edit-name">Queue Name:</label>
+						<input id="queue-edit-name" required maxlength="100" placeholder="e.g. Nightly, Work" />
+					</div>
+					<div class="form-line">
+						<label for="queue-edit-concurrency">Max Active Downloads:</label>
+						<input id="queue-edit-concurrency" type="number" min="1" max="10" value="2" required />
+					</div>
+					<div class="form-line">
+						<label for="queue-edit-speed">Speed Limit (KB/s, 0 = unlimited):</label>
+						<input id="queue-edit-speed" type="number" min="0" max="1000000" value="0" />
+					</div>
+					<fieldset class="schedule-fieldset">
+						<legend>
+							<label class="checkbox-label" for="queue-edit-schedule-enabled">
+								<input type="checkbox" id="queue-edit-schedule-enabled" />
+								Enable Recurring Schedule
+							</label>
+						</legend>
+						<div id="queue-schedule-fields" class="queue-schedule-fields" hidden>
+							<div class="form-line">
+								<label for="queue-edit-start-time">Start Time (24h):</label>
+								<input id="queue-edit-start-time" type="time" value="22:00" />
+							</div>
+							<div class="form-line">
+								<label for="queue-edit-stop-time">Stop Time (optional):</label>
+								<input id="queue-edit-stop-time" type="time" value="06:00" />
+							</div>
+							<div class="form-line">
+								<label>Days of Week:</label>
+								<div class="days-selector">
+									<label class="day-chip"><input type="checkbox" name="q-day" value="1" checked /> Mon</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="2" checked /> Tue</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="3" checked /> Wed</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="4" checked /> Thu</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="5" checked /> Fri</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="6" /> Sat</label>
+									<label class="day-chip"><input type="checkbox" name="q-day" value="7" /> Sun</label>
+								</div>
+							</div>
+							<div class="form-line">
+								<label for="queue-edit-missed-policy">Missed Run Policy:</label>
+								<select id="queue-edit-missed-policy">
+									<option value="runOnStartup">Run on Startup (Catch-up if app was closed)</option>
+									<option value="skip">Skip until Next Scheduled Run</option>
+								</select>
+							</div>
+							<p class="field-help">Timezone: Local system time. Start and stop actions apply only to this queue.</p>
+						</div>
+					</fieldset>
+					<p class="form-error" id="queue-edit-error" role="alert" hidden></p>
+				</div>
+				<div class="dialog-footer">
+					<button
+						class="button"
+						id="queue-edit-cancel-btn"
+						type="button">
+						Cancel
+					</button>
+					<button
+						class="button primary"
+						type="submit">
+						Save Queue
+					</button>
+				</div>
+			</form>
 		</dialog>
 
 		<dialog
@@ -650,6 +1269,17 @@
 					<p
 						id="transfer-source"
 						class="transfer-source"></p>
+					<div id="detail-error-card" class="detail-error-card" hidden>
+						<div class="detail-error-header">
+							<span class="detail-error-badge">⚠️ Error</span>
+							<strong id="detail-error-title">Download Interrupted</strong>
+						</div>
+						<p id="detail-error-summary" class="detail-error-summary"></p>
+						<div class="detail-error-actions">
+							<button type="button" class="button small-button" id="detail-error-view-btn">View full details…</button>
+							<button type="button" class="button small-button primary" id="detail-error-retry-btn">Retry download</button>
+						</div>
+					</div>
 					<dl
 						id="details-content"
 						class="details-content"></dl>
@@ -714,7 +1344,20 @@
 							id="completion-result"
 							role="status"></span>
 					</form>
-					<p>
+					<hr style="margin: 12px 0; border: none; border-top: 1px solid var(--border-color, #e5e5e5);" />
+					<div class="completion-history-section">
+						<strong>Post-Download Action History</strong>
+						<div id="completion-action-history" style="margin-top: 6px;"></div>
+						<button
+							type="button"
+							class="button small-button"
+							id="detail-retry-actions"
+							style="margin-top: 6px;"
+							hidden>
+							Re-run completion actions
+						</button>
+					</div>
+					<p style="margin-top: 12px;">
 						<button
 							class="button"
 							id="detail-open">
@@ -775,16 +1418,117 @@
 						id="segment-note"
 						class="field-help"></p>
 				</div>
-				<p
-					id="detail-error"
-					class="form-error"
-					hidden></p>
 			</div>
 			<div class="dialog-footer">
 				<button
 					class="button"
 					data-close>
 					Close
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="media-tool-dialog"
+			aria-labelledby="media-tool-title">
+			<div class="dialog-title">
+				<strong id="media-tool-title">FFmpeg Required</strong>
+				<button
+					class="close-button"
+					data-close
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body media-tool-dialog-body">
+				<div class="media-tool-dialog-icon" aria-hidden="true">
+					<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+						<line x1="12" y1="9" x2="12" y2="13"/>
+						<line x1="12" y1="17" x2="12.01" y2="17"/>
+					</svg>
+				</div>
+				<div class="media-tool-dialog-content">
+					<h4 class="media-tool-dialog-heading" id="media-tool-dialog-heading">FFmpeg is required to combine video and audio</h4>
+					<div class="media-tool-dialog-desc" id="media-tool-dialog-desc">
+						This YouTube video was captured as separate high-definition video and audio tracks.
+						Open Download Manager needs <strong>FFmpeg</strong> to assemble these streams into a complete playable media file.
+					</div>
+					<p class="media-tool-dialog-help" id="media-tool-dialog-help">
+						Would you like Open Download Manager to automatically download and install FFmpeg now?
+					</p>
+					<div id="media-tool-dialog-progress" class="media-tool-progress-container" hidden>
+						<div class="media-tool-progress-bar">
+							<div id="media-tool-progress-fill" class="media-tool-progress-fill"></div>
+						</div>
+						<span id="media-tool-dialog-status-text" class="field-help">Downloading and installing FFmpeg…</span>
+					</div>
+					<p id="media-tool-dialog-error" class="form-error" hidden></p>
+				</div>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					class="button primary"
+					id="media-tool-confirm-btn">
+					Download &amp; Install FFmpeg
+				</button>
+				<button
+					type="button"
+					class="button"
+					data-close
+					id="media-tool-cancel-btn">
+					Cancel
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="error-dialog"
+			aria-labelledby="error-dialog-title">
+			<div class="dialog-title">
+				<strong id="error-dialog-title">Download Error</strong>
+				<button
+					class="close-button"
+					data-close
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body error-dialog-body">
+				<div class="error-dialog-alert">
+					<div class="error-dialog-icon" aria-hidden="true">⚠️</div>
+					<div class="error-dialog-message-container">
+						<h3 id="error-dialog-heading">Download could not be completed</h3>
+						<p id="error-dialog-description"></p>
+					</div>
+				</div>
+
+				<div id="error-dialog-fix-suggestion" class="error-dialog-suggestion" hidden>
+					<strong>Suggested action:</strong>
+					<span id="error-dialog-suggestion-text"></span>
+					<button type="button" class="button small-button" id="error-dialog-suggestion-action" hidden></button>
+				</div>
+
+				<details id="error-dialog-tech-container" class="error-tech-details">
+					<summary>Technical details &amp; diagnostics</summary>
+					<pre id="error-dialog-tech-text" class="error-tech-pre"></pre>
+					<button type="button" class="button small-button" id="error-dialog-copy-btn">Copy details to clipboard</button>
+				</details>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					class="button primary"
+					id="error-dialog-retry-btn">
+					Retry Download
+				</button>
+				<button
+					type="button"
+					class="button"
+					data-close
+					id="error-dialog-close-btn">
+					Dismiss
 				</button>
 			</div>
 		</dialog>
@@ -827,6 +1571,25 @@
 					id="browser-grid"
 					role="list"
 					aria-label="Installed supported browsers"></div>
+				<section class="advanced-integration-section" id="advanced-integration-section">
+					<div class="advanced-integration-heading">
+						<div>
+							<h3 id="advanced-integration-title">Enhanced Media Integration (Opt-in)</h3>
+							<p class="field-help">
+								Deep player stream detection for media requests. A bounded non-destructive health check runs automatically, with instant rollback if conflicts occur.
+							</p>
+						</div>
+						<span class="advanced-integration-badge" id="advanced-integration-badge">Disabled</span>
+					</div>
+					<div class="advanced-integration-banner" id="advanced-integration-banner" hidden>
+						<p id="advanced-integration-message" role="status"></p>
+					</div>
+					<div class="advanced-integration-controls" id="advanced-integration-controls">
+						<button type="button" class="button" id="advanced-enable-button">Enable Enhanced Mode…</button>
+						<button type="button" class="button secondary" id="advanced-repair-button" hidden>Repair &amp; Verify</button>
+						<button type="button" class="button secondary" id="advanced-disable-button" hidden>Disable</button>
+					</div>
+				</section>
 				<section
 					class="browser-detail"
 					id="browser-detail"
@@ -892,6 +1655,73 @@
 					class="button"
 					data-close>
 					Close
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="proxy-discovery-dialog"
+			class="proxy-discovery-dialog"
+			aria-labelledby="proxy-discovery-title">
+			<div class="dialog-title">
+				<strong id="proxy-discovery-title">Discovered Proxy Configuration</strong>
+				<button
+					class="close-button"
+					id="proxy-discovery-close-btn"
+					type="button"
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body proxy-discovery-body">
+				<div class="proxy-discovery-summary">
+					<span class="badge" id="proxy-discovery-source-badge">System</span>
+					<span class="badge" id="proxy-discovery-mode-badge">Manual</span>
+					<span class="badge auth-badge" id="proxy-discovery-auth-badge" hidden>Authentication Detected</span>
+				</div>
+				<div id="proxy-discovery-pac-section" class="proxy-discovery-section" hidden>
+					<label>Auto-configuration script (PAC URL):</label>
+					<div class="code-preview" id="proxy-discovery-pac-url"></div>
+					<p class="field-help warning-text">PAC automatic script routing is not evaluated; route resolution is unavailable rather than direct fallback.</p>
+				</div>
+				<div id="proxy-discovery-routes-section" class="proxy-discovery-section">
+					<label>Detected Protocol Routes:</label>
+					<ul id="proxy-discovery-routes-list" class="proxy-routes-list"></ul>
+				</div>
+				<div id="proxy-discovery-diff-section" class="proxy-discovery-section">
+					<label>Configuration Preview / Diff:</label>
+					<div class="proxy-diff-box">
+						<div class="diff-col">
+							<span class="diff-title">Current Setting:</span>
+							<span id="proxy-diff-current" class="diff-val">Direct (Disabled)</span>
+						</div>
+						<div class="diff-arrow">→</div>
+						<div class="diff-col">
+							<span class="diff-title">Discovered Setting:</span>
+							<span id="proxy-diff-discovered" class="diff-val">HTTP 127.0.0.1:8080 (Enabled)</span>
+						</div>
+					</div>
+				</div>
+				<div id="proxy-discovery-unsupported-section" class="proxy-discovery-section" hidden>
+					<div class="warning-callout" id="proxy-discovery-unsupported-list"></div>
+				</div>
+				<p class="field-help secure-note" id="proxy-discovery-auth-note" hidden>
+					Protected credential notice: Passwords are protected and never exposed. If authentication is required, enter credentials securely in settings.
+				</p>
+				<p class="form-error" id="proxy-discovery-error" role="alert" hidden></p>
+			</div>
+			<div class="dialog-footer">
+				<button
+					class="button"
+					id="proxy-discovery-cancel-btn"
+					type="button">
+					Cancel
+				</button>
+				<button
+					class="button primary"
+					id="proxy-discovery-import-btn"
+					type="button">
+					Import Settings
 				</button>
 			</div>
 		</dialog>

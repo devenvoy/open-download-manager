@@ -1,3 +1,10 @@
+// Created: 2026-11-05
+// Reason: feat(media): implement notifications, file icons, and adaptive dual-stream muxing (Phase E)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Integration tests verifying paired downloads functionality, edge cases, and error recovery.
+
 use std::{
     io::{Read, Write},
     net::TcpListener,
@@ -120,15 +127,22 @@ fn paired_request_validation_and_record_mapping() {
         urls: vec!["https://example.com/video_stream".to_string()],
         filename: Some("paired_video.mp4".to_string()),
         directory: Some(dir.to_string_lossy().into_owned()),
+        temp_directory: None,
         category: None,
         description: Some("Adaptive paired video".to_string()),
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: Some("https://example.com/audio_stream".to_string()),
         kind: Some("paired".to_string()),
         sabr: None,
         reuse_active: None,
+        referer: None,
+        youtube_format: None,
+        conflict_policy: None,
+        credentials: None,
+        completion_actions: None,
     };
 
     let ids = transfer.add(req, settings.settings()).expect("add download");
@@ -197,14 +211,17 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,
         estimated: false,
+        transfer_kind: None,
         kind: Some("paired".to_string()),
         resumable: Some(false),
         duration: None,
@@ -212,6 +229,14 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         connections_progress: Vec::new(),
         audio_url: Some(format!("{base_url}/audio.m4a")),
         sabr: None,
+        referer: None,
+        youtube_format: None,
+        etag: None,
+        validator: None,
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -296,14 +321,17 @@ async fn paired_download_converts_to_mp3() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,
         estimated: false,
+        transfer_kind: None,
         kind: Some("paired".to_string()),
         resumable: Some(false),
         duration: None,
@@ -311,6 +339,14 @@ async fn paired_download_converts_to_mp3() {
         connections_progress: Vec::new(),
         audio_url: Some(format!("{base_url}/audio.m4a")),
         sabr: None,
+        referer: None,
+        youtube_format: None,
+        etag: None,
+        validator: None,
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let progress_handler: DownloadProgressHandler = Arc::new(|_| {});
@@ -345,14 +381,17 @@ fn paired_download_discard_partial_cleans_up_directory() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,
         estimated: false,
+        transfer_kind: None,
         kind: Some("paired".to_string()),
         resumable: Some(false),
         duration: None,
@@ -360,6 +399,14 @@ fn paired_download_discard_partial_cleans_up_directory() {
         connections_progress: Vec::new(),
         audio_url: Some("https://example.com/a".to_string()),
         sabr: None,
+        referer: None,
+        youtube_format: None,
+        etag: None,
+        validator: None,
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let parts_dir = dir.join(format!(".open-download-manager-paired-{}", download.id));

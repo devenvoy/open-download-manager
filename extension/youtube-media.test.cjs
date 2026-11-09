@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-10-24
+// Reason: Initial public release
+// Description: Unit tests verifying YouTube adaptive video-audio pairing, SABR session detection, and expiration handling.
+
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {mediaUrl,playerData,choices}=require('./youtube-media.js');

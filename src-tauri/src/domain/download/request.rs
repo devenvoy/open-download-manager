@@ -1,7 +1,14 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Inbound download creation request carrying URLs, optional credentials, category, and options.
+
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::{
     category::DownloadCategory,
@@ -21,6 +28,8 @@ pub struct DownloadRequest {
     pub urls: Vec<String>,
     pub filename: Option<String>,
     pub directory: Option<String>,
+    #[serde(default)]
+    pub temp_directory: Option<String>,
     pub category: Option<DownloadCategory>,
     pub description: Option<String>,
     #[serde(default)]
@@ -28,11 +37,28 @@ pub struct DownloadRequest {
     #[serde(default)]
     pub review_only: Option<bool>,
     pub scheduled_at: Option<String>,
+    #[serde(default)]
+    pub queue_id: Option<String>,
     pub audio_url: Option<String>,
     pub kind: Option<String>,
     pub sabr: Option<SabrSession>,
     #[serde(default)]
     pub reuse_active: Option<bool>,
+    pub referer: Option<String>,
+    pub youtube_format: Option<String>,
+    #[serde(default)]
+    pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
+    #[serde(default)]
+    pub credentials: Option<DownloadCredentials>,
+    #[serde(default)]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadCredentials {
+    pub username: String,
+    pub password: Option<String>,
 }
 
 impl DownloadRequest {
@@ -84,6 +110,16 @@ impl DownloadRequest {
             }
             None => default_directory,
         };
+        let temp_directory = match self.temp_directory {
+            Some(temp_dir) => {
+                let path = PathBuf::from(temp_dir);
+                if !path.is_absolute() {
+                    return Err("Choose an absolute temporary folder.".to_owned());
+                }
+                Some(path)
+            }
+            None => None,
+        };
         let description = self
             .description
             .map(|description| description.trim().to_owned());
@@ -114,19 +150,42 @@ impl DownloadRequest {
             None
         };
 
+        let kind = self.kind.or_else(|| {
+            if urls.iter().any(|u| crate::domain::media::youtube_url(u.url().as_str()).is_some()) {
+                Some("youtube".to_owned())
+            } else {
+                None
+            }
+        });
+
+        if let Some(ref actions) = self.completion_actions {
+            for action in actions {
+                if let Err(msg) = action.validate() {
+                    return Err(msg.to_string());
+                }
+            }
+        }
+
         Ok(ValidatedDownloadRequest {
             urls,
             filename,
             directory,
+            temp_directory,
             category: self.category,
             description,
             queue_only: self.queue_only,
             review_only: self.review_only.unwrap_or(false),
             scheduled_at,
+            queue_id: self.queue_id,
             audio_url,
-            kind: self.kind,
+            kind,
             sabr,
             reuse_active: self.reuse_active.unwrap_or(false),
+            referer: self.referer,
+            youtube_format: self.youtube_format,
+            conflict_policy: self.conflict_policy,
+            credentials: self.credentials,
+            completion_actions: self.completion_actions,
         })
     }
 }

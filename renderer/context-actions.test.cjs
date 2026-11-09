@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Last updated: 2026-11-05
+// Reason: feat: implement Phase A download context actions and filesystem parity
+// Description: Frontend tests verifying context menu actions, confirmation prompts, and download operations.
+
 'use strict';
 
 const assert = require('node:assert/strict');

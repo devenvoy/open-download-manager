@@ -1,3 +1,11 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-08
+// Reason: rebrand: migrate project to Open Download Manager
+// Reason: fix(ui): verify expanded review and add window dimensions
+// Reason: test(window): verify compact initial dimensions for review and complete windows
+// Description: Integration tests verifying window manager functionality, edge cases, and error recovery.
+
 use open_download_manager_lib::{
     domain::download::DownloadStatus,
     presentation::window_manager::{
@@ -87,9 +95,9 @@ fn auxiliary_window_routes_and_exact_dimensions_match_legacy() {
         "index.html?add=1&scheduled=2026-11-05T12%3A00%3A00Z"
     );
     assert_eq!(ADD_WINDOW_WIDTH, 565.0);
-    assert_eq!(ADD_WINDOW_HEIGHT, 430.0);
+    assert_eq!(ADD_WINDOW_HEIGHT, 370.0);
     assert_eq!(ADD_WINDOW_MIN_WIDTH, 520.0);
-    assert_eq!(ADD_WINDOW_MIN_HEIGHT, 390.0);
+    assert_eq!(ADD_WINDOW_MIN_HEIGHT, 300.0);
 
     // Progress window dimension constants
     assert_eq!(PROGRESS_WINDOW_WIDTH, 565.0);
@@ -100,12 +108,12 @@ fn auxiliary_window_routes_and_exact_dimensions_match_legacy() {
     assert_eq!(PROGRESS_WINDOW_MIN_COLLAPSED_HEIGHT, 325.0);
 
     // Review & Complete modes
-    assert_eq!(REVIEW_WINDOW_HEIGHT, 365.0);
-    assert_eq!(REVIEW_WINDOW_MIN_HEIGHT, 330.0);
+    assert_eq!(REVIEW_WINDOW_HEIGHT, 370.0);
+    assert_eq!(REVIEW_WINDOW_MIN_HEIGHT, 300.0);
     assert_eq!(COMPLETE_WINDOW_WIDTH, 480.0);
-    assert_eq!(COMPLETE_WINDOW_HEIGHT, 280.0);
-    assert_eq!(COMPLETE_WINDOW_MIN_WIDTH, 470.0);
-    assert_eq!(COMPLETE_WINDOW_MIN_HEIGHT, 270.0);
+    assert_eq!(COMPLETE_WINDOW_HEIGHT, 230.0);
+    assert_eq!(COMPLETE_WINDOW_MIN_WIDTH, 460.0);
+    assert_eq!(COMPLETE_WINDOW_MIN_HEIGHT, 190.0);
 }
 
 #[test]

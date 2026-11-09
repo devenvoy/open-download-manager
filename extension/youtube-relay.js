@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Content script relay forwarding detected YouTube player formats to the extension background worker.
+
 (() => {
   const api=globalThis.browser||chrome;
   const pending=new Set();
@@ -20,6 +26,7 @@
     const data=event.data.data;
     if(!data || !/^[\w-]{11}$/.test(data.videoId||'') || !Array.isArray(data.formats) || data.formats.length>150)return;
     try{
+      console.log('[ODM Relay] Forwarding playerResponse to background for videoId:', data.videoId);
       await api.runtime.sendMessage({action:'playerResponse',data});
       for(const done of pending)done();pending.clear();
     }catch(error){if(/extension context invalidated/i.test(error?.message||''))shutdown();}

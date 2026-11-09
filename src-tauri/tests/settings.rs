@@ -1,3 +1,12 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Description: Integration tests verifying settings functionality, edge cases, and error recovery.
+
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -43,11 +52,19 @@ fn settings_update_is_validated_and_persisted() {
             connections: Some(12),
             speed_limit_kbps: Some(64),
             category_directories: Some(category_directories),
+            temporary_directory: None,
             notify_on_complete: Some(false),
             reveal_on_complete: None,
             confirm_browser_downloads: None,
             start_with_windows: Some(false),
             hide_completion_dialog: None,
+            proxy: None,
+            capture_policy: None,
+            completion_actions: None,
+            clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
+            theme: None,
         })
         .expect("valid settings should save");
 
@@ -81,11 +98,19 @@ fn invalid_setting_does_not_change_or_persist_current_state() {
         connections: None,
         speed_limit_kbps: None,
         category_directories: None,
+        temporary_directory: None,
         notify_on_complete: None,
         reveal_on_complete: None,
         confirm_browser_downloads: None,
         start_with_windows: None,
         hide_completion_dialog: None,
+        proxy: None,
+        capture_policy: None,
+        completion_actions: None,
+        clipboard_monitoring: None,
+        connection_overrides: None,
+        window_limit: None,
+        theme: None,
     };
 
     let error = service
@@ -113,11 +138,19 @@ fn relative_category_directory_is_rejected() {
             connections: None,
             speed_limit_kbps: None,
             category_directories: Some(category_directories),
+            temporary_directory: None,
             notify_on_complete: None,
             reveal_on_complete: None,
             confirm_browser_downloads: None,
             start_with_windows: None,
             hide_completion_dialog: None,
+            proxy: None,
+            capture_policy: None,
+            completion_actions: None,
+            clipboard_monitoring: None,
+            connection_overrides: None,
+            window_limit: None,
+            theme: None,
         })
         .expect_err("category directories must be absolute");
 

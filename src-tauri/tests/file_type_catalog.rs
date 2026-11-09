@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: integrate standard crates (mime_guess, sanitize-filename, tempfile, which) and FileType vector icon catalog
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Integration tests verifying file type catalog functionality, edge cases, and error recovery.
+
 use std::path::Path;
 
 use open_download_manager_lib::domain::{

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(playlist): implement YouTube playlist discovery, model, and batch queue controls (#21)
+// Last updated: 2026-11-06
+// Reason: perf: eliminate upfront clone in remove_completed, fuse HLS parsing and stream playlist entries
+// Description: Batch playlist models representing multi-video collections, individual tracks, and metadata.
+
 use serde::{Deserialize, Serialize};
 use url::Url;
 

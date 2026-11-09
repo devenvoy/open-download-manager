@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Description: RAII concurrency permit guard ensuring active download slots are released on drop.
+
 use std::sync::Arc;
 
 use super::download_concurrency_limiter::DownloadConcurrencyLimiter;

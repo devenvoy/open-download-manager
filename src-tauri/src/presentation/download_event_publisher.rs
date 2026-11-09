@@ -1,15 +1,30 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(actions): add configurable post-download actions (Closes #31)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: fix(window): use window manager completion sizing constants to avoid wasted dialog space
+// Description: Tauri IPC event publisher pushing real-time download updates to frontend windows.
+
 use tauri::{AppHandle, Emitter, LogicalSize, Manager};
 
 use crate::{
     application::{
+        clipboard_service::ClipboardEventPublisher,
         download_event_publisher::DownloadEventPublisher,
         error::{AppError, AppResult},
     },
-    domain::download::DownloadStatus,
-    presentation::{app_state::AppState, window_manager::PROGRESS_WINDOW_PREFIX},
+    domain::{clipboard::ClipboardCandidate, download::DownloadStatus},
+    presentation::{
+        app_state::AppState,
+        window_manager::{
+            COMPLETE_WINDOW_HEIGHT, COMPLETE_WINDOW_MIN_HEIGHT, COMPLETE_WINDOW_MIN_WIDTH,
+            COMPLETE_WINDOW_WIDTH, PROGRESS_WINDOW_PREFIX,
+        },
+    },
 };
 
-use super::event_policy::DOWNLOAD_CHANGE_EVENT;
+use super::event_policy::{CLIPBOARD_CANDIDATE_EVENT, DOWNLOAD_CHANGE_EVENT};
 
 pub struct TauriDownloadEventPublisher {
     app: AppHandle,
@@ -18,6 +33,24 @@ pub struct TauriDownloadEventPublisher {
 impl TauriDownloadEventPublisher {
     pub fn new(app: AppHandle) -> Self {
         Self { app }
+    }
+}
+
+pub struct TauriClipboardEventPublisher {
+    app: AppHandle,
+}
+
+impl TauriClipboardEventPublisher {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl ClipboardEventPublisher for TauriClipboardEventPublisher {
+    fn publish_candidate(&self, candidate: &ClipboardCandidate) -> Result<(), String> {
+        self.app
+            .emit(CLIPBOARD_CANDIDATE_EVENT, candidate)
+            .map_err(|error| format!("Could not notify renderer of clipboard candidate: {error}"))
     }
 }
 
@@ -46,8 +79,14 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
                                     let _ = window.destroy();
                                 } else {
                                     let _ = window.set_title("Download complete");
-                                    let _ = window.set_min_size(Some(LogicalSize::new(470.0, 270.0)));
-                                    let _ = window.set_size(LogicalSize::new(480.0, 280.0));
+                                    let _ = window.set_min_size(Some(LogicalSize::new(
+                                        COMPLETE_WINDOW_MIN_WIDTH,
+                                        COMPLETE_WINDOW_MIN_HEIGHT,
+                                    )));
+                                    let _ = window.set_size(LogicalSize::new(
+                                        COMPLETE_WINDOW_WIDTH,
+                                        COMPLETE_WINDOW_HEIGHT,
+                                    ));
                                 }
                             } else {
                                 let title = if d.needs_review {
@@ -91,15 +130,6 @@ impl DownloadEventPublisher for TauriDownloadEventPublisher {
                         .title("Download complete")
                         .body(&download.filename)
                         .show();
-                }
-
-                if settings.reveal_on_complete {
-                    if let Some(ref path_str) = download.path {
-                        let path = std::path::Path::new(path_str);
-                        if path.exists() {
-                            let _ = opener::reveal(path);
-                        }
-                    }
                 }
             }
         }

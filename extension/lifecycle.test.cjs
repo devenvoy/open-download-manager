@@ -1,3 +1,9 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-07
+// Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Description: Unit tests verifying extension cleanup after context invalidation and YouTube relay detachment.
+
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
@@ -15,7 +21,7 @@ function harness(file,mode){
     createElement(){const host={style:{},remove(){removed++;},attachShadow(){return {querySelector(selector){return selector==='.chooser'?host.chooser||null:{addEventListener(){}};}};}};hosts.push(host);return host;}};
   const context={chrome:{runtime},document,location:{href:'https://www.youtube.com/watch?v=wLdZWyLOJCI',origin:'https://www.youtube.com'},window:{},URL,AbortController,ResizeObserver:Observer,MutationObserver:Observer,IntersectionObserver:Observer,addEventListener,removeEventListener(name){events.delete(name);},requestAnimationFrame(){return 1;},cancelAnimationFrame(){},setTimeout,clearTimeout,dispatchEvent(){},Event,innerHeight:800,innerWidth:1200};
   vm.createContext(context);
-  for(const lib of ['safe-tooltip.js','panel-position.js','chooser-keyboard.js'])if(fs.existsSync(path.join(__dirname,lib)))vm.runInContext(fs.readFileSync(path.join(__dirname,lib),'utf8'),context);
+  for(const lib of ['safe-tooltip.js','panel-position.js','chooser-keyboard.js','format-presentation.js'])if(fs.existsSync(path.join(__dirname,lib)))vm.runInContext(fs.readFileSync(path.join(__dirname,lib),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,file),'utf8'),context);
   return {context,events,observers,callbacks,hosts,video,get calls(){return calls;},get removed(){return removed;},invalidate(){id=undefined;}};
 }

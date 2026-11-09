@@ -1,3 +1,10 @@
+// Created: 2026-11-05
+// Reason: fix(engine): implement genuine auto-updater payload execution and SABR UMP streaming executor
+// Last updated: 2026-11-08
+// Reason: fix(transfer): preserve HTTP resume validator type across interrupted downloads (Closes #25) (#40)
+// Reason: feat(media): auto-fallback to yt-dlp on premature SABR stream cutoff and provide 1-click solution flow
+// Description: YouTube SABR streaming executor reading UMP chunks and reassembling playable media.
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -17,11 +24,11 @@ use crate::{
         download::{DownloadRecord, DownloadSegmentProgress},
         media::sabr::{build_sabr_request_body, parse_media_header_itag, SabrFormat},
     },
-    infrastructure::media::ffmpeg::FfmpegTools,
+    infrastructure::media::{ffmpeg::FfmpegTools, ytdlp::YtDlpTools},
 };
 
 pub struct SabrDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
 }
 
@@ -44,9 +51,20 @@ fn read_varint_from_slice(slice: &[u8]) -> Option<(u64, usize)> {
 impl SabrDownloadExecutor {
     pub fn new(client: reqwest::Client) -> Self {
         Self {
+            client: Arc::new(std::sync::RwLock::new(client)),
+            ffmpeg: FfmpegTools::new(),
+        }
+    }
+
+    pub fn new_shared(client: Arc<std::sync::RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             ffmpeg: FfmpegTools::new(),
         }
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
     }
 
     pub async fn transfer(
@@ -122,7 +140,7 @@ impl SabrDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not create audio track file: {e}")))?;
 
-        let mut req = self.client.post(&session.server_abr_streaming_url);
+        let mut req = self.client().post(&session.server_abr_streaming_url);
 
         let body_bytes = build_sabr_request_body(&session);
         if !body_bytes.is_empty() {
@@ -274,6 +292,11 @@ impl SabrDownloadExecutor {
                 total,
                 bytes_per_second: speed,
                 connections_progress: segs,
+                notice: None,
+                transfer_kind: Some("sabr".to_string()),
+                effective_concurrency: Some(2),
+                etag: None,
+                validator: None,
             });
         }
 
@@ -296,6 +319,11 @@ impl SabrDownloadExecutor {
                 total: total.or(Some(video_downloaded + audio_downloaded)),
                 bytes_per_second: 0,
                 connections_progress: Vec::new(),
+                notice: None,
+                transfer_kind: Some("sabr".to_string()),
+                effective_concurrency: Some(1),
+                etag: None,
+                validator: None,
             });
         }
 
@@ -319,7 +347,7 @@ impl SabrDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not save audio track part: {e}")))?;
 
-        // Mux tracks or convert
+        // Destination resolution
         let is_mp3 = download.filename.to_ascii_lowercase().ends_with(".mp3");
         let destination_filename = if is_mp3 {
             download.filename.clone()
@@ -332,18 +360,95 @@ impl SabrDownloadExecutor {
                 .unwrap_or(&download.filename);
             format!("{base}.mp4")
         };
-
         let destination = directory.join(destination_filename);
 
+        // Validate stream completeness before invoking FFmpeg
+        let total_downloaded = video_downloaded + audio_downloaded;
+        if let Some(expected_total) = total {
+            if total_downloaded < expected_total {
+                let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+                if let Some(ytdlp) = YtDlpTools::new() {
+                    let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                    let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                    progress_handler(DownloadProgress {
+                        downloaded: 0,
+                        total: Some(expected_total),
+                        bytes_per_second: 0,
+                        connections_progress: Vec::new(),
+                        notice: Some("Direct YouTube stream ended prematurely; resuming with yt-dlp to download full video.".to_string()),
+                        transfer_kind: Some("ytdlp".to_string()),
+                        effective_concurrency: Some(1),
+                        etag: None,
+                        validator: None,
+                    });
+                    return ytdlp.download(
+                        &watch_url,
+                        format_spec.as_deref(),
+                        download.referer.as_deref().or(Some(&watch_url)),
+                        &destination,
+                        progress_handler,
+                        control,
+                        0,
+                    ).await;
+                }
+                return Err(AppError::download(format!(
+                    "YouTube stream ended prematurely: received {total_downloaded} of {expected_total} bytes ({:.1}%). Please install yt-dlp from Settings > Media Tools to download full YouTube streams.",
+                    (total_downloaded as f64 / expected_total as f64) * 100.0
+                )));
+            }
+        }
+
+        let video_len = if has_video {
+            tokio::fs::metadata(&video_part).await.map(|m| m.len()).unwrap_or(0)
+        } else {
+            0
+        };
+        let audio_len = tokio::fs::metadata(&audio_part).await.map(|m| m.len()).unwrap_or(0);
+
+        if has_video && video_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            if let Some(ytdlp) = YtDlpTools::new() {
+                let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                return ytdlp.download(
+                    &watch_url,
+                    format_spec.as_deref(),
+                    download.referer.as_deref().or(Some(&watch_url)),
+                    &destination,
+                    progress_handler,
+                    control,
+                    0,
+                ).await;
+            }
+            return Err(AppError::download("YouTube video track is empty. Please install yt-dlp to download full YouTube streams."));
+        }
+        if audio_len == 0 {
+            let _ = tokio::fs::remove_dir_all(&parts_dir).await;
+            if let Some(ytdlp) = YtDlpTools::new() {
+                let watch_url = format!("https://www.youtube.com/watch?v={}", session.video_id);
+                let format_spec = session.video_itag.map(|v| format!("{v}+{}", session.audio_itag));
+                return ytdlp.download(
+                    &watch_url,
+                    format_spec.as_deref(),
+                    download.referer.as_deref().or(Some(&watch_url)),
+                    &destination,
+                    progress_handler,
+                    control,
+                    0,
+                ).await;
+            }
+            return Err(AppError::download("YouTube audio track is empty. Please install yt-dlp to download full YouTube streams."));
+        }
+
         if has_video {
-            let ffmpeg = self.ffmpeg.as_ref().ok_or_else(|| {
+            let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
                 AppError::download("FFmpeg is required to combine YouTube SABR video and audio tracks.")
             })?;
             ffmpeg
                 .mux_tracks(&video_part, &audio_part, &destination, &mut control)
                 .await?;
         } else if is_mp3 {
-            let ffmpeg = self.ffmpeg.as_ref().ok_or_else(|| {
+            let ffmpeg = self.ffmpeg.as_ref().cloned().or_else(FfmpegTools::new).ok_or_else(|| {
                 AppError::download("FFmpeg is required to convert YouTube audio track to mp3.")
             })?;
             ffmpeg

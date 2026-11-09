@@ -1,10 +1,17 @@
+// Created: 2026-11-05
+// Reason: feat: add native HTTP download engine
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Integration tests verifying download transfer functionality, edge cases, and error recovery.
+
 use std::{
     fs,
     io::{Read, Write},
     net::TcpListener,
     path::PathBuf,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use open_download_manager_lib::{
@@ -246,11 +253,13 @@ fn download_request(url: String, filename: &str) -> DownloadRequest {
         urls: vec![url],
         filename: Some(filename.to_owned()),
         directory: None,
+        temp_directory: None,
         category: None,
         description: Some("fixture download".to_owned()),
         queue_only: false,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         ..Default::default()
@@ -731,6 +740,41 @@ async fn supported_byte_ranges_use_configured_segments_and_assemble_in_order() {
 }
 
 #[tokio::test]
+async fn segmented_download_dynamically_rebalances_chunks_and_assembles_in_order() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    // 5 MB file so initial chunks exceed the MIN_CHUNK_REASSIGN_BYTES (2 MB) threshold
+    let body = (0..5 * 1024 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let url = serve_segmented(body.clone(), 10);
+    let settings = settings(directory.clone(), 2);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let ids = service
+        .add(download_request(url, "rebalanced.bin"), &settings)
+        .expect("segmented download should start");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("rebalanced.bin")).unwrap(),
+        body,
+        "dynamically reassigned and assembled chunks must match original data bit-for-bit"
+    );
+    let record = history.downloads().unwrap().remove(0);
+    assert!(record
+        .connections_progress
+        .iter()
+        .all(|segment| segment.status == "complete"));
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
 async fn segmented_download_resumes_partial_ranges_after_pause() {
     let directory = temporary_directory();
     fs::create_dir_all(&directory).expect("temporary directory should be created");
@@ -1001,6 +1045,516 @@ async fn segmented_download_recovers_from_midstream_segment_drop() {
         fs::read(directory.join("segmented_recovered.bin")).unwrap(),
         body,
         "assembled segmented download should match full file after midstream recovery"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+fn serve_partial_then_changed_full(
+    initial_body: Vec<u8>,
+    new_full_body: Vec<u8>,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener
+        .local_addr()
+        .expect("local fixture should expose its address");
+    thread::spawn(move || {
+        // Request 1: sends partial bytes
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n",
+                initial_body.len()
+            );
+            let _ = stream.write_all(&initial_body[..10 * 1024]);
+        }
+
+        // Request 2: resume with If-Range / Range -> returns 200 OK with new_full_body because resource changed
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"v2\"\r\nConnection: close\r\n\r\n",
+                new_full_body.len()
+            );
+            let _ = stream.write_all(&new_full_body);
+        }
+    });
+    format!("http://{address}/changed_file.bin")
+}
+
+#[tokio::test]
+async fn expired_media_link_can_be_refreshed_and_resumed_from_browser() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let expired_url = serve_once("403 Forbidden", b"forbidden");
+    let valid_url = serve_once("200 OK", b"refreshed video stream content");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(expired_url, "refreshed_clip.mp4"), &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Failed
+    );
+
+    // Refresh the expired download with the fresh URL
+    service
+        .refresh_download(&ids[0], Some(valid_url), None, None)
+        .expect("download should be refreshed");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("refreshed_clip.mp4")).unwrap(),
+        b"refreshed video stream content"
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert!(record.notice.as_deref().unwrap_or("").contains("refreshed"));
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn resource_changed_on_resume_explains_restart_and_preserves_correctness() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let initial_body = vec![7u8; 100 * 1024];
+    let new_full_body = b"completely new content after server file changed".to_vec();
+    let url = serve_partial_then_changed_full(initial_body, new_full_body.clone());
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(url, "changed.bin"), &settings)
+        .expect("download should be accepted");
+
+    // Wait until download completes through midstream drop recovery and restart
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("changed.bin")).unwrap(),
+        new_full_body
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert!(
+        record
+            .notice
+            .as_deref()
+            .unwrap_or("")
+            .contains("restarted")
+            || record
+                .notice
+                .as_deref()
+                .unwrap_or("")
+                .contains("changed"),
+        "notice should explain restart: {:?}",
+        record.notice
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn immediate_cancellation_during_retry_wait_stops_promptly() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("fixture address");
+    thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+        }
+    });
+    let url = format!("http://{address}/rate_limited.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let start = Instant::now();
+    let ids = service
+        .add(download_request(url, "cancelled_retry.bin"), &settings)
+        .expect("download should start");
+
+    // Give it a brief moment to receive 429 and enter wait_before_retry
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Immediately cancel the download
+    service
+        .action(&ids[0], DownloadAction::Cancel)
+        .expect("download should cancel");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Cancelled
+    );
+
+    // Assert it cancelled immediately rather than waiting 30 seconds
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "Cancellation took too long: {:?}",
+        start.elapsed()
+    );
+    assert!(
+        !directory
+            .join(format!(".open-download-manager-{}.part", ids[0]))
+            .exists(),
+        "partial file should be removed on cancel"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[test]
+fn typed_validator_survives_serialization_and_migrates_safely() {
+    use open_download_manager_lib::domain::download::{DownloadRecord, TransferValidator};
+
+    // 1. Typed ETag survives serialization/deserialization
+    let etag_val = TransferValidator::ETag("\"v1-hash\"".to_string());
+    let json_etag = serde_json::to_string(&etag_val).unwrap();
+    let de_etag: TransferValidator = serde_json::from_str(&json_etag).unwrap();
+    assert_eq!(de_etag, etag_val);
+
+    // 2. Typed LastModified survives serialization/deserialization
+    let lm_val = TransferValidator::LastModified("Sun, 08 Nov 2026 01:00:00 GMT".to_string());
+    let json_lm = serde_json::to_string(&lm_val).unwrap();
+    let de_lm: TransferValidator = serde_json::from_str(&json_lm).unwrap();
+    assert_eq!(de_lm, lm_val);
+
+    // 3. DownloadRecord with typed validator
+    let record = DownloadRecord {
+        id: "rec-1".to_string(),
+        url: "https://example.com/file".to_string(),
+        filename: "file.bin".to_string(),
+        status: DownloadStatus::Queued,
+        downloaded: 0,
+        total: Some(100),
+        speed: 0,
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        needs_review: false,
+        scheduled_at: None,
+        queue_id: None,
+        description: None,
+        category: None,
+        directory: Some("/tmp".to_string()),
+        path: None,
+        temp_directory: None,
+        last_try: None,
+        error: None,
+        notice: None,
+        estimated: false,
+        kind: None,
+        resumable: Some(true),
+        duration: None,
+        connections: 1,
+        connections_progress: Vec::new(),
+        audio_url: None,
+        sabr: None,
+        referer: None,
+        youtube_format: None,
+        transfer_kind: None,
+        etag: None,
+        validator: Some(lm_val.clone()),
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
+    };
+    let serialized_rec = serde_json::to_string(&record).unwrap();
+    let de_rec: DownloadRecord = serde_json::from_str(&serialized_rec).unwrap();
+    assert_eq!(de_rec.validator, Some(lm_val));
+
+    // 4. Backward-compatible migration: untyped safe quoted string in etag field
+    let legacy_json = r#"{
+        "id": "rec-legacy",
+        "url": "https://example.com/file",
+        "status": "paused",
+        "etag": "\"legacy-strong-etag\""
+    }"#;
+    let legacy_rec: DownloadRecord = serde_json::from_str(legacy_json).unwrap();
+    assert_eq!(
+        legacy_rec.resume_validator(),
+        Some(TransferValidator::ETag("\"legacy-strong-etag\"".to_string()))
+    );
+
+    // 5. Unsafe/untyped string does not migrate to ETag and returns None
+    let unsafe_legacy_json = r#"{
+        "id": "rec-unsafe",
+        "url": "https://example.com/file",
+        "status": "paused",
+        "etag": "unquoted-string"
+    }"#;
+    let unsafe_rec: DownloadRecord = serde_json::from_str(unsafe_legacy_json).unwrap();
+    assert_eq!(unsafe_rec.resume_validator(), None);
+
+    // 6. Unknown raw validator string in legacy document (like "private-validator") safely deserializes as None
+    let private_val_json = r#"{
+        "id": "rec-private",
+        "url": "https://example.com/file",
+        "status": "paused",
+        "validator": "private-validator"
+    }"#;
+    let private_rec: DownloadRecord = serde_json::from_str(private_val_json).unwrap();
+    assert_eq!(private_rec.validator, None);
+    assert_eq!(private_rec.resume_validator(), None);
+}
+
+#[tokio::test]
+async fn last_modified_validator_resumes_with_conditional_range_and_assembles() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let full_content = vec![42u8; 80 * 1024];
+    let full_len = full_content.len();
+    let body_clone = full_content.clone();
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("fixture address");
+    let last_modified = "Sun, 08 Nov 2026 01:23:45 GMT";
+
+    thread::spawn(move || {
+        // Request 1: initial GET, send partial 20KB then drop
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {full_len}\r\nAccept-Ranges: bytes\r\nLast-Modified: {last_modified}\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(&body_clone[..20 * 1024]);
+            let _ = stream.flush();
+        }
+
+        // Request 2: resume request, expect If-Range and Range headers
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let n = stream.read(&mut request).unwrap_or(0);
+            let req_str = String::from_utf8_lossy(&request[..n]).to_lowercase();
+            assert!(
+                req_str.contains("range: bytes=20480-"),
+                "Range request header should be sent: {req_str}"
+            );
+            assert!(
+                req_str.contains(&format!("if-range: {}", last_modified.to_lowercase())),
+                "If-Range header with Last-Modified should be sent: {req_str}"
+            );
+
+            let remaining = &body_clone[20 * 1024..];
+            let _ = write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 20480-{}/{full_len}\r\nContent-Length: {}\r\nLast-Modified: {last_modified}\r\nConnection: close\r\n\r\n",
+                full_len - 1,
+                remaining.len()
+            );
+            let _ = stream.write_all(remaining);
+            let _ = stream.flush();
+        }
+    });
+
+    let url = format!("http://{address}/test_lm.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(url, "test_lm.bin"), &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("test_lm.bin")).unwrap(),
+        full_content
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert_eq!(
+        record.validator,
+        Some(open_download_manager_lib::domain::download::TransferValidator::LastModified(
+            last_modified.to_string()
+        ))
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn weak_etag_with_last_modified_falls_back_to_last_modified_validator() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let full_content = vec![99u8; 60 * 1024];
+    let full_len = full_content.len();
+    let body_clone = full_content.clone();
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("fixture address");
+    let last_modified = "Sat, 07 Nov 2026 12:00:00 GMT";
+
+    thread::spawn(move || {
+        // Request 1: Server sends weak ETag + Last-Modified
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {full_len}\r\nAccept-Ranges: bytes\r\nETag: W/\"weak-123\"\r\nLast-Modified: {last_modified}\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(&body_clone[..15 * 1024]);
+            let _ = stream.flush();
+        }
+
+        // Request 2: Resumed request must NOT emit weak ETag; it must emit Last-Modified in If-Range!
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let n = stream.read(&mut request).unwrap_or(0);
+            let req_str = String::from_utf8_lossy(&request[..n]).to_lowercase();
+            assert!(
+                !req_str.contains("if-range: w/\"weak-123\""),
+                "Weak ETag must NEVER be used in If-Range: {req_str}"
+            );
+            assert!(
+                req_str.contains(&format!("if-range: {}", last_modified.to_lowercase())),
+                "Last-Modified should be used in If-Range: {req_str}"
+            );
+
+            let remaining = &body_clone[15 * 1024..];
+            let _ = write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 15360-{}/{full_len}\r\nContent-Length: {}\r\nLast-Modified: {last_modified}\r\nConnection: close\r\n\r\n",
+                full_len - 1,
+                remaining.len()
+            );
+            let _ = stream.write_all(remaining);
+            let _ = stream.flush();
+        }
+    });
+
+    let url = format!("http://{address}/weak_etag_lm.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(url, "weak_etag_lm.bin"), &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("weak_etag_lm.bin")).unwrap(),
+        full_content
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert_eq!(
+        record.validator,
+        Some(open_download_manager_lib::domain::download::TransferValidator::LastModified(
+            last_modified.to_string()
+        ))
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn server_200_ok_on_range_request_safely_restarts_and_discards_partial() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let initial_body = vec![1u8; 50 * 1024];
+    let replacement_body = b"completely new content returned via 200 OK on resume".to_vec();
+    let rep_len = replacement_body.len();
+    let rep_clone = replacement_body.clone();
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("fixture address");
+
+    thread::spawn(move || {
+        // Request 1: initial GET, send partial then drop
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n",
+                initial_body.len()
+            );
+            let _ = stream.write_all(&initial_body[..10 * 1024]);
+            let _ = stream.flush();
+        }
+
+        // Request 2: resume with If-Range / Range -> Server responds with 200 OK (range ignored) and full new body
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0; 2048];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {rep_len}\r\nAccept-Ranges: bytes\r\nETag: \"v2\"\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(&rep_clone);
+            let _ = stream.flush();
+        }
+    });
+
+    let url = format!("http://{address}/range_ignored.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let ids = service
+        .add(download_request(url, "range_ignored.bin"), &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("range_ignored.bin")).unwrap(),
+        replacement_body
+    );
+
+    let record = history.download(&ids[0]).unwrap();
+    assert!(
+        record
+            .notice
+            .as_deref()
+            .unwrap_or("")
+            .contains("restarted")
+            || record
+                .notice
+                .as_deref()
+                .unwrap_or("")
+                .contains("changed"),
+        "notice should record restart: {:?}",
+        record.notice
     );
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-05
+// Reason: feat: implement Phase C browser integration UI, scanner, and review confirmation workflow
+// Description: Browser extension connection status summary for Chromium and Firefox installations.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

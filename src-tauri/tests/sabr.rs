@@ -1,3 +1,10 @@
+// Created: 2026-11-05
+// Reason: feat(sabr): implement YouTube SABR session normalization, Protobuf parser, and transfer deduplication (Phase G)
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Integration tests verifying sabr functionality, edge cases, and error recovery.
+
 use std::{
     io::{Read, Write},
     net::TcpListener,
@@ -198,6 +205,7 @@ fn sabr_handoff_accepts_only_a_bounded_captured_googlevideo_session() {
 
     let msg = BrowserIncomingMessage {
         action: "download".to_owned(),
+        download_id: None,
         url: Some(url.to_owned()),
         youtube_format: None,
         sabr: Some(sabr.clone()),
@@ -207,6 +215,8 @@ fn sabr_handoff_accepts_only_a_bounded_captured_googlevideo_session() {
         urls: None,
         filename: None,
         referer: None,
+        canonical_url: None,
+        video_id: None,
         request_headers: None,
     };
 
@@ -281,6 +291,35 @@ fn sabr_rejects_invalid_itags_and_oversized_request_bodies() {
     let err_audio = sanitize_sabr(&sabr_missing_audio, url);
     assert!(err_audio.is_err());
     assert_eq!(err_audio.unwrap_err(), "Selected SABR format is unavailable.");
+
+    // YouTube real-world formats with colorInfo and enhanced bitrate labels
+    let sabr_real_world = serde_json::json!({
+        "videoId": "wLdZWyLOJCI",
+        "serverAbrStreamingUrl": url,
+        "videoPlaybackUstreamerConfig": "AQID~_+-=:;.",
+        "audioItag": 140,
+        "videoItag": 137,
+        "formats": [
+            {
+                "itag": 140,
+                "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+                "bitrate": 128000,
+                "audioQuality": "AUDIO_QUALITY_MEDIUM"
+            },
+            {
+                "itag": 137,
+                "mimeType": "video/mp4; codecs=\"avc1.640028\"",
+                "bitrate": 4500000,
+                "quality": "hd1080",
+                "qualityLabel": "1080p Premium (Enhanced bitrate)",
+                "colorInfo": {
+                    "transferCharacteristics": "COLOR_TRANSFER_CHARACTERISTICS_BT709"
+                }
+            }
+        ]
+    });
+    let valid_real = sanitize_sabr(&sabr_real_world, url);
+    assert!(valid_real.is_ok(), "Real YouTube colorInfo and qualityLabel must be accepted");
 }
 
 #[test]
@@ -327,15 +366,22 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         urls: vec![sabr.server_abr_streaming_url.clone()],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
+        conflict_policy: None,
+        credentials: None,
+        completion_actions: None,
     };
 
     let ids1 = transfer_service.add(req1, &settings).unwrap();
@@ -350,15 +396,22 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         urls: vec![new_url],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr2.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
+        conflict_policy: None,
+        credentials: None,
+        completion_actions: None,
     };
 
     let ids2 = transfer_service.add(req2, &settings).unwrap();
@@ -371,15 +424,22 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         urls: vec![sabr.server_abr_streaming_url.clone()],
         filename: None,
         directory: None,
+        temp_directory: None,
         category: None,
         description: None,
         queue_only: true,
         review_only: None,
         scheduled_at: None,
+        queue_id: None,
         audio_url: None,
         kind: None,
         sabr: Some(sabr3.to_session()),
         reuse_active: Some(true),
+        referer: None,
+        youtube_format: None,
+        conflict_policy: None,
+        credentials: None,
+        completion_actions: None,
     };
 
     let ids3 = transfer_service.add(req3, &settings).unwrap();
@@ -550,14 +610,17 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,
         estimated: false,
+        transfer_kind: None,
         kind: Some("sabr".to_string()),
         resumable: Some(false),
         duration: None,
@@ -565,6 +628,14 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         connections_progress: Vec::new(),
         audio_url: None,
         sabr: Some(sabr_session),
+        referer: None,
+        youtube_format: None,
+        etag: None,
+        validator: None,
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let progress_events = Arc::new(Mutex::new(Vec::new()));
@@ -651,14 +722,17 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         created_at: "2026-01-01T00:00:00Z".to_string(),
         needs_review: false,
         scheduled_at: None,
+        queue_id: None,
         description: None,
         category: None,
         directory: Some(dir.to_string_lossy().into_owned()),
         path: None,
+        temp_directory: None,
         last_try: None,
         error: None,
         notice: None,
         estimated: false,
+        transfer_kind: None,
         kind: Some("sabr".to_string()),
         resumable: Some(false),
         duration: None,
@@ -666,6 +740,14 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         connections_progress: Vec::new(),
         audio_url: None,
         sabr: Some(sabr_session),
+        referer: None,
+        youtube_format: None,
+        etag: None,
+        validator: None,
+        conflict_policy: None,
+        credentials_override: None,
+        completion_actions: None,
+        action_ledger: Vec::new(),
     };
 
     let (tx, rx) = watch::channel(None);

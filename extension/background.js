@@ -1,14 +1,42 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Description: Extension service worker managing browser download interception, context menus, and native messaging communication.
+
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
-if(typeof importScripts==='function') importScripts('hls.js','youtube-media.js');
+if(typeof importScripts==='function') importScripts('media-policy.js','hls.js','youtube-media.js','capture-evaluator.js');
 const api = globalThis.browser || chrome;
 const HOST = 'com.open.downloadmanager';
 const CACHE_KEY = 'mediaByTab';
 const SABR_KEY = 'sabrByTab';
 let serial = Promise.resolve();
+let cachedCapturePolicy = null;
+async function getCapturePolicy() {
+  if (cachedCapturePolicy) return cachedCapturePolicy;
+  try {
+    const data = await api.storage.local.get('capturePolicy');
+    if (data?.capturePolicy) {
+      cachedCapturePolicy = data.capturePolicy;
+      return cachedCapturePolicy;
+    }
+  } catch {}
+  return null;
+}
+async function refreshCapturePolicy() {
+  try {
+    const res = await nativeSend({ action: 'policy' });
+    if (res?.policy) {
+      cachedCapturePolicy = res.policy;
+      await api.storage.local.set({ capturePolicy: res.policy });
+    }
+  } catch {}
+}
 // Credentials stay in worker memory and are used only for the selected observed URL.
 const requestContext = new Map();
-const youtubePlayers=new Map(), youtubeObserved=new Map(), youtubeSabrObserved=new Map(), youtubeSabrSeed=new Map();
+const youtubePlayers=new Map(), youtubePlayersByVideo=new Map(), youtubeObserved=new Map(), youtubeSabrObserved=new Map(), youtubeSabrSeed=new Map();
 function rememberSabrCapture(tabId,seed){
+  console.log('[ODM Background] Captured SABR session for tabId:', tabId, 'url:', seed.url);
   youtubeSabrObserved.set(tabId,seed);
   if(youtubeSabrObserved.size>50)youtubeSabrObserved.delete(youtubeSabrObserved.keys().next().value);
   updateSession(SABR_KEY,map=>{map[tabId]={url:seed.url,requestBody:seed.requestBody};}).catch(()=>{});
@@ -54,7 +82,10 @@ api.webRequest.onBeforeSendHeaders?.addListener(rememberRequest,{urls:['http://*
 function httpUrl(value) {
   try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password ? u.href : null; } catch { return null; }
 }
-function unsupported(url, mime = '') { return /\.mpd(?:[?#]|$)/i.test(url) || /dash\+xml/i.test(mime); }
+function unsupported(url, mime = '') {
+  const isDash = globalThis.mediaPolicy ? globalThis.mediaPolicy.isDashMime(mime) : /dash\+xml/i.test(mime);
+  return /\.mpd(?:[?#]|$)/i.test(url) || isDash;
+}
 function isFragment(url) { return /\.(m4s|ts|aac)(?:[?#]|$)/i.test(url) || /\/init[^/]*\.mp4(?:[?#]|$)/i.test(url); }
 const hlsSeen=new Map(); let hlsActive=0;
 async function discoverHls(tabId,url) {
@@ -63,7 +94,7 @@ async function discoverHls(tabId,url) {
   if(seen.has(url)||seen.size>=20)return;seen.add(url);hlsActive++;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
   try {
-    const response=await fetch(url,{signal:controller.signal,credentials:'omit'});
+    const response=await fetch(url,{signal:controller.signal,credentials:'include'});
     if(!response.ok)throw new Error('Manifest fetch failed.');
     const reader=response.body.getReader();let size=0;const chunks=[];
     while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1048576){await reader.cancel();throw new Error('Manifest too large.');}chunks.push(value);}
@@ -71,7 +102,9 @@ async function discoverHls(tabId,url) {
     const variants=globalThis.parseHlsMaster(new TextDecoder().decode(bytes),response.url||url);
     let title='';try{title=(await api.tabs.get(tabId)).title||'';}catch{}
     if(hlsSeen.get(tabId)===seen)await remember(tabId,variants.map(item=>({...item,title})));
-  } catch {} finally {clearTimeout(timer);hlsActive--;}
+  } catch {
+    await remember(tabId,[{url,mime:'application/vnd.apple.mpegurl',format:'HLS',unsupported:true,reason:'Could not read the HLS playlist. The stream may require site authorization.'}]).catch(()=>{});
+  } finally {clearTimeout(timer);hlsActive--;}
 }
 function nativeSend(payload) {
   return new Promise((resolve, reject) => {
@@ -87,24 +120,48 @@ function nativeSend(payload) {
 async function enqueue(item, tabId) {
   let sabr;
   if(item.sabrSelection){
-    const player=youtubePlayers.get(tabId), selection=item.sabrSelection;
+    const player=(item.videoId&&youtubePlayersByVideo.get(item.videoId))||youtubePlayers.get(tabId), selection=item.sabrSelection;
     const videoItag=selection.videoItag===undefined?undefined:Number(selection.videoItag), audioItag=Number(selection.audioItag);
     if(!player||!Number.isSafeInteger(audioItag)||audioItag<=0||videoItag!==undefined&&(!Number.isSafeInteger(videoItag)||videoItag<=0))throw new Error('The captured YouTube session expired. Reopen the menu.');
     const audio=player.formats.find(f=>f.itag===audioItag&&/^audio\/mp4/i.test(f.mimeType));
     const video=videoItag===undefined?undefined:player.formats.find(f=>f.itag===videoItag&&/^video\/mp4/i.test(f.mimeType));
     const captured=await sabrCapture(tabId);
-    if(!captured)throw new Error('Play this YouTube video briefly so its streaming session can be captured, then try again.');
-    const serverAbrStreamingUrl=captured.url;
-    if(!audio||videoItag!==undefined&&!video||!globalThis.youtubeMedia.sabrUrl(serverAbrStreamingUrl)||!player.ustreamerConfig)throw new Error('The captured YouTube SABR session is incomplete. Play the video briefly and reopen the menu.');
+    const serverAbrStreamingUrl=captured?.url || player.sabrUrl;
+    if(!audio||videoItag!==undefined&&!video||!globalThis.youtubeMedia.sabrUrl(serverAbrStreamingUrl)||!player.ustreamerConfig)throw new Error('The captured YouTube SABR session is incomplete. Reopen the menu.');
     // Native messaging is limited to 1 MiB. The desktop only needs the two
     // selected tracks, not every format advertised by YouTube's player.
-    sabr={videoId:player.videoId,serverAbrStreamingUrl,videoPlaybackUstreamerConfig:player.ustreamerConfig,clientInfo:{clientName:player.clientName,clientVersion:player.clientVersion},formats:[video,audio].filter(Boolean),videoItag,audioItag,requestBody:captured.requestBody};
+    sabr={videoId:player.videoId,serverAbrStreamingUrl,videoPlaybackUstreamerConfig:player.ustreamerConfig,clientInfo:{clientName:player.clientName,clientVersion:player.clientVersion},formats:[video,audio].filter(Boolean),videoItag,audioItag,requestBody:captured?.requestBody};
   }
   const url = httpUrl(sabr?.serverAbrStreamingUrl||item.url);
   if (!url) throw new Error('Only direct HTTP and HTTPS links are supported.');
   if (unsupported(url, item.mime) || item.unsupported) throw new Error(item.reason || 'DASH streams are unsupported.');
+  const policy = await getCapturePolicy();
+  let startNow = item.startNow === true;
+  if (globalThis.captureEvaluator && policy) {
+    const outcome = globalThis.captureEvaluator.evaluateCapture(policy, url, item.filename);
+    if (outcome.decision === 'excluded-host' || outcome.decision === 'excluded-address') {
+      throw new Error(outcome.reason);
+    }
+    if (outcome.decision === 'confirmation-required') {
+      startNow = false;
+    }
+  }
   const requestHeaders=requestContext.get(tabId)?.get(url);
-  return nativeSend({action: 'download', url, youtubeFormat:item.youtubeFormat, sabr, startNow:item.startNow===true, audioUrl:httpUrl(item.audioUrl)||undefined, outputFormat:item.outputFormat, filename: item.filename, referer: httpUrl(requestHeaders?.referer || item.referer) || undefined,requestHeaders});
+  const effectiveReferer = item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null) || item.referer || requestHeaders?.referer;
+  return nativeSend({
+    action: 'download',
+    url,
+    youtubeFormat: item.youtubeFormat,
+    sabr,
+    startNow,
+    audioUrl: httpUrl(item.audioUrl) || undefined,
+    outputFormat: item.outputFormat,
+    filename: item.filename,
+    referer: httpUrl(effectiveReferer) || undefined,
+    canonicalUrl: item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : undefined),
+    videoId: item.videoId,
+    requestHeaders
+  });
 }
 function updateSession(key,change) {
   const next = serial.then(async () => {
@@ -127,12 +184,12 @@ async function remember(tabId, items) {
     for (const item of items.slice(0, 100)) {
       const url = httpUrl(item.url);
       if (!url || isFragment(url)) continue;
-      const value={url, mime: String(item.mime || '').slice(0, 100), title: String(item.title || '').slice(0, 180), quality:String(item.quality||'').slice(0,40),bitrate:Number(item.bitrate)||0,format:String(item.format||'').slice(0,20),separateAudio:!!item.separateAudio,reason:String(item.reason||'').slice(0,180),unsupported: unsupported(url, item.mime)||!!item.unsupported};
+      const value={url, mime: String(item.mime || '').slice(0, 100), media:item.media===true, title: String(item.title || '').slice(0, 180), quality:String(item.quality||'').slice(0,40),bitrate:Number(item.bitrate)||0,format:String(item.format||'').slice(0,20),separateAudio:!!item.separateAudio,reason:String(item.reason||'').slice(0,180),unsupported: unsupported(url, item.mime)||!!item.unsupported};
       value.audioUrl=httpUrl(item.audioUrl)||undefined;
       value.codecs=String(item.codecs||'').slice(0,200);
       value.masterUrl=httpUrl(item.masterUrl)||undefined;
       const existing=prior.findIndex(v=>v.url===url);
-      if(existing>=0){const previous=prior[existing];if(previous.format==='HLS'&&!item.format){if(value.title)previous.title=value.title;continue;}prior[existing]={...previous,...value,audioUrl:value.audioUrl||previous.audioUrl,codecs:value.codecs||previous.codecs,masterUrl:value.masterUrl||previous.masterUrl,title:value.title||previous.title,quality:value.quality||previous.quality,bitrate:value.bitrate||previous.bitrate,format:value.format||previous.format,separateAudio:value.separateAudio||previous.separateAudio,unsupported:value.unsupported||previous.unsupported,reason:value.reason||previous.reason};continue;}
+      if(existing>=0){const previous=prior[existing];if(previous.format==='HLS'&&!item.format){if(value.title)previous.title=value.title;continue;}const mime=value.mime||previous.mime;prior[existing]={...previous,...value,mime,media:value.media||previous.media,audioUrl:value.audioUrl||previous.audioUrl,codecs:value.codecs||previous.codecs,masterUrl:value.masterUrl||previous.masterUrl,title:value.title||previous.title,quality:value.quality||previous.quality,bitrate:value.bitrate||previous.bitrate,format:value.format||previous.format,separateAudio:value.separateAudio||previous.separateAudio,unsupported:unsupported(url,mime)||value.unsupported||previous.unsupported,reason:value.reason||previous.reason};continue;}
       prior.push(value);
     }
     map[tabId] = prior.slice(-100);
@@ -153,24 +210,50 @@ api.webRequest.onHeadersReceived.addListener(details => {
     youtubeObserved.set(details.tabId,urls.slice(0,100));
     if(youtubeObserved.size>50)youtubeObserved.delete(youtubeObserved.keys().next().value);
   }
-  if (details.type === 'media' || /^(video|audio)\//i.test(mime) || unsupported(details.url, mime)) {
-    remember(details.tabId, [{url: details.url, mime}]).catch(() => {});
+  const policy = globalThis.mediaPolicy;
+  const isMediaMime = policy ? policy.isMediaMime(mime) : /^(video|audio)\//i.test(mime);
+  const isMediaExt = policy ? policy.isMediaExtension(details.url) : /\.(mp4|webm|mkv|avi|mov|m4v|flv|wmv|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(details.url);
+  const isHls = policy ? (policy.isHlsMime(mime) || /\.m3u8(?:[?#]|$)/i.test(details.url)) : (/\.m3u8(?:[?#]|$)/i.test(details.url) || /mpegurl/i.test(mime));
+  const isDash = policy ? (policy.isDashMime(mime) || /\.mpd(?:[?#]|$)/i.test(details.url)) : (/\.mpd(?:[?#]|$)/i.test(details.url) || /dash\+xml/i.test(mime));
+
+  const isMedia = details.type === 'media' || isMediaMime || isMediaExt || isHls;
+  if (isMedia || isDash || unsupported(details.url, mime)) {
+    remember(details.tabId, [{
+      url: details.url,
+      mime,
+      media: isMedia,
+      unsupported: isDash,
+      reason: isDash ? 'DASH streams requiring dynamic manifests or DRM are not supported yet. Choose an MP4 or HLS format.' : ''
+    }]).catch(() => {});
   }
-  if(/\.m3u8(?:[?#]|$)/i.test(details.url)||/mpegurl/i.test(mime))discoverHls(details.tabId,details.url);
+  if (isHls) discoverHls(details.tabId, details.url);
 }, {urls: ['http://*/*', 'https://*/*']}, ['responseHeaders']);
-api.tabs.onRemoved.addListener(tabId => {youtubePlayers.delete(tabId);youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});});
-api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading') {youtubePlayers.delete(tabId);youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});} });
+api.tabs.onRemoved.addListener(tabId => {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});});
+api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading') {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});} });
 api.runtime.onInstalled.addListener(async () => {
   try {
     await api.contextMenus.removeAll();
     api.contextMenus.create({id: 'odm-link', title: 'Download with Open Download Manager', contexts: ['link', 'video', 'audio']});
     api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
   } catch (error) { await api.storage.local.set({lastError: error.message}); }
+  refreshCapturePolicy().catch(() => {});
 });
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     if (info.menuItemId === 'odm-page') { await api.tabs.sendMessage(tab.id, {action: 'collectLinks'}); await api.action.setBadgeText({tabId: tab.id, text: 'LINK'}); return; }
-    await enqueue({url: info.linkUrl || info.srcUrl, referer: tab?.url},tab?.id);
+    const targetUrl = info.linkUrl || info.srcUrl;
+    const policy = await getCapturePolicy();
+    let startNow = true;
+    if (globalThis.captureEvaluator && policy) {
+      const outcome = globalThis.captureEvaluator.evaluateCapture(policy, targetUrl);
+      if (outcome.decision === 'excluded-host' || outcome.decision === 'excluded-address') {
+        throw new Error(outcome.reason);
+      }
+      if (outcome.decision === 'confirmation-required') {
+        startNow = false;
+      }
+    }
+    await enqueue({url: targetUrl, referer: tab?.url, startNow}, tab?.id);
     await api.action.setBadgeText({tabId: tab.id, text: 'OK'});
   } catch (e) {
     await api.storage.local.set({lastError: e.message});
@@ -190,13 +273,18 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
         const previous=youtubePlayers.get(sender.tab.id);
         if(previous&&previous.videoId!==clean.videoId){clearSabrCapture(sender.tab.id);youtubeObserved.delete(sender.tab.id);}
         youtubePlayers.set(sender.tab.id,clean);if(youtubePlayers.size>50)youtubePlayers.delete(youtubePlayers.keys().next().value);
+        youtubePlayersByVideo.set(clean.videoId,clean);if(youtubePlayersByVideo.size>50)youtubePlayersByVideo.delete(youtubePlayersByVideo.keys().next().value);
       }
       return {ok:true};
     }
     if (message.action === 'remember' && sender.tab) { await remember(sender.tab.id, message.items || []); return {ok: true}; }
     if (message.action === 'download') {
       const tabId=sender.tab?.id ?? message.tabId;
-      return enqueue({...message.item, referer: sender.tab?.url || message.item?.referer},tabId);
+      const explicitReferer = (message.item?.videoId ? `https://www.youtube.com/watch?v=${message.item.videoId}` : null)
+        || message.item?.canonicalUrl
+        || message.item?.referer;
+      const referer = explicitReferer || sender.tab?.url;
+      return enqueue({...message.item, referer},tabId);
     }
     if (message.action === 'list' && !sender.tab) {
       await serial;
@@ -206,23 +294,59 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.action === 'listForFrame' && sender.tab) {
       const page=new URL(sender.tab.url||'https://invalid.local');
       if(['www.youtube.com','youtube.com','m.youtube.com'].includes(page.hostname)) {
-        const id=page.searchParams.get('v')||/^\/shorts\/([\w-]{11})/.exec(page.pathname)?.[1];
-        if(!/^[\w-]{11}$/.test(id||''))return {ok:true,items:[]};
-        await api.tabs.sendMessage(sender.tab.id,{action:'refreshPlayer'}).catch(()=>{});
-        const player=youtubePlayers.get(sender.tab.id);
-        if(player?.videoId!==id)return {ok:true,items:[]};
-        const capture=player.sabr?await sabrCapture(sender.tab.id):undefined;
-        const active={...player,sabrUrl:capture?.url||player.sabrUrl};
-        let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
-        if(!capture&&items.some(item=>item.sabrSelection)){
-          items=items.filter(item=>!item.sabrSelection);
-          if(!items.length)return {ok:true,items,notice:'Play this video for a few seconds so its streaming session can be captured, then reopen this menu.'};
+        const id = message.videoId || page.searchParams.get('v') || /^\/shorts\/([\w-]{11})/.exec(page.pathname)?.[1];
+        console.log('[ODM Background] listForFrame tab:', sender.tab.id, 'page:', sender.tab.url, 'resolved videoId:', id);
+        if(!/^[\w-]{11}$/.test(id||'')) {
+          console.warn('[ODM Background] listForFrame could not resolve videoId from page or message');
+          return {ok:true,items:[]};
         }
-        return {ok:true,items};
+        await api.tabs.sendMessage(sender.tab.id,{action:'refreshPlayer'}).catch(()=>{});
+        let player=youtubePlayers.get(sender.tab.id);
+        if(player?.videoId!==id && youtubePlayersByVideo.has(id)) {
+          console.log('[ODM Background] resolving player from videoId cache:', id);
+          player = youtubePlayersByVideo.get(id);
+        }
+        console.log('[ODM Background] cached player videoId:', player?.videoId, 'expected:', id);
+        if(player?.videoId===id) {
+          const capture=player.sabr?await sabrCapture(sender.tab.id):undefined;
+          console.log('[ODM Background] sabrCapture status:', !!capture);
+          const active={...player,sabrUrl:capture?.url||player.sabrUrl};
+          let items=globalThis.youtubeMedia.choices(active,youtubeObserved.get(sender.tab.id)||[]);
+          console.log('[ODM Background] Returning', items.length, 'format choices');
+          if(items.length) {
+            return {ok:true,items};
+          }
+        }
+        try {
+          const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+          console.log('[ODM Background] Querying native bridge for formats on:', watchUrl);
+          const nativeRes = await nativeSend({action: 'formats', url: watchUrl});
+          if (nativeRes?.ok && Array.isArray(nativeRes.items) && nativeRes.items.length) {
+            console.log('[ODM Background] Native bridge returned', nativeRes.items.length, 'formats');
+            return {ok: true, items: nativeRes.items};
+          }
+        } catch (e) {
+          console.warn('[ODM Background] native formats fallback error:', e);
+        }
+        return {ok: true, items: []};
       }
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);
-      return {ok:true, items:(data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => item.unsupported || item.format==='HLS' || /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url))};
+      const policy = globalThis.mediaPolicy;
+      return {
+        ok: true,
+        items: (data[CACHE_KEY]?.[sender.tab.id] || []).filter(item => {
+          if (item.unsupported || item.media || item.format === 'HLS') return true;
+          if (policy) return policy.isMediaMime(item.mime) || policy.isMediaExtension(item.url);
+          return /^(video|audio)\//i.test(item.mime) || /\.(m3u8|mp4|webm|mov|m4v|mp3|m4a|ogg|wav)(?:[?#]|$)/i.test(item.url);
+        })
+      };
+    }
+    if(message.action==='extractFormats'&&sender.tab){
+      const pageUrl=httpUrl(sender.tab.url||'');
+      if(!pageUrl)throw new Error('Only HTTP(S) video pages can be inspected.');
+      const result=await nativeSend({action:'formats',url:pageUrl});
+      return {ok:true,items:Array.isArray(result.items)?result.items.slice(0,100):[]};
     }
     throw new Error('Unsupported extension request.');
   };

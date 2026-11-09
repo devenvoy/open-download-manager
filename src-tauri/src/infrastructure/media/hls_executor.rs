@@ -1,3 +1,11 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-08
+// Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Reason: fix(hls): resolve external audio playlist when audio_url is specified on media variant
+// Reason: fix(hls): abort workers cleanly on pause, select stopped on network requests, and throttle progress
+// Description: HLS stream executor downloading individual media segments and assembling into continuous streams.
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -12,9 +20,10 @@ use crate::{
         download_rate_limiter::DownloadRateLimiter,
         download_result::DownloadResult,
         error::{AppError, AppResult},
+        throughput_meter::ThroughputMeter,
     },
     domain::{
-        download::DownloadRecord,
+        download::{DownloadRecord, DownloadSegmentProgress},
         media::{
             calculate_stream_progress, parse_hls, scoped_headers, HlsMediaPlaylist,
             ParsedHls, StreamSegment,
@@ -23,13 +32,48 @@ use crate::{
     infrastructure::media::ffmpeg::FfmpegTools,
 };
 
+struct WorkerProgressState {
+    current_segment: Option<usize>,
+    segment_downloaded: u64,
+}
+
+struct HlsTransferState {
+    segments: Vec<StreamSegment>,
+    meter: ThroughputMeter,
+    worker_progress: Vec<WorkerProgressState>,
+}
+
+impl HlsTransferState {
+    fn build_connections_progress(&self, segment_count: usize) -> Vec<DownloadSegmentProgress> {
+        self.worker_progress
+            .iter()
+            .enumerate()
+            .map(|(w_idx, w)| {
+                let (info, downloaded) = match w.current_segment {
+                    Some(seg_idx) => (format!("Segment {}/{}", seg_idx + 1, segment_count), w.segment_downloaded),
+                    None => ("Idle".to_string(), 0),
+                };
+                DownloadSegmentProgress {
+                    start: w_idx as u64,
+                    end: segment_count as u64,
+                    downloaded,
+                    total: 0,
+                    status: info,
+                }
+            })
+            .collect()
+    }
+}
+
 pub struct HlsDownloadExecutor {
-    client: reqwest::Client,
+    client: Arc<std::sync::RwLock<reqwest::Client>>,
     ffmpeg: Option<FfmpegTools>,
 }
 
+#[derive(Clone)]
 pub struct ResolvedHlsPlan {
     pub urls: Vec<String>,
+    pub segments: Vec<crate::domain::media::HlsSegment>,
     pub video_count: usize,
     pub has_separate_audio: bool,
     pub duration: f64,
@@ -39,14 +83,26 @@ pub struct ResolvedHlsPlan {
 impl HlsDownloadExecutor {
     pub fn new(client: reqwest::Client) -> Self {
         Self {
+            client: Arc::new(std::sync::RwLock::new(client)),
+            ffmpeg: FfmpegTools::new(),
+        }
+    }
+
+    pub fn new_shared(client: Arc<std::sync::RwLock<reqwest::Client>>) -> Self {
+        Self {
             client,
             ffmpeg: FfmpegTools::new(),
         }
     }
 
+    pub fn client(&self) -> reqwest::Client {
+        self.client.read().unwrap().clone()
+    }
+
     pub async fn resolve_plan(
         &self,
         url: &str,
+        audio_url: Option<&str>,
         headers: &HashMap<String, String>,
         depth: usize,
     ) -> AppResult<ResolvedHlsPlan> {
@@ -54,9 +110,15 @@ impl HlsDownloadExecutor {
             return Err(AppError::download("Too many nested HLS playlists."));
         }
 
-        let resp = self
-            .client
-            .get(url)
+        let mut req = self.client().get(url);
+        for (k, v) in headers {
+            if let Ok(name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(v) {
+                    req = req.header(name, val);
+                }
+            }
+        }
+        let resp = req
             .send()
             .await
             .map_err(|e| AppError::download(format!("Could not fetch HLS playlist: {e}")))?;
@@ -84,13 +146,17 @@ impl HlsDownloadExecutor {
                 let video = Box::pin(self.resolve_media_playlist(&chosen.url, headers)).await?;
                 let video_count = video.urls.len();
 
-                if let Some(audio_url) = &chosen.audio_url {
-                    let audio_headers = scoped_headers(headers, url, audio_url);
-                    let audio = Box::pin(self.resolve_media_playlist(audio_url, &audio_headers)).await?;
+                let target_audio = chosen.audio_url.as_deref().or(audio_url);
+                if let Some(target_audio_url) = target_audio {
+                    let audio_headers = scoped_headers(headers, url, target_audio_url);
+                    let audio = Box::pin(self.resolve_media_playlist(target_audio_url, &audio_headers)).await?;
                     let mut combined_urls = video.urls;
                     combined_urls.extend(audio.urls);
+                    let mut combined_segments = video.segments;
+                    combined_segments.extend(audio.segments);
                     Ok(ResolvedHlsPlan {
                         urls: combined_urls,
+                        segments: combined_segments,
                         video_count,
                         has_separate_audio: true,
                         duration: video.duration,
@@ -99,6 +165,7 @@ impl HlsDownloadExecutor {
                 } else {
                     Ok(ResolvedHlsPlan {
                         urls: video.urls,
+                        segments: video.segments,
                         video_count,
                         has_separate_audio: false,
                         duration: video.duration,
@@ -107,14 +174,32 @@ impl HlsDownloadExecutor {
                 }
             }
             ParsedHls::Media(media) => {
-                let count = media.urls.len();
-                Ok(ResolvedHlsPlan {
-                    urls: media.urls,
-                    video_count: count,
-                    has_separate_audio: false,
-                    duration: media.duration,
-                    extension: media.extension,
-                })
+                let video_count = media.urls.len();
+                if let Some(target_audio_url) = audio_url {
+                    let audio_headers = scoped_headers(headers, url, target_audio_url);
+                    let audio = Box::pin(self.resolve_media_playlist(target_audio_url, &audio_headers)).await?;
+                    let mut combined_urls = media.urls;
+                    combined_urls.extend(audio.urls);
+                    let mut combined_segments = media.segments;
+                    combined_segments.extend(audio.segments);
+                    Ok(ResolvedHlsPlan {
+                        urls: combined_urls,
+                        segments: combined_segments,
+                        video_count,
+                        has_separate_audio: true,
+                        duration: media.duration,
+                        extension: ".mp4",
+                    })
+                } else {
+                    Ok(ResolvedHlsPlan {
+                        urls: media.urls,
+                        segments: media.segments,
+                        video_count,
+                        has_separate_audio: false,
+                        duration: media.duration,
+                        extension: media.extension,
+                    })
+                }
             }
         }
     }
@@ -122,11 +207,17 @@ impl HlsDownloadExecutor {
     async fn resolve_media_playlist(
         &self,
         url: &str,
-        _headers: &HashMap<String, String>,
+        headers: &HashMap<String, String>,
     ) -> AppResult<HlsMediaPlaylist> {
-        let resp = self
-            .client
-            .get(url)
+        let mut req = self.client().get(url);
+        for (k, v) in headers {
+            if let Ok(name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(v) {
+                    req = req.header(name, val);
+                }
+            }
+        }
+        let resp = req
             .send()
             .await
             .map_err(|e| AppError::download(format!("Could not fetch HLS media playlist: {e}")))?;
@@ -146,7 +237,13 @@ impl HlsDownloadExecutor {
 
         match parse_hls(&text, &final_url).map_err(AppError::download)? {
             ParsedHls::Media(media) => Ok(media),
-            ParsedHls::Master(_) => Err(AppError::download("Nested master playlists are not supported.")),
+            ParsedHls::Master(master) => {
+                let chosen = master
+                    .variants
+                    .first()
+                    .ok_or_else(|| AppError::download("No audio variants found in master playlist."))?;
+                Box::pin(self.resolve_media_playlist(&chosen.url, headers)).await
+            }
         }
     }
 
@@ -167,9 +264,12 @@ impl HlsDownloadExecutor {
             .await
             .map_err(|e| AppError::download(format!("Could not create download folder: {e}")))?;
 
-        let empty_headers = HashMap::new();
+        let mut headers = HashMap::new();
+        if let Some(ref referer) = download.referer {
+            headers.insert("Referer".to_string(), referer.clone());
+        }
         let plan = self
-            .resolve_plan(&download.url, &empty_headers, 0)
+            .resolve_plan(&download.url, download.audio_url.as_deref(), &headers, 0)
             .await?;
 
         let parts_dir = directory.join(format!(".open-download-manager-hls-{}", download.id));
@@ -191,20 +291,33 @@ impl HlsDownloadExecutor {
             state
         };
 
-        let segments = Arc::new(Mutex::new(segments_state));
-        let next_index = Arc::new(Mutex::new(0_usize));
+        let initial_downloaded: u64 = segments_state.iter().map(|s| s.downloaded).sum();
         let worker_count = (download.connections as usize).clamp(1, segment_count);
+        let state = Arc::new(Mutex::new(HlsTransferState {
+            segments: segments_state,
+            meter: ThroughputMeter::with_initial_bytes(initial_downloaded),
+            worker_progress: (0..worker_count)
+                .map(|_| WorkerProgressState {
+                    current_segment: None,
+                    segment_downloaded: 0,
+                })
+                .collect(),
+        }));
+        let next_index = Arc::new(Mutex::new(0_usize));
+        let referer = download.referer.clone();
 
         let mut workers = tokio::task::JoinSet::new();
-        for _ in 0..worker_count {
-            let client = self.client.clone();
-            let urls = plan.urls.clone();
-            let segments = segments.clone();
+        let segments_plan = plan.segments.clone();
+        for worker_id in 0..worker_count {
+            let client = self.client();
+            let segments = segments_plan.clone();
+            let state = state.clone();
             let next_index = next_index.clone();
             let parts_dir = parts_dir.clone();
             let mut control = control.clone();
             let rate_limiter = rate_limiter.clone();
             let progress_handler = progress_handler.clone();
+            let referer = referer.clone();
 
             workers.spawn(async move {
                 loop {
@@ -214,7 +327,7 @@ impl HlsDownloadExecutor {
                     let index = {
                         let mut idx_lock = next_index.lock().unwrap();
                         let i = *idx_lock;
-                        if i >= urls.len() {
+                        if i >= segments.len() {
                             break;
                         }
                         *idx_lock += 1;
@@ -222,8 +335,8 @@ impl HlsDownloadExecutor {
                     };
 
                     let is_already_done = {
-                        let segs = segments.lock().unwrap();
-                        segs[index].done
+                        let st = state.lock().unwrap();
+                        st.segments[index].done
                     };
                     if is_already_done {
                         continue;
@@ -231,15 +344,21 @@ impl HlsDownloadExecutor {
 
                     download_hls_segment(
                         &client,
-                        &urls[index],
+                        &segments[index],
                         index,
+                        worker_id,
+                        segment_count,
                         &parts_dir,
-                        &segments,
+                        &state,
                         &mut control,
                         rate_limiter.clone(),
                         &progress_handler,
+                        referer.as_deref(),
                     )
                     .await?;
+                }
+                if let Ok(mut st) = state.lock() {
+                    st.worker_progress[worker_id].current_segment = None;
                 }
                 Ok(())
             });
@@ -249,9 +368,13 @@ impl HlsDownloadExecutor {
             match res {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
+                    workers.abort_all();
+                    while workers.join_next().await.is_some() {}
                     return Err(e);
                 }
                 Err(e) => {
+                    workers.abort_all();
+                    while workers.join_next().await.is_some() {}
                     return Err(AppError::download(format!("HLS segment task failed: {e}")));
                 }
             }
@@ -264,6 +387,13 @@ impl HlsDownloadExecutor {
             let base_name = download
                 .filename
                 .strip_suffix(".m3u8")
+                .or_else(|| {
+                    if plan.extension == ".mp4" {
+                        download.filename.strip_suffix(".ts")
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or(&download.filename);
             format!("{base_name}{}", plan.extension)
         };
@@ -313,22 +443,44 @@ impl HlsDownloadExecutor {
 
 async fn download_hls_segment(
     client: &reqwest::Client,
-    url: &str,
+    segment: &crate::domain::media::HlsSegment,
     index: usize,
+    worker_id: usize,
+    segment_count: usize,
     parts_dir: &Path,
-    segments: &Arc<Mutex<Vec<StreamSegment>>>,
+    state: &Arc<Mutex<HlsTransferState>>,
     control: &mut DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
+    referer: Option<&str>,
 ) -> AppResult<()> {
     let temp_part = parts_dir.join(format!("{index}.receiving"));
     let final_part = parts_dir.join(format!("{index}.part"));
 
-    let mut response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| AppError::download(format!("Could not download segment {index}: {e}")))?;
+    {
+        let mut st = state.lock().unwrap();
+        st.worker_progress[worker_id].current_segment = Some(index);
+        st.worker_progress[worker_id].segment_downloaded = 0;
+    }
+
+    let mut req = client.get(&segment.url);
+    if let Some(r) = referer {
+        req = req.header(reqwest::header::REFERER, r);
+    }
+    if let Some(range) = segment.byte_range {
+        req = req.header(
+            reqwest::header::RANGE,
+            format!("bytes={}-{}", range.offset, range.offset + range.length - 1),
+        );
+    }
+
+    let mut response = tokio::select! {
+        reason = control.stopped() => return Err(stopped_error(reason)),
+        res = req.send() => res.map_err(|e| {
+            let safe_url = crate::domain::media::redact_media_url(&segment.url);
+            AppError::download(format!("Could not download segment {index} from {safe_url}: {e}"))
+        })?,
+    };
 
     if !response.status().is_success() {
         return Err(AppError::download(format!(
@@ -345,6 +497,17 @@ async fn download_hls_segment(
         .await
         .map_err(|e| AppError::download(format!("Could not create segment file: {e}")))?;
 
+    let is_status_200 = response.status() == reqwest::StatusCode::OK;
+    let (mut skip_remaining, max_bytes) = if let Some(range) = segment.byte_range {
+        if is_status_200 {
+            (range.offset, Some(range.length))
+        } else {
+            (0, Some(range.length))
+        }
+    } else {
+        (0, None)
+    };
+
     let mut segment_downloaded = 0_u64;
     loop {
         let chunk = tokio::select! {
@@ -359,13 +522,83 @@ async fn download_hls_segment(
             break;
         };
 
-        let chunk_size = chunk.len() as u64;
-        rate_limiter.throttle(chunk_size).await;
-        file.write_all(&chunk)
-            .await
-            .map_err(|e| AppError::download(format!("Could not write segment: {e}")))?;
+        let chunk_data = if skip_remaining > 0 {
+            let skip = (chunk.len() as u64).min(skip_remaining);
+            skip_remaining -= skip;
+            &chunk[skip as usize..]
+        } else {
+            &chunk[..]
+        };
+
+        if chunk_data.is_empty() {
+            continue;
+        }
+
+        let to_write = if let Some(limit) = max_bytes {
+            let remaining = limit.saturating_sub(segment_downloaded);
+            if remaining == 0 {
+                break;
+            }
+            let take = (chunk_data.len() as u64).min(remaining) as usize;
+            &chunk_data[..take]
+        } else {
+            chunk_data
+        };
+
+        let chunk_size = to_write.len() as u64;
+        let throttled = tokio::select! {
+            reason = control.stopped() => {
+                let _ = tokio::fs::remove_file(&temp_part).await;
+                return Err(stopped_error(reason));
+            }
+            () = rate_limiter.throttle(chunk_size) => Ok(()),
+        };
+        if let Err(e) = throttled {
+            return Err(e);
+        }
+
+        let write_res = tokio::select! {
+            reason = control.stopped() => {
+                let _ = tokio::fs::remove_file(&temp_part).await;
+                return Err(stopped_error(reason));
+            }
+            res = file.write_all(to_write) => res.map_err(|e| AppError::download(format!("Could not write segment: {e}"))),
+        };
+        write_res?;
 
         segment_downloaded += chunk_size;
+
+        {
+            let mut st = state.lock().unwrap();
+            st.segments[index].downloaded = segment_downloaded;
+            st.worker_progress[worker_id].segment_downloaded = segment_downloaded;
+
+            let total_now: u64 = st.segments.iter().map(|s| s.downloaded).sum();
+            if let Some(speed) = st.meter.update(total_now) {
+                let stream_prog = calculate_stream_progress(&st.segments);
+                let conns = st.build_connections_progress(segment_count);
+                let eff_conns = st.worker_progress.len() as u8;
+                drop(st);
+
+                progress_handler(DownloadProgress {
+                    downloaded: total_now,
+                    total: stream_prog.estimated_bytes,
+                    bytes_per_second: speed,
+                    connections_progress: conns,
+                    notice: None,
+                    transfer_kind: Some("hls".to_string()),
+                    effective_concurrency: Some(eff_conns),
+                    etag: None,
+                    validator: None,
+                });
+            }
+        }
+
+        if let Some(limit) = max_bytes {
+            if segment_downloaded >= limit {
+                break;
+            }
+        }
     }
 
     file.flush()
@@ -378,19 +611,33 @@ async fn download_hls_segment(
         .map_err(|e| AppError::download(format!("Could not commit segment: {e}")))?;
 
     {
-        let mut segs = segments.lock().unwrap();
-        segs[index].done = true;
-        segs[index].downloaded = segment_downloaded;
+        let mut st = state.lock().unwrap();
+        st.segments[index].done = true;
+        st.segments[index].downloaded = segment_downloaded;
+        st.worker_progress[worker_id].segment_downloaded = segment_downloaded;
 
-        let total_downloaded: u64 = segs.iter().map(|s| s.downloaded).sum();
-        let stream_prog = calculate_stream_progress(&segs);
+        let total_downloaded: u64 = st.segments.iter().map(|s| s.downloaded).sum();
+        let all_done = st.segments.iter().all(|s| s.done);
+        let speed_opt = st.meter.update(total_downloaded);
+        if all_done || speed_opt.is_some() {
+            let stream_prog = calculate_stream_progress(&st.segments);
+            let speed = speed_opt.unwrap_or_else(|| st.meter.current_throughput());
+            let conns = st.build_connections_progress(segment_count);
+            let eff_conns = st.worker_progress.len() as u8;
+            drop(st);
 
-        progress_handler(DownloadProgress {
-            downloaded: total_downloaded,
-            total: stream_prog.estimated_bytes,
-            bytes_per_second: 0,
-            connections_progress: Vec::new(),
-        });
+            progress_handler(DownloadProgress {
+                downloaded: total_downloaded,
+                total: stream_prog.estimated_bytes,
+                bytes_per_second: speed,
+                connections_progress: conns,
+                notice: None,
+                transfer_kind: Some("hls".to_string()),
+                effective_concurrency: Some(eff_conns),
+                etag: None,
+                validator: None,
+            });
+        }
     }
 
     Ok(())

@@ -1,3 +1,15 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(mms): add MMS streaming support or explicit unsupported guidance (Closes #35)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
+
 'use strict';
 
 const tauri = window.__TAURI__;
@@ -72,10 +84,12 @@ window.downloader = Object.freeze({
   openProgress: ({ id }) => invoke('open_progress_window', { id }),
   closeProgress: () => invoke('close_auxiliary_window'),
   resizeProgress: ({ expanded }) => invoke('resize_progress_window', { expanded }),
+  resizeAuxiliaryWindow: ({ width, height } = {}) => invoke('resize_auxiliary_window', { width, height }),
   add: request => invoke('add_download', { request }),
   action: request => invoke('download_action', request),
   removeCompleted: () => invoke('remove_completed'),
   review: request => invoke('review_download', { request }),
+  checkDestinationConflict: ({ directory, filename }) => invoke('check_destination_conflict', { directory, filename }),
   integration: () => invoke('get_integration_info'),
   browserSetup: ({ action, browser }) => invoke('browser_setup_action', { action, browser }),
   registerBrowser: ({ browser, extensionId }) => invoke('register_browser', { browser, extensionId }),
@@ -87,5 +101,31 @@ window.downloader = Object.freeze({
   importDownloads: () => invoke('import_downloads_from_file'),
   showAbout: () => invoke('show_about_dialog'),
   getPlaylistInfo: url => invoke('get_playlist_info', { url }),
-  addPlaylistDownloads: request => invoke('add_playlist_downloads', { request })
+  resolveAsxPlaylist: urlOrContent => invoke('resolve_asx_playlist', { urlOrContent }),
+  getVideoFormats: url => invoke('get_video_formats', { url }),
+  addPlaylistDownloads: request => invoke('add_playlist_downloads', { request }),
+  getMediaToolsStatus: () => invoke('get_media_tools_status'),
+  installMediaTool: tool => invoke('install_media_tool', { tool }),
+  testProxy: ({ proxy, testUrl }) => invoke('test_proxy_connection', { proxy, testUrl: testUrl || null }),
+  detectProxy: () => invoke('detect_proxy'),
+  applyDetectedProxy: ({ detected }) => invoke('apply_detected_proxy', { detected }),
+  listCredentialRules: () => invoke('list_credential_rules'),
+  saveCredentialRule: rule => invoke('save_credential_rule', { rule }),
+  deleteCredentialRule: id => invoke('delete_credential_rule', { id }),
+  listQueues: () => invoke('list_queues'),
+  createQueue: ({ name, concurrencyLimit, speedLimitKbps, schedule }) => invoke('create_queue', { name, concurrencyLimit, speedLimitKbps, schedule }),
+  updateQueue: ({ id, name, enabled, concurrencyLimit, speedLimitKbps, schedule }) => invoke('update_queue', { id, name, enabled, concurrencyLimit, speedLimitKbps, schedule }),
+  deleteQueue: ({ id, disposition }) => invoke('delete_queue', { id, disposition }),
+  startQueue: ({ id }) => invoke('start_queue', { id }),
+  pauseQueue: ({ id }) => invoke('pause_queue', { id }),
+  assignDownloadToQueue: ({ downloadId, queueId }) => invoke('assign_download_to_queue', { downloadId, queueId }),
+  reorderQueueItems: ({ queueId, itemIds }) => invoke('reorder_queue_items', { queueId, itemIds }),
+  updateDownloadCompletionActions: ({ id, actions }) => invoke('update_download_completion_actions', { id, actions }),
+  retryDownloadActions: ({ id }) => invoke('retry_download_actions', { id }),
+  validateDirectory: path => invoke('validate_directory', { path }),
+  dismissClipboardCandidate: url => invoke('dismiss_clipboard_candidate', { url }),
+  getAdvancedIntegration: () => invoke('get_advanced_integration_capability'),
+  enableAdvancedIntegration: ({ consent }) => invoke('enable_advanced_integration', { consent }),
+  disableAdvancedIntegration: () => invoke('disable_advanced_integration'),
+  repairAdvancedIntegration: () => invoke('repair_advanced_integration')
 });

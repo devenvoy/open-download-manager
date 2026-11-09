@@ -1,9 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Open Download Manager",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "identifier": "com.opendownloadmanager.desktop",
   "build": {
+    "beforeDevCommand": "cargo build --bin open-download-manager-native-host",
+    "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host",
     "frontendDist": "../renderer"
   },
   "app": {
@@ -12,8 +14,8 @@
       {
         "label": "main",
         "title": "Open Download Manager",
-        "width": 805,
-        "height": 465,
+        "width": 900,
+        "height": 560,
         "minWidth": 760,
         "minHeight": 450,
         "visible": false

@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(media): implement notifications, file icons, and adaptive dual-stream muxing (Phase E)
+// Last updated: 2026-11-06
+// Reason: perf: optimize file icon path normalization, extension deduplication and snapshot cloning
+// Description: System file icon provider generating category-appropriate SVG icons for UI display.
+
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},

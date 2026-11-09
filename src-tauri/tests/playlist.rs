@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(playlist): implement YouTube playlist discovery, model, and batch queue controls (#21)
+// Last updated: 2026-11-08
+// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
+// Description: Integration tests verifying playlist functionality, edge cases, and error recovery.
+
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -243,7 +249,9 @@ async fn test_playlist_commands_through_app_state() {
     let update_client = Arc::new(open_download_manager_lib::infrastructure::updater::GitHubReleaseClient::default_client());
     let updater = UpdateService::new(update_client, "0.1.2", true);
 
-    let app_state = AppState::new(settings, history.clone(), transfer, integration, file_icons, updater);
+    let cred_store = Arc::new(open_download_manager_lib::infrastructure::credentials::CredentialStore::new(&data_dir));
+    let cred_service = Arc::new(open_download_manager_lib::application::credential_service::CredentialService::new(cred_store));
+    let app_state = AppState::new(settings, history.clone(), transfer, cred_service, integration, file_icons, updater);
 
     let app = tauri::test::mock_app();
     app.manage(app_state);

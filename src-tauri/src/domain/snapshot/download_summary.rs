@@ -1,8 +1,19 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Description: Redacted, frontend-safe download transfer summary view model for UI rendering.
+
 use serde::Serialize;
 
 use crate::domain::{
     category::DownloadCategory,
-    download::{redact_download_url, DownloadRecord, DownloadSegmentProgress, DownloadStatus},
+    download::{
+        redact_download_url, sanitize_diagnostic_text, DownloadRecord, DownloadSegmentProgress,
+        DownloadStatus,
+    },
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -18,10 +29,14 @@ pub struct DownloadSummary {
     pub created_at: String,
     pub needs_review: bool,
     pub scheduled_at: Option<String>,
+    #[serde(default)]
+    pub queue_id: Option<String>,
     pub description: Option<String>,
     pub category: Option<DownloadCategory>,
     pub directory: Option<String>,
     pub path: Option<String>,
+    #[serde(default)]
+    pub temp_directory: Option<String>,
     pub last_try: Option<String>,
     pub error: Option<String>,
     pub notice: Option<String>,
@@ -31,6 +46,12 @@ pub struct DownloadSummary {
     pub duration: Option<f64>,
     pub connections: u8,
     pub connections_progress: Vec<DownloadSegmentProgress>,
+    pub transfer_kind: Option<String>,
+    pub referer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub action_ledger: Vec<crate::domain::completion::ActionLedgerEntry>,
 }
 
 impl From<&DownloadRecord> for DownloadSummary {
@@ -46,19 +67,25 @@ impl From<&DownloadRecord> for DownloadSummary {
             created_at: download.created_at.clone(),
             needs_review: download.needs_review,
             scheduled_at: download.scheduled_at.clone(),
+            queue_id: download.queue_id.clone(),
             description: download.description.clone(),
             category: download.category.clone(),
             directory: download.directory.clone(),
             path: download.path.clone(),
+            temp_directory: download.temp_directory.clone(),
             last_try: download.last_try.clone(),
-            error: download.error.clone(),
-            notice: download.notice.clone(),
+            error: download.error.as_deref().map(sanitize_diagnostic_text),
+            notice: download.notice.as_deref().map(sanitize_diagnostic_text),
             estimated: download.estimated,
             kind: download.kind.clone(),
             resumable: download.resumable,
             duration: download.duration,
             connections: download.connections,
             connections_progress: download.connections_progress.clone(),
+            transfer_kind: download.transfer_kind.clone(),
+            referer: download.referer.as_deref().map(redact_download_url),
+            completion_actions: download.completion_actions.clone(),
+            action_ledger: download.action_ledger.clone(),
         }
     }
 }
@@ -76,19 +103,25 @@ impl From<DownloadRecord> for DownloadSummary {
             created_at: download.created_at,
             needs_review: download.needs_review,
             scheduled_at: download.scheduled_at,
+            queue_id: download.queue_id,
             description: download.description,
             category: download.category,
             directory: download.directory,
             path: download.path,
+            temp_directory: download.temp_directory,
             last_try: download.last_try,
-            error: download.error,
-            notice: download.notice,
+            error: download.error.as_deref().map(sanitize_diagnostic_text),
+            notice: download.notice.as_deref().map(sanitize_diagnostic_text),
             estimated: download.estimated,
             kind: download.kind,
             resumable: download.resumable,
             duration: download.duration,
             connections: download.connections,
             connections_progress: download.connections_progress,
+            transfer_kind: download.transfer_kind,
+            referer: download.referer.as_deref().map(redact_download_url),
+            completion_actions: download.completion_actions,
+            action_ledger: download.action_ledger,
         }
     }
 }

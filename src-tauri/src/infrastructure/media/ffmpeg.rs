@@ -1,11 +1,18 @@
+// Created: 2026-11-05
+// Reason: feat: add media handling for HLS, FFmpeg, yt-dlp, and stream progress
+// Last updated: 2026-11-07
+// Reason: fix(media): handle ffmpeg errors, yt-dlp execution, stream truncation and UI error dialogs
+// Description: FFmpeg wrapper executing stream multiplexing, track extraction, and format conversions.
+
 use std::{path::{Path, PathBuf}, process::Stdio};
-use tokio::process::Command;
+use tokio::{io::AsyncReadExt, process::Command};
 
 use crate::application::{
     download_executor::{stopped_error, DownloadControl},
     error::{AppError, AppResult},
 };
 
+#[derive(Clone)]
 pub struct FfmpegTools {
     executable: PathBuf,
 }
@@ -124,50 +131,58 @@ async fn run_command_with_control(
         .spawn()
         .map_err(|e| AppError::download(format!("Could not spawn ffmpeg: {e}")))?;
 
+    let mut stderr_handle = child.stderr.take();
+    let mut stderr_bytes = Vec::new();
+
     tokio::select! {
         reason = control.stopped() => {
             let _ = child.kill().await;
             let _ = tokio::fs::remove_file(output_file).await;
             Err(stopped_error(reason))
         }
-        status = child.wait() => {
-            let status = status.map_err(|e| AppError::download(format!("ffmpeg process error: {e}")))?;
+        res = async {
+            let stderr_fut = async {
+                if let Some(ref mut handle) = stderr_handle {
+                    let _ = handle.read_to_end(&mut stderr_bytes).await;
+                }
+            };
+            let (status, _) = tokio::join!(child.wait(), stderr_fut);
+            status
+        } => {
+            let status = res.map_err(|e| AppError::download(format!("ffmpeg process error: {e}")))?;
             if !status.success() {
                 let _ = tokio::fs::remove_file(output_file).await;
-                return Err(AppError::download(format!("Media assembly failed with exit code: {:?}", status.code())));
+                let stderr_str = String::from_utf8_lossy(&stderr_bytes);
+                return Err(AppError::download(format_ffmpeg_error(status.code(), &stderr_str)));
             }
             Ok(())
         }
     }
 }
 
+fn format_ffmpeg_error(code: Option<i32>, stderr: &str) -> String {
+    let clean = stderr.trim();
+    if clean.is_empty() {
+        return match code {
+            Some(c) => format!("Media assembly failed (FFmpeg process exited with code {c})."),
+            None => "Media assembly process terminated unexpectedly.".to_string(),
+        };
+    }
+
+    let error_line = clean
+        .lines()
+        .rev()
+        .find(|l| {
+            let lower = l.to_ascii_lowercase();
+            lower.contains("error") || lower.contains("invalid") || lower.contains("failed") || lower.contains("cannot")
+        })
+        .or_else(|| clean.lines().last())
+        .unwrap_or(clean);
+
+    let short_error = error_line.trim().chars().take(300).collect::<String>();
+    format!("Media assembly failed: {short_error}")
+}
+
 fn find_ffmpeg_path() -> Option<PathBuf> {
-    if let Ok(env_path) = std::env::var("AD_FFMPEG_PATH") {
-        let path = PathBuf::from(env_path);
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(parent) = current_exe.parent() {
-            let candidate = parent.join(if cfg!(windows) { "tools/ffmpeg.exe" } else { "tools/ffmpeg" });
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-            // Tauri externalBin sidecar in Contents/MacOS/
-            let direct_sidecar = parent.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
-            if direct_sidecar.is_file() {
-                return Some(direct_sidecar);
-            }
-            #[cfg(target_os = "macos")]
-            if let Some(bundle_res) = parent.parent().map(|p| p.join("Resources/tools/ffmpeg")) {
-                if bundle_res.is_file() {
-                    return Some(bundle_res);
-                }
-            }
-        }
-    }
-
-    which::which("ffmpeg").ok()
+    super::tools::find_tool_path("ffmpeg")
 }

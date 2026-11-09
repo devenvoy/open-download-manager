@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: migrate history and adopt Bun
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Description: Application service managing download history, record queries, state transitions, and filtering.
+
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
@@ -11,7 +17,8 @@ use crate::{
         error::{AppError, AppResult},
     },
     domain::download::{
-        sanitize_filename, DownloadRecord, DownloadStatus, ReviewDownloadRequest,
+        sanitize_filename, DownloadRecord, DownloadStatus, FileConflictPolicy,
+        ReviewDownloadRequest,
     },
 };
 
@@ -70,7 +77,33 @@ impl DownloadHistoryService {
         Ok(f(&downloads))
     }
 
-    pub(crate) fn download(&self, id: &str) -> AppResult<DownloadRecord> {
+    pub(crate) fn next_queued_download_ids(&self, limit: usize) -> AppResult<Vec<String>> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let ids = downloads
+            .iter()
+            .filter(|d| d.status == DownloadStatus::Queued && !d.needs_review)
+            .take(limit)
+            .map(|d| d.id.clone())
+            .collect();
+        Ok(ids)
+    }
+
+    pub(crate) fn active_download_count(&self) -> AppResult<usize> {
+        let downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let count = downloads
+            .iter()
+            .filter(|d| matches!(d.status, DownloadStatus::Connecting | DownloadStatus::Downloading | DownloadStatus::Assembling))
+            .count();
+        Ok(count)
+    }
+
+    pub fn download(&self, id: &str) -> AppResult<DownloadRecord> {
         self.downloads
             .lock()
             .map_err(|_| AppError::storage("Download history is unavailable."))?
@@ -151,8 +184,7 @@ impl DownloadHistoryService {
         downloads[index].error = None;
         downloads[index].speed = 0;
         if retry {
-            downloads[index].downloaded = 0;
-            downloads[index].total = None;
+            downloads[index].action_ledger.clear();
         }
         if let Err(error) = self.repository.save(&downloads) {
             downloads[index] = previous;
@@ -243,6 +275,13 @@ impl DownloadHistoryService {
             }
         }
 
+        if let Some(temp_dir) = &request.temp_directory {
+            let p = std::path::Path::new(temp_dir);
+            if !p.is_absolute() {
+                return Err(AppError::invalid_download("Choose an absolute temporary folder."));
+            }
+        }
+
         if let Some(desc) = &request.description {
             if desc.chars().count() > 4096 {
                 return Err(AppError::invalid_download("Description is too long."));
@@ -270,6 +309,9 @@ impl DownloadHistoryService {
         if let Some(directory) = &request.directory {
             downloads[index].directory = Some(directory.clone());
         }
+        if let Some(temp_directory) = &request.temp_directory {
+            downloads[index].temp_directory = Some(temp_directory.clone());
+        }
         if let Some(category) = request.category {
             downloads[index].category = Some(category);
         }
@@ -279,6 +321,10 @@ impl DownloadHistoryService {
 
         downloads[index].scheduled_at = scheduled_time.clone();
         downloads[index].needs_review = false;
+        if let Some(creds) = &request.credentials {
+            downloads[index].credentials_override =
+                Some((creds.username.clone(), creds.password.clone().unwrap_or_default()));
+        }
 
         let queue_only = request.queue_only.unwrap_or(false);
         if queue_only {
@@ -287,6 +333,46 @@ impl DownloadHistoryService {
             downloads[index].status = DownloadStatus::Scheduled;
         } else {
             downloads[index].status = DownloadStatus::Queued;
+        }
+
+        if let Some(policy) = request.conflict_policy {
+            downloads[index].conflict_policy = Some(policy);
+            match policy {
+                FileConflictPolicy::Skip => {
+                    downloads[index].status = DownloadStatus::Skipped;
+                    downloads[index].speed = 0;
+                    downloads[index].notice = Some(
+                        "Download skipped because destination file already exists.".to_owned(),
+                    );
+                }
+                FileConflictPolicy::Cancel => {
+                    downloads[index].status = DownloadStatus::Cancelled;
+                    downloads[index].speed = 0;
+                    downloads[index].downloaded = 0;
+                    downloads[index].notice = Some(
+                        "Download cancelled due to destination conflict.".to_owned(),
+                    );
+                }
+                FileConflictPolicy::Rename => {
+                    if let Some(dir) = &downloads[index].directory {
+                        let dir_path = std::path::Path::new(dir);
+                        if dir_path.join(&downloads[index].filename).exists() {
+                            for idx in 1..=10000 {
+                                let cand = crate::domain::download::generate_indexed_filename(
+                                    &downloads[index].filename,
+                                    idx,
+                                );
+                                if !dir_path.join(&cand).exists() {
+                                    downloads[index].filename = cand;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                FileConflictPolicy::Overwrite => {}
+                FileConflictPolicy::Ask => {}
+            }
         }
 
         if let Err(error) = self.repository.save(&downloads) {
@@ -435,6 +521,30 @@ impl DownloadHistoryService {
         drop(downloads);
         self.publish_change();
         Ok(true)
+    }
+
+    pub fn update_download(
+        &self,
+        id: &str,
+        update: impl FnOnce(&mut DownloadRecord),
+    ) -> AppResult<()> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        let index = downloads
+            .iter()
+            .position(|download| download.id == id)
+            .ok_or_else(|| AppError::download("The download no longer exists."))?;
+        let previous = downloads[index].clone();
+        update(&mut downloads[index]);
+        if let Err(error) = self.repository.save(&downloads) {
+            downloads[index] = previous;
+            return Err(error);
+        }
+        drop(downloads);
+        self.publish_change();
+        Ok(())
     }
 
     pub fn notify_complete(&self, id: &str) -> AppResult<()> {

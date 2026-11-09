@@ -1,6 +1,6 @@
 {
   "name": "open-download-manager",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "description": "Open Download Manager desktop application built with Rust and Tauri",
   "repository": {
@@ -18,11 +18,13 @@
     "build": "tauri build",
     "build:mac": "tauri build --bundles dmg,app",
     "build:linux": "tauri build --bundles deb,appimage",
-    "build:win": "tauri build --bundles nsis",
+    "build:win": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
+    "build:win:arm64": "tauri build --target aarch64-pc-windows-msvc --bundles nsis",
     "clean": "cargo clean",
     "pack:extension": "bun scripts/pack-extension.mjs",
+    "pack:extension:firefox": "bun scripts/pack-extension.mjs",
     "test": "cargo test && bun run test:extension",
-    "test:extension": "bun test extension renderer"
+    "test:extension": "bun test ./extension ./renderer"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

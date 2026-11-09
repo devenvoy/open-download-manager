@@ -1,3 +1,18 @@
+// Created: 2026-10-24
+// Reason: Initial public release
+// Last updated: 2026-11-08
+// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
+// Reason: feat(clipboard): add optional clipboard link monitoring (Closes #33)
+// Reason: feat(proxy): add SOCKS5 proxy support and protocol-specific proxy settings (Closes #34)
+// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
+// Reason: feat(media): add opt-in advanced browser media adapter (Closes #38)
+// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
+// Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
+// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
+// Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Reason: feat(ui): provide solution flow dialog with steps to install yt-dlp and auto-resume YouTube downloads
+// Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
+
 "use strict";
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -18,6 +33,37 @@ if (integrationMode) document.title = "Browser integration";
 if (optionsMode) document.title = "Options";
 if (addMode) document.title = "Download File Info";
 if (schedulerMode) document.title = "Scheduler";
+
+let currentThemeSetting = "system";
+
+function getEffectiveTheme(themeSetting) {
+	if (themeSetting === "light" || themeSetting === "dark") {
+		return themeSetting;
+	}
+	return typeof window !== "undefined" &&
+		window.matchMedia &&
+		window.matchMedia("(prefers-color-scheme: dark)").matches
+		? "dark"
+		: "light";
+}
+
+function applyTheme(themeSetting = "system") {
+	currentThemeSetting = themeSetting || "system";
+	const effective = getEffectiveTheme(currentThemeSetting);
+	document.documentElement.setAttribute("data-theme", effective);
+	document.documentElement.setAttribute("data-theme-setting", currentThemeSetting);
+	document.documentElement.style.colorScheme = effective;
+}
+
+if (typeof window !== "undefined" && window.matchMedia) {
+	window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+		if (currentThemeSetting === "system") {
+			applyTheme("system");
+		}
+	});
+}
+
+applyTheme("system");
 let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },
 	selectedId = null,
 	selectionAnchorId = null,
@@ -179,6 +225,61 @@ function renderBrowserGrid(info) {
 	)
 		showBrowserDetail(selectedBrowserName);
 }
+function renderAdvancedIntegration(cap) {
+	if (!cap) return;
+	const badge = $("#advanced-integration-badge");
+	const banner = $("#advanced-integration-banner");
+	const msg = $("#advanced-integration-message");
+	const enableBtn = $("#advanced-enable-button");
+	const repairBtn = $("#advanced-repair-button");
+	const disableBtn = $("#advanced-disable-button");
+
+	if (!badge || !enableBtn) return;
+
+	const stateObj = cap.state || {};
+	const stateKind = typeof stateObj === "string" ? stateObj : stateObj.state;
+
+	badge.className = "advanced-integration-badge";
+	banner.hidden = true;
+	msg.textContent = "";
+
+	enableBtn.hidden = true;
+	enableBtn.disabled = false;
+	repairBtn.hidden = true;
+	disableBtn.hidden = true;
+
+	if (stateKind === "active") {
+		badge.textContent = "Active (Protected)";
+		badge.classList.add("active");
+		disableBtn.hidden = false;
+	} else if (stateKind === "degraded") {
+		badge.textContent = "Degraded (Rolled Back)";
+		badge.classList.add("degraded");
+		banner.hidden = false;
+		msg.textContent = `Health check or conflict occurred: ${stateObj.reason || "Operation degraded"}. Standard browser integration remains active.`;
+		repairBtn.hidden = false;
+		disableBtn.hidden = false;
+	} else if (stateKind === "unsupported") {
+		badge.textContent = "Unsupported";
+		badge.classList.add("unsupported");
+		banner.hidden = false;
+		msg.textContent = `Enhanced media integration is not supported on this platform: ${stateObj.reason || "Platform capability unavailable."}`;
+		enableBtn.hidden = false;
+		enableBtn.disabled = true;
+		enableBtn.title = "Enhanced media integration is not supported on this platform.";
+	} else {
+		badge.textContent = "Disabled";
+		enableBtn.hidden = false;
+	}
+}
+async function refreshAdvancedIntegration() {
+	try {
+		const cap = await api.getAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (e) {
+		console.warn("Could not load advanced integration capability:", e);
+	}
+}
 function showBrowserDetail(name) {
 	const browser = integrationBrowsers.find((item) => item.name === name);
 	if (!browser) return;
@@ -315,6 +416,7 @@ async function refreshIntegrationInfo(showErrors = false) {
 		const info = (await call("integration")) || state.integration;
 		state.integration = info;
 		renderBrowserGrid(info);
+		await refreshAdvancedIntegration();
 	} catch (problem) {
 		if (showErrors) {
 			$("#browser-setup-error").textContent = messageOf(problem);
@@ -324,6 +426,40 @@ async function refreshIntegrationInfo(showErrors = false) {
 		setupPolling = false;
 	}
 }
+
+$("#advanced-enable-button")?.addEventListener("click", async () => {
+	const confirmed = confirm(
+		"Enable Enhanced Media Integration?\n\nThis installs an opt-in platform adapter to observe player streams. Only selected and approved media requests are captured; unrelated web browsing traffic is never collected or persisted. A non-destructive health verification check will run automatically."
+	);
+	if (!confirmed) return;
+	try {
+		const cap = await api.enableAdvancedIntegration({ consent: true });
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
+
+$("#advanced-repair-button")?.addEventListener("click", async () => {
+	try {
+		const cap = await api.repairAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
+
+$("#advanced-disable-button")?.addEventListener("click", async () => {
+	try {
+		const cap = await api.disableAdvancedIntegration();
+		renderAdvancedIntegration(cap);
+	} catch (err) {
+		await refreshAdvancedIntegration();
+		alert(messageOf(err));
+	}
+});
 const setupPoll = setInterval(() => {
 	if (integrationMode) refreshIntegrationInfo();
 }, 3000);
@@ -391,17 +527,35 @@ renderDetails = function () {
 		element("span", "completed-icon", "✓"),
 		element(
 			"div",
-			"",
+			"completed-summary-text",
 			`Download complete\nDownloaded ${bytes(d.total || d.downloaded)} (${Math.round(d.total || d.downloaded || 0)} Bytes)`,
 		),
 	);
 	completedFields.url.value = d.url || "";
 	completedFields.path.value = d.path || "";
 	suppressCompletion.checked = state.settings.hideCompletionDialog === true;
+	fitWindowToContent("#details-dialog");
 };
 function numeric(value) {
 	const result = Number(value);
 	return Number.isFinite(result) && result > 0 ? result : 0;
+}
+function redactUrl(raw) {
+	if (!raw) return "";
+	try {
+		const u = new URL(raw);
+		if (u.protocol === "ftp:" && (u.username || u.password)) {
+			const port = u.port && u.port !== "21" ? `:${u.port}` : "";
+			return `ftp://******:******@${u.hostname}${port}${u.pathname}`;
+		}
+		u.username = "";
+		u.password = "";
+		u.search = "";
+		u.hash = "";
+		return u.href;
+	} catch {
+		return raw;
+	}
 }
 function statusOf(d) {
 	const value = String(d.status || "queued").toLowerCase();
@@ -450,6 +604,7 @@ function timeLeft(d) {
 	return (!d.total || d.estimated ? "≈ " : "") + duration(seconds);
 }
 function sizeLabel(d) {
+	if (statusOf(d) === "connecting" || statusOf(d) === "queued") return "Connecting…";
 	return numeric(d.total)
 		? (d.estimated ? "≈ " : "") + bytes(d.total)
 		: d.streamProgress?.estimatedBytes
@@ -477,10 +632,26 @@ function percentage(d) {
 function messageOf(error) {
 	return error?.message || String(error || "The operation failed.");
 }
-function notify(message, error = false) {
+function notify(message, error = false, options = {}) {
 	clearTimeout(toastTimer);
 	$("#toast-text").textContent = message;
-	$("#toast").dataset.error = String(error);
+	$("#toast").dataset.error = String(Boolean(error));
+
+	const actionBtn = $("#toast-action");
+	if (actionBtn) {
+		if (options.actionText && typeof options.onAction === "function") {
+			actionBtn.textContent = options.actionText;
+			actionBtn.onclick = () => {
+				$("#toast").hidden = true;
+				options.onAction();
+			};
+			actionBtn.hidden = false;
+		} else {
+			actionBtn.hidden = true;
+			actionBtn.onclick = null;
+		}
+	}
+
 	$("#toast").hidden = false;
 	toastTimer = setTimeout(
 		() => {
@@ -511,6 +682,9 @@ function acceptSnapshot(snapshot) {
 		integration: snapshot.integration || state.integration,
 		fileIcons: snapshot.fileIcons || state.fileIcons,
 	};
+	if (state.settings?.theme) {
+		applyTheme(state.settings.theme);
+	}
 	const valid = new Set(state.downloads.map((d) => d.id));
 	for (const id of selectedIds) if (!valid.has(id)) selectedIds.delete(id);
 	if (!valid.has(selectedId))
@@ -657,9 +831,9 @@ function rowFor(d) {
 	);
 	statusCell.title = d.error || names[status] || status;
 	const description =
-		d.description ||
-		d.error ||
-		d.notice ||
+		(status === "failed"
+			? (d.error || d.notice || d.description)
+			: (d.notice || d.description || d.error)) ||
 		(d.scheduledAt && status === "scheduled"
 			? `Starts ${date(d.scheduledAt)}`
 			: "");
@@ -831,20 +1005,104 @@ function showDialog(id) {
 	const dialog = $(id);
 	if (!dialog.open) dialog.showModal();
 }
+let chosenYouTubeFormat = null;
+let currentVideoChoices = [];
+
 function isYouTubePlaylistUrl(text) {
 	if (!text || typeof text !== "string") return false;
 	const trimmed = text.trim();
 	if (!/^https?:\/\//i.test(trimmed)) return false;
 	return /(?:youtube\.com\/(?:playlist\?list=|watch\?.*[?&]list=)|youtu\.be\/.*[?&]list=)([\w-]{10,64})/i.test(trimmed);
 }
+function isYouTubeVideoUrl(text) {
+	if (!text || typeof text !== "string") return false;
+	const trimmed = text.trim();
+	if (!/^https?:\/\//i.test(trimmed)) return false;
+	if (isYouTubePlaylistUrl(trimmed)) return false;
+	return /(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i.test(trimmed);
+}
+function fitWindowToContent(dialogSelector) {
+	if (!addMode && !progressMode) return;
+	requestAnimationFrame(() => {
+		const selector =
+			dialogSelector ||
+			(progressMode && $("#details-dialog")?.open
+				? "#details-dialog"
+				: "#add-dialog");
+		const dialog = $(selector);
+		if (!dialog) return;
+
+		let targetHeight = 0;
+		if (
+			dialog.id === "details-dialog" &&
+			dialog.classList.contains("is-complete")
+		) {
+			const panel = dialog.querySelector(".completed-panel");
+			if (panel) {
+				const style = window.getComputedStyle(panel);
+				let contentH =
+					parseFloat(style.paddingTop || 0) +
+					parseFloat(style.paddingBottom || 0);
+				for (const child of panel.children) {
+					if (child.hidden || window.getComputedStyle(child).display === "none")
+						continue;
+					const cs = window.getComputedStyle(child);
+					contentH +=
+						child.offsetHeight +
+						parseFloat(cs.marginTop || 0) +
+						parseFloat(cs.marginBottom || 0);
+				}
+				targetHeight = contentH + 8;
+			}
+		} else {
+			const form = dialog.querySelector("form");
+			const body = form
+				? form.querySelector(".dialog-body")
+				: dialog.querySelector(".dialog-body");
+			const footer = form
+				? form.querySelector(".dialog-footer")
+				: dialog.querySelector(".dialog-footer");
+			if (body && footer) {
+				const bodyStyle = window.getComputedStyle(body);
+				let bodyContentH =
+					parseFloat(bodyStyle.paddingTop || 0) +
+					parseFloat(bodyStyle.paddingBottom || 0);
+				for (const child of body.children) {
+					if (child.hidden || window.getComputedStyle(child).display === "none")
+						continue;
+					const cs = window.getComputedStyle(child);
+					bodyContentH +=
+						child.offsetHeight +
+						parseFloat(cs.marginTop || 0) +
+						parseFloat(cs.marginBottom || 0);
+				}
+				targetHeight = bodyContentH + footer.offsetHeight + 4;
+			} else if (dialog) {
+				targetHeight = dialog.scrollHeight;
+			}
+		}
+
+		if (targetHeight >= 180) {
+			call("resizeAuxiliaryWindow", {
+				height: Math.ceil(targetHeight),
+			}).catch(() => {});
+		}
+	});
+}
 function checkPlaylistUrl() {
-	const banner = $("#playlist-banner");
-	if (banner) {
-		banner.hidden = !isYouTubePlaylistUrl($("#download-urls").value);
-	}
+	const val = $("#download-urls")?.value || "";
+	const playlistBanner = $("#playlist-banner");
+	const videoBanner = $("#video-banner");
+	const isPlaylist = isYouTubePlaylistUrl(val);
+	const isVideo = isYouTubeVideoUrl(val);
+	if (playlistBanner) playlistBanner.hidden = !isPlaylist;
+	if (videoBanner) videoBanner.hidden = !isVideo;
+	fitWindowToContent("#add-dialog");
 }
 function openAdd(text = "", scheduled = "") {
 	pendingReviewId = null;
+	chosenYouTubeFormat = null;
+	currentVideoChoices = [];
 	$("#add-error").hidden = true;
 	$("#download-urls").value = text;
 	$("#download-urls").readOnly = false;
@@ -856,8 +1114,10 @@ function openAdd(text = "", scheduled = "") {
 	rememberInput.disabled = true;
 	$("#download-schedule").value = scheduled;
 	$("#add-directory").value = state.settings.defaultDirectory || "";
+	refreshQueuesUI();
 	showDialog("#add-dialog");
 	$("#download-urls").focus();
+	fitWindowToContent("#add-dialog");
 }
 async function openAddFromClipboard() {
 	openAdd(await call("clipboard"));
@@ -882,6 +1142,7 @@ function openReview(id) {
 	rememberInput.disabled = !$("#download-category").value;
 	$("#add-directory").value =
 		d.directory || state.settings.defaultDirectory || "";
+	fitWindowToContent("#add-dialog");
 }
 async function dismissReview() {
 	if (!pendingReviewId) return;
@@ -907,6 +1168,8 @@ function showDetails(id) {
 	}
 	document.body.classList.remove("review-window");
 	detailId = id;
+	const details = $("#connection-details");
+	call("resizeProgress", { expanded: !details?.hidden }).catch(() => {});
 	$("#detail-speed-limit").value = state.settings.speedLimitKbps || 0;
 	$("#notify-complete").checked = state.settings.notifyOnComplete !== false;
 	$("#reveal-complete").checked = state.settings.revealOnComplete === true;
@@ -926,8 +1189,11 @@ function renderDetails() {
 		content = $("#details-content");
 	$("#details-title").textContent =
 		`${percent !== null ? `${Math.floor(percent)}% ` : ""}${d.filename || "Download status"}`;
-	$("#transfer-source").textContent = d.url || "";
-	$("#transfer-source").title = d.url || "";
+	const isYouTube = d.transferKind === "sabr" || (d.url && (d.url.includes("googlevideo.com") || d.url.includes("youtube.com")));
+	const watchUrl = d.canonicalUrl || (d.referer && (d.referer.includes("youtube.com") || d.referer.includes("youtu.be")) ? d.referer : null);
+	const sourceAddress = (isYouTube && watchUrl) ? watchUrl : (d.url || d.referer || "");
+	$("#transfer-source").textContent = sourceAddress;
+	$("#transfer-source").title = d.url ? `${sourceAddress}\nStream: ${d.url}` : sourceAddress;
 	const names = {
 		completed: "Complete",
 		downloading: "Receiving data…",
@@ -963,6 +1229,22 @@ function renderDetails() {
 					: "Checking…",
 		],
 	];
+	if (d.referer && d.referer !== d.url) {
+		rows.push(["Referrer", d.referer]);
+	}
+	if (d.transferKind) {
+		const transferKindLabels = {
+			segmented_http: `Segmented HTTP (${d.connections || 1} connections)`,
+			single_http: "Single HTTP stream",
+			paired: "Paired audio & video streams",
+			sabr: "YouTube SABR streaming",
+			ytdlp: "yt-dlp fragment stream",
+			hls: "HLS segment stream",
+		};
+		if (transferKindLabels[d.transferKind]) {
+			rows.push(["Transfer type", transferKindLabels[d.transferKind]]);
+		}
+	}
 	if (numeric(d.duration))
 		rows.splice(1, 0, [
 			"Video duration",
@@ -987,9 +1269,38 @@ function renderDetails() {
 		? d.connectionsProgress
 		: [];
 	const bars = $("#segment-bars"),
-		map = $("#segment-map");
+		map = $("#segment-map"),
+		caption = document.querySelector(".connection-caption");
 	bars.replaceChildren();
 	map.replaceChildren();
+
+	const isSegmented = d.transferKind === "segmented_http";
+	const isPaired = d.transferKind === "paired" || d.kind === "paired";
+	const isHls = d.transferKind === "hls" || d.kind === "hls";
+
+	// Show per-range map bar ONLY for segmented HTTP downloads with multiple connections.
+	// Never display a duplicate overall bar for single stream, paired media, or SABR.
+	if (isSegmented && segments.length > 1) {
+		map.style.display = "flex";
+		if (caption) {
+			caption.style.display = "";
+			caption.textContent = "Start positions and download progress by connections";
+		}
+	} else {
+		map.style.display = "none";
+		if (caption) {
+			if (isPaired && segments.length > 0) {
+				caption.style.display = "";
+				caption.textContent = "Media tracks";
+			} else if (isHls && segments.length > 0) {
+				caption.style.display = "";
+				caption.textContent = "HLS download streams";
+			} else {
+				caption.style.display = "none";
+			}
+		}
+	}
+
 	for (let index = 0; index < segments.length; index++) {
 		const segment = segments[index];
 		const row = element("tr");
@@ -1000,29 +1311,96 @@ function renderDetails() {
 					(status === "downloading"
 						? "Receiving data…"
 						: names[status] || status);
+		const trackLabel = isPaired
+			? (index === 0 ? "Video" : index === 1 ? "Audio" : String(index + 1))
+			: String(index + 1);
 		row.append(
-			element("td", "", String(index + 1)),
+			element("td", "", trackLabel),
 			element("td", "", bytes(segment.downloaded)),
 			element("td", "", segmentStatus),
 		);
 		bars.append(row);
-		const bar = element("progress");
-		bar.max = 100;
-		const total = numeric(segment.total);
-		bar.value = total
-			? Math.min(100, (numeric(segment.downloaded) / total) * 100)
-			: 0;
-		bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
-		if (!total && status === "downloading") bar.removeAttribute("value");
-		map.append(bar);
+
+		if (isSegmented && segments.length > 1) {
+			const bar = element("progress");
+			bar.max = 100;
+			const total = numeric(segment.total);
+			bar.value = total
+				? Math.min(100, (numeric(segment.downloaded) / total) * 100)
+				: 0;
+			bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
+			if (!total && status === "downloading") bar.removeAttribute("value");
+			map.append(bar);
+		}
 	}
-	$("#segment-note").textContent = segments.length
-		? `${segments.length} connection(s)`
-		: status === "completed"
-			? "Download completed."
-			: "Connection progress appears when the transfer starts.";
-	$("#detail-error").textContent = d.error || "";
-	$("#detail-error").hidden = !d.error;
+	const noteText = isPaired
+		? (segments.length === 2 ? "2 tracks (Video + Audio)" : `${segments.length} track(s)`)
+		: isSegmented
+			? `${segments.length} connection(s)`
+			: segments.length > 1
+				? `${segments.length} connection(s)`
+				: "";
+	$("#segment-note").textContent = noteText;
+	const isError = (status === "error" || status === "failed");
+	const errorCard = $("#detail-error-card");
+	if (errorCard) {
+		errorCard.hidden = !isError;
+		if (isError) {
+			const errText = d.error || "Download failed or was interrupted.";
+			const isFfmpeg = /ffmpeg/i.test(errText);
+			const isYtdlp = /yt-dlp/i.test(errText);
+			const isExpired = /expired|HTTP 401|HTTP 403|HTTP 410/i.test(errText);
+			$("#detail-error-title").textContent = isFfmpeg
+				? "FFmpeg Assembly Required"
+				: isYtdlp
+					? "YouTube Media Tool Required"
+					: isExpired
+						? "Download Link Expired"
+						: "Download Interrupted";
+			$("#detail-error-summary").textContent = errText;
+			$("#detail-error-view-btn").textContent = (isYtdlp || isFfmpeg) ? "View Solution Steps…" : "View full details…";
+			$("#detail-error-view-btn").onclick = () => {
+				if (isYtdlp) {
+					openMediaToolDialog("yt-dlp", d.id);
+				} else if (isFfmpeg) {
+					openMediaToolDialog("ffmpeg", d.id);
+				} else {
+					openErrorDialog(d.id);
+				}
+			};
+			if (isYtdlp) {
+				$("#detail-error-retry-btn").textContent = "Install yt-dlp & Fix";
+				$("#detail-error-retry-btn").onclick = () => openMediaToolDialog("yt-dlp", d.id);
+			} else if (isFfmpeg) {
+				$("#detail-error-retry-btn").textContent = "Install FFmpeg & Fix";
+				$("#detail-error-retry-btn").onclick = () => openMediaToolDialog("ffmpeg", d.id);
+			} else {
+				$("#detail-error-retry-btn").textContent = "Retry download";
+				$("#detail-error-retry-btn").onclick = () => performAction(d, "resume");
+			}
+		}
+	}
+	const connDetails = $("#connection-details");
+	if (connDetails) {
+		connDetails.hidden = isError;
+	}
+
+	const isFfmpegError = Boolean(d.error && /ffmpeg is required/i.test(d.error));
+	const isYtdlpError = Boolean(d.error && /yt-dlp/i.test(d.error));
+	const toolBanner = $("#media-tool-fix-banner");
+	if (toolBanner) {
+		toolBanner.hidden = !isFfmpegError;
+	}
+	if ((isFfmpegError || isYtdlpError) && (status === "error" || status === "failed") && !d._mediaToolPrompted) {
+		d._mediaToolPrompted = true;
+		openMediaToolDialog(isYtdlpError ? "yt-dlp" : "ffmpeg", d.id);
+	} else if (d.error && (status === "error" || status === "failed") && !d._notified) {
+		d._notified = true;
+		notify(d.error, true, {
+			actionText: "View Details",
+			onAction: () => openErrorDialog(d.id),
+		});
+	}
 	$("#detail-open").disabled = status !== "completed";
 	$("#detail-resume").disabled = !canResume(d) || pending.has(d.id);
 	$("#detail-stop").disabled = !canPause(d) || pending.has(d.id);
@@ -1034,6 +1412,37 @@ function renderDetails() {
 		"is-complete",
 		status === "completed",
 	);
+	renderActionLedger(d);
+}
+function renderActionLedger(d) {
+	const container = $("#completion-action-history");
+	const retryBtn = $("#detail-retry-actions");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!d || !Array.isArray(d.actionLedger) || d.actionLedger.length === 0) {
+		container.innerHTML = "<p class='field-help' style='margin: 4px 0;'>No post-download actions recorded yet.</p>";
+		if (retryBtn) retryBtn.hidden = true;
+		return;
+	}
+	const list = document.createElement("ul");
+	list.style.listStyle = "none";
+	list.style.padding = "0";
+	list.style.margin = "4px 0";
+	for (const entry of d.actionLedger) {
+		const li = document.createElement("li");
+		li.style.padding = "3px 0";
+		li.style.fontSize = "12px";
+		const isSuccess = entry.status === "success";
+		const isFailed = entry.status === "failed";
+		const icon = isSuccess ? "✓" : isFailed ? "⚠️" : "ℹ️";
+		const color = isSuccess ? "#166534" : isFailed ? "#991b1b" : "#4b5563";
+		li.innerHTML = `<span style="color: ${color}; font-weight: bold;">${icon} ${entry.actionType}</span>: <span>${entry.status}</span> ${entry.message ? `— <em>${entry.message}</em>` : ""}`;
+		list.appendChild(li);
+	}
+	container.appendChild(list);
+	if (retryBtn) {
+		retryBtn.hidden = statusOf(d) !== "completed";
+	}
 }
 function setDetailTab(name) {
 	for (const tab of ["status", "speed", "completion"]) {
@@ -1056,17 +1465,794 @@ function setView(nextFilter, nextCategory = "") {
 	});
 	render();
 }
+function updateProxyFieldsState() {
+	const enabled = $("#proxy-enabled").checked;
+	const protocol = $("#proxy-protocol").value;
+	const isDirect = protocol === "direct";
+	const isSocks5 = protocol === "socks5";
+	const container = $("#proxy-fields");
+	if (container) {
+		container.classList.toggle("disabled", !enabled);
+	}
+	$("#proxy-protocol").disabled = !enabled;
+	$("#proxy-host").disabled = !enabled || isDirect;
+	$("#proxy-port").disabled = !enabled || isDirect;
+	$("#proxy-username").disabled = !enabled || isDirect;
+	$("#proxy-password").disabled = !enabled || isDirect;
+	$("#test-proxy-button").disabled = !enabled;
+
+	const dnsGroup = $("#proxy-dns-group");
+	if (dnsGroup) {
+		dnsGroup.style.display = isSocks5 ? "flex" : "none";
+		if ($("#proxy-resolve-dns-remotely")) {
+			$("#proxy-resolve-dns-remotely").disabled = !enabled || !isSocks5;
+		}
+	}
+}
+
+function resetProxyTestStatus() {
+	const statusEl = $("#proxy-test-status");
+	if (statusEl) {
+		statusEl.textContent = "";
+		statusEl.className = "proxy-test-status";
+	}
+}
+
+let currentDetectedProxyConfig = null;
+
+function formatProxyDisplay(proxy) {
+	if (!proxy || !proxy.enabled || proxy.protocol === "direct") {
+		return "Direct (No Proxy)";
+	}
+	const userPrefix = proxy.username ? `${proxy.username}@` : "";
+	return `${String(proxy.protocol || "http").toUpperCase()} ${userPrefix}${proxy.host}:${proxy.port}`;
+}
+
+function openProxyDiscoveryDialog(detected) {
+	currentDetectedProxyConfig = detected;
+	const dialog = $("#proxy-discovery-dialog");
+	if (!dialog) return;
+
+	// Source badge
+	const sourceBadge = $("#proxy-discovery-source-badge");
+	let sourceText = "System";
+	if (typeof detected.source === "string") {
+		sourceText = detected.source.charAt(0).toUpperCase() + detected.source.slice(1);
+	} else if (detected.source && typeof detected.source === "object") {
+		const key = Object.keys(detected.source)[0];
+		sourceText = detected.source[key] || "Browser";
+	}
+	if (sourceBadge) sourceBadge.textContent = sourceText;
+
+	// Mode badge
+	const modeBadge = $("#proxy-discovery-mode-badge");
+	const modeText =
+		detected.mode === "pac"
+			? "PAC Script"
+			: detected.mode === "manual"
+				? "Manual Proxy"
+				: "Direct Connection";
+	if (modeBadge) modeBadge.textContent = modeText;
+
+	// Auth badge & note
+	const authBadge = $("#proxy-discovery-auth-badge");
+	const authNote = $("#proxy-discovery-auth-note");
+	if (authBadge) authBadge.hidden = !detected.credentialsAvailable;
+	if (authNote) authNote.hidden = !detected.credentialsAvailable;
+
+	// PAC section
+	const pacSection = $("#proxy-discovery-pac-section");
+	const pacUrlEl = $("#proxy-discovery-pac-url");
+	if (detected.mode === "pac" && detected.pacUrl) {
+		if (pacSection) pacSection.hidden = false;
+		if (pacUrlEl) pacUrlEl.textContent = detected.pacUrl;
+	} else if (pacSection) {
+		pacSection.hidden = true;
+	}
+
+	// Routes list
+	const routesSection = $("#proxy-discovery-routes-section");
+	const routesList = $("#proxy-discovery-routes-list");
+	if (routesList) {
+		routesList.innerHTML = "";
+		if (Array.isArray(detected.routes) && detected.routes.length > 0) {
+			if (routesSection) routesSection.hidden = false;
+			for (const route of detected.routes) {
+				const li = document.createElement("li");
+				li.className = "proxy-route-item";
+				const textSpan = document.createElement("span");
+				textSpan.textContent = `${route.protocol.toUpperCase()}: ${route.host}:${route.port}`;
+				const badgeSpan = document.createElement("span");
+				badgeSpan.className = `proxy-route-badge ${route.supported ? "supported" : "unsupported"}`;
+				badgeSpan.textContent = route.supported
+					? "Supported"
+					: route.reason || "Unsupported";
+				li.appendChild(textSpan);
+				li.appendChild(badgeSpan);
+				routesList.appendChild(li);
+			}
+		} else if (routesSection) {
+			routesSection.hidden = detected.mode === "pac";
+		}
+	}
+
+	// Diff / Preview
+	const currentProxy = {
+		enabled: $("#proxy-enabled")?.checked === true,
+		protocol: $("#proxy-protocol")?.value || "http",
+		host: $("#proxy-host")?.value?.trim() || "",
+		port: Number($("#proxy-port")?.value) || 8080,
+		username: $("#proxy-username")?.value?.trim() || null,
+	};
+	const currentEl = $("#proxy-diff-current");
+	if (currentEl) currentEl.textContent = formatProxyDisplay(currentProxy);
+
+	const diffDiscovered = $("#proxy-diff-discovered");
+	if (diffDiscovered) {
+		if (detected.importSettings) {
+			diffDiscovered.textContent = formatProxyDisplay(detected.importSettings);
+		} else if (detected.mode === "pac") {
+			diffDiscovered.textContent = "PAC Script (Auto-routing unavailable)";
+		} else {
+			diffDiscovered.textContent = "Direct (No Proxy)";
+		}
+	}
+
+	// Unsupported warnings
+	const unsuppSection = $("#proxy-discovery-unsupported-section");
+	const unsuppList = $("#proxy-discovery-unsupported-list");
+	if (unsuppList) {
+		unsuppList.innerHTML = "";
+		if (
+			Array.isArray(detected.unsupportedFields) &&
+			detected.unsupportedFields.length > 0
+		) {
+			if (unsuppSection) unsuppSection.hidden = false;
+			for (const field of detected.unsupportedFields) {
+				const item = document.createElement("div");
+				item.textContent = `• ${field}`;
+				unsuppList.appendChild(item);
+			}
+		} else if (unsuppSection) {
+			unsuppSection.hidden = true;
+		}
+	}
+
+	// Error & import button state
+	const errorEl = $("#proxy-discovery-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	const importBtn = $("#proxy-discovery-import-btn");
+	if (importBtn) {
+		importBtn.disabled = !detected.canImport || !detected.importSettings;
+		importBtn.textContent = "Import Settings";
+	}
+
+	showDialog("#proxy-discovery-dialog");
+}
+
+let optionsConnectionOverrides = [];
+
+function renderSiteOverrides() {
+	const container = $("#site-overrides-list");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!Array.isArray(optionsConnectionOverrides) || optionsConnectionOverrides.length === 0) {
+		const empty = document.createElement("div");
+		empty.className = "field-help";
+		empty.textContent = "No site exceptions configured.";
+		container.appendChild(empty);
+		return;
+	}
+	optionsConnectionOverrides.forEach((rule, index) => {
+		const row = document.createElement("div");
+		row.className = "site-override-row";
+
+		const patternSpan = document.createElement("span");
+		patternSpan.className = "site-override-pattern";
+		patternSpan.textContent = rule.hostPattern;
+
+		const connsSpan = document.createElement("span");
+		connsSpan.className = "site-override-conns";
+		connsSpan.textContent = `${rule.connections} conn${rule.connections === 1 ? "" : "s"}`;
+
+		const removeBtn = document.createElement("button");
+		removeBtn.type = "button";
+		removeBtn.className = "small-button remove-override-button";
+		removeBtn.dataset.index = index;
+		removeBtn.textContent = "Remove";
+
+		row.appendChild(patternSpan);
+		row.appendChild(connsSpan);
+		row.appendChild(removeBtn);
+		container.appendChild(row);
+	});
+}
+
+function updateWindowLimitFieldsState() {
+	const enabled = $("#window-limit-enabled")?.checked === true;
+	const container = $("#window-limit-fields");
+	if (container) {
+		container.classList.toggle("disabled", !enabled);
+	}
+	if ($("#window-limit-max-mb")) $("#window-limit-max-mb").disabled = !enabled;
+	if ($("#window-limit-hours")) $("#window-limit-hours").disabled = !enabled;
+}
+
 function openSettings() {
 	const settings = state.settings;
+	if ($("#app-theme")) {
+		$("#app-theme").value = settings.theme || "system";
+	}
+	optionsCategoryDirectories = { ...(settings.categoryDirectories || {}) };
+	const currentCat = $("#options-category-select")?.value || "Archives";
+	if ($("#category-directory")) {
+		$("#category-directory").value = optionsCategoryDirectories[currentCat] || "";
+	}
+	if ($("#temporary-directory")) {
+		$("#temporary-directory").value = settings.temporaryDirectory || "";
+	}
 	$("#start-with-windows").checked = settings.startWithWindows !== false;
+	const clipboardMonitoring = settings.clipboardMonitoring || {};
+	if ($("#clipboard-monitoring-enabled")) {
+		$("#clipboard-monitoring-enabled").checked = clipboardMonitoring.enabled === true;
+		$("#clipboard-auto-enqueue").checked = clipboardMonitoring.autoEnqueue === true;
+		$("#clipboard-auto-enqueue").disabled = !$("#clipboard-monitoring-enabled").checked;
+	}
 	$("#default-directory").value = settings.defaultDirectory || "";
 	$("#max-concurrent").value = settings.maxConcurrent || 3;
 	$("#connections").value = settings.connections || 8;
 	$("#speed-limit").value = settings.speedLimitKbps || 0;
+
+	optionsConnectionOverrides = Array.isArray(settings.connectionOverrides)
+		? [...settings.connectionOverrides]
+		: [];
+	renderSiteOverrides();
+
+	const windowLimit = settings.windowLimit || {};
+	if ($("#window-limit-enabled")) {
+		$("#window-limit-enabled").checked = windowLimit.enabled === true;
+		$("#window-limit-max-mb").value = windowLimit.maxBytes
+			? Math.round(windowLimit.maxBytes / (1024 * 1024))
+			: 2048;
+		$("#window-limit-hours").value = windowLimit.windowHours || 12;
+		updateWindowLimitFieldsState();
+
+		const statusEl = $("#window-limit-status");
+		if (statusEl) {
+			if (windowLimit.enabled) {
+				const currentMb = ((windowLimit.currentBytes || 0) / (1024 * 1024)).toFixed(1);
+				const maxMb = ((windowLimit.maxBytes || 0) / (1024 * 1024)).toFixed(0);
+				let text = `Current usage: ${currentMb} / ${maxMb} MB in rolling window.`;
+				if (windowLimit.stoppedUntil) {
+					text += ` (Quota exceeded; auto-resumes at ${windowLimit.stoppedUntil})`;
+				}
+				statusEl.textContent = text;
+			} else {
+				statusEl.textContent = "";
+			}
+		}
+	}
+
+	const proxy = settings.proxy || {};
+	$("#proxy-enabled").checked = proxy.enabled === true;
+	$("#proxy-protocol").value = proxy.protocol || "http";
+	$("#proxy-host").value = proxy.host || "";
+	$("#proxy-port").value = proxy.port || 8080;
+	$("#proxy-username").value = proxy.username || "";
+	$("#proxy-password").value = proxy.password || "";
+	if ($("#proxy-resolve-dns-remotely")) {
+		$("#proxy-resolve-dns-remotely").checked = proxy.resolveDnsRemotely === true;
+	}
+	updateProxyFieldsState();
+
+	const capturePolicy = settings.capturePolicy || {};
+	$("#capture-enabled").checked = capturePolicy.enabled !== false;
+	$("#capture-mode").value = capturePolicy.confirmationMode || "askForUnknown";
+	$("#capture-file-types").value = Array.isArray(capturePolicy.fileTypes) ? capturePolicy.fileTypes.join(" ").toUpperCase() : "";
+	$("#capture-excluded-hosts").value = Array.isArray(capturePolicy.excludedHosts) ? capturePolicy.excludedHosts.join(", ") : "";
+	$("#capture-excluded-addresses").value = Array.isArray(capturePolicy.excludedAddresses) ? capturePolicy.excludedAddresses.join(", ") : "";
+
+	const actions = Array.isArray(settings.completionActions) ? settings.completionActions : [];
+	const soundAction = actions.find((a) => a.type === "playSound");
+	$("#settings-play-sound").checked = Boolean(soundAction);
+	$("#settings-sound-file").value = soundAction?.soundFile || "";
+
+	const scanAction = actions.find((a) => a.type === "antivirusScan");
+	$("#settings-scan-antivirus").checked = Boolean(scanAction);
+	$("#settings-scanner-executable").value = scanAction?.executable || "";
+	$("#settings-scanner-args").value = Array.isArray(scanAction?.arguments) ? scanAction.arguments.join(" ") : "";
+
+	const cmdAction = actions.find((a) => a.type === "executeCommand");
+	$("#settings-post-command").checked = Boolean(cmdAction);
+	$("#settings-command-executable").value = cmdAction?.executable || "";
+	$("#settings-command-args").value = Array.isArray(cmdAction?.arguments) ? cmdAction.arguments.join(" ") : "";
+
+	const powerAction = actions.find((a) => a.type === "powerAction");
+	$("#settings-power-action").value = powerAction?.kind || "none";
+	$("#settings-power-confirm").checked = powerAction ? powerAction.confirmed !== false : true;
+
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+
 	$("#settings-error").hidden = true;
+	refreshMediaToolsStatus();
+	refreshCredentialRules();
 	showDialog("#settings-dialog");
 }
+async function refreshCredentialRules() {
+	if (!api.listCredentialRules) return;
+	const listEl = $("#credentials-list");
+	if (!listEl) return;
+	try {
+		const rules = await api.listCredentialRules();
+		listEl.innerHTML = "";
+		if (!rules || rules.length === 0) {
+			const tr = document.createElement("tr");
+			tr.innerHTML = '<td colspan="7" style="text-align:center; color: var(--text-muted, #888); padding: 8px;">No stored site credentials.</td>';
+			listEl.appendChild(tr);
+			return;
+		}
+		for (const rule of rules) {
+			const tr = document.createElement("tr");
+			tr.style.borderBottom = "1px solid var(--border-color, #e5e7eb)";
+
+			const tdScheme = document.createElement("td");
+			tdScheme.style.padding = "4px";
+			tdScheme.textContent = rule.scheme;
+
+			const tdHost = document.createElement("td");
+			tdHost.style.padding = "4px";
+			tdHost.style.fontWeight = "600";
+			tdHost.textContent = rule.host;
+
+			const tdPort = document.createElement("td");
+			tdPort.style.padding = "4px";
+			tdPort.textContent = rule.port ? String(rule.port) : "default";
+
+			const tdPath = document.createElement("td");
+			tdPath.style.padding = "4px";
+			tdPath.textContent = rule.pathPrefix;
+
+			const tdUser = document.createElement("td");
+			tdUser.style.padding = "4px";
+			tdUser.textContent = rule.username;
+
+			const tdPass = document.createElement("td");
+			tdPass.style.padding = "4px";
+			tdPass.textContent = "******";
+
+			const tdAction = document.createElement("td");
+			tdAction.style.padding = "4px";
+			const delBtn = document.createElement("button");
+			delBtn.type = "button";
+			delBtn.className = "small-button delete-cred-btn";
+			delBtn.textContent = "Delete";
+			delBtn.style.color = "#dc2626";
+			delBtn.dataset.id = rule.id;
+			tdAction.appendChild(delBtn);
+
+			tr.appendChild(tdScheme);
+			tr.appendChild(tdHost);
+			tr.appendChild(tdPort);
+			tr.appendChild(tdPath);
+			tr.appendChild(tdUser);
+			tr.appendChild(tdPass);
+			tr.appendChild(tdAction);
+
+			listEl.appendChild(tr);
+		}
+	} catch (e) {
+		console.error("Could not refresh credentials list:", e);
+	}
+}
+async function refreshMediaToolsStatus() {
+	if (!api.getMediaToolsStatus) return;
+	try {
+		const statuses = await api.getMediaToolsStatus();
+		for (const st of statuses) {
+			const type = st.toolType || st.tool_type;
+			const isAvail = st.isAvailable || st.is_available;
+			const src = st.source || "";
+			const label = $(`#${type}-status`);
+			const btn = $(`#install-${type}-btn`);
+			if (label) {
+				if (isAvail) {
+					label.textContent = `Installed (${src || "ready"})`;
+					label.style.color = "#166534";
+				} else {
+					label.textContent = "Not installed";
+					label.style.color = "#991b1b";
+				}
+			}
+			if (btn) {
+				btn.textContent = isAvail ? "Reinstall" : "Install";
+				btn.disabled = false;
+			}
+		}
+	} catch (e) {
+		console.error("Could not refresh media tools status:", e);
+	}
+}
+async function installMediaToolAction(tool) {
+	const btn = $(`#install-${tool}-btn`);
+	const label = $(`#${tool}-status`);
+	if (btn) { btn.disabled = true; btn.textContent = "Installing…"; }
+	if (label) { label.textContent = "Downloading & installing…"; label.style.color = "#0369a1"; }
+	try {
+		await api.installMediaTool(tool);
+		notify(`${tool} installed successfully.`);
+		await refreshMediaToolsStatus();
+	} catch (err) {
+		notify(`Failed to install ${tool}: ${messageOf(err)}`, true);
+		if (btn) btn.disabled = false;
+		await refreshMediaToolsStatus();
+	}
+}
+let activeMediaToolType = "ffmpeg";
+let activeMediaToolDownloadId = null;
+
+function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
+	activeMediaToolType = tool === "yt-dlp" ? "yt-dlp" : "ffmpeg";
+	activeMediaToolDownloadId = downloadId || state.selectedId || null;
+	const dialog = $("#media-tool-dialog");
+	if (!dialog) return;
+
+	const descEl = $("#media-tool-dialog-desc");
+	const helpEl = $("#media-tool-dialog-help");
+	const headingEl = $("#media-tool-dialog-heading");
+	const titleEl = $("#media-tool-title");
+	const confirmBtn = $("#media-tool-confirm-btn");
+
+	if (activeMediaToolType === "yt-dlp") {
+		if (titleEl) titleEl.textContent = "YouTube Decryption Tool Required";
+		if (headingEl) headingEl.textContent = "yt-dlp is required to download this YouTube stream";
+		if (descEl) {
+			descEl.innerHTML = `
+				<div class="media-tool-steps">
+					<p style="margin: 0 0 6px 0;"><strong>Why this happened:</strong> YouTube cut off the direct browser stream due to signature encryption (Po-Token/SABR).</p>
+					<p style="margin: 0 0 4px 0;"><strong>Solution Steps:</strong></p>
+					<ol style="margin: 0 0 4px 18px; padding: 0;">
+						<li>Click below to automatically install <strong>yt-dlp</strong> into the sandboxed tools folder.</li>
+						<li>Open Download Manager will automatically decrypt the YouTube stream and solve signatures.</li>
+						<li>Your download will resume immediately once installation finishes.</li>
+					</ol>
+				</div>
+			`;
+		}
+		if (helpEl) helpEl.textContent = "No terminal commands or manual setup needed. Install now?";
+		if (confirmBtn) confirmBtn.textContent = "Install yt-dlp & Resume Download";
+	} else {
+		if (titleEl) titleEl.textContent = "FFmpeg Assembly Required";
+		if (headingEl) headingEl.textContent = "FFmpeg is required to combine video and audio";
+		if (descEl) {
+			descEl.innerHTML = `
+				<div class="media-tool-steps">
+					<p style="margin: 0 0 6px 0;"><strong>Why this happened:</strong> This video was streamed as separate high-definition video and audio tracks.</p>
+					<p style="margin: 0 0 4px 0;"><strong>Solution Steps:</strong></p>
+					<ol style="margin: 0 0 4px 18px; padding: 0;">
+						<li>Click below to install <strong>FFmpeg</strong> into the sandboxed tools folder.</li>
+						<li>Open Download Manager will assemble video and audio into a complete playable file.</li>
+						<li>Assembly will start automatically once installation finishes.</li>
+					</ol>
+				</div>
+			`;
+		}
+		if (helpEl) helpEl.textContent = "Would you like Open Download Manager to automatically download and install FFmpeg now?";
+		if (confirmBtn) confirmBtn.textContent = "Install FFmpeg & Assemble";
+	}
+
+	if (confirmBtn) confirmBtn.disabled = false;
+	const cancelBtn = $("#media-tool-cancel-btn");
+	if (cancelBtn) cancelBtn.disabled = false;
+	const progressArea = $("#media-tool-dialog-progress");
+	if (progressArea) progressArea.hidden = true;
+	const errorEl = $("#media-tool-dialog-error");
+	if (errorEl) errorEl.hidden = true;
+
+	showDialog("#media-tool-dialog");
+	if (typeof fitWindowToContent === "function") {
+		fitWindowToContent("#media-tool-dialog");
+	}
+}
+
+let activeErrorDownloadId = null;
+
+function openErrorDialog(downloadId = null) {
+	const targetId = downloadId || state.selectedId;
+	const d = state.downloads.find((item) => item.id === targetId);
+	if (!d) return;
+
+	activeErrorDownloadId = d.id;
+	const errorDialog = $("#error-dialog");
+	if (!errorDialog) return;
+
+	const errText = d.error || "The download encountered an unrecoverable error.";
+	const isFfmpeg = /ffmpeg/i.test(errText);
+	const isYtdlp = /yt-dlp/i.test(errText);
+	const isPremature = /prematurely|interrupted|truncated|stream ended/i.test(errText);
+
+	let title = "Download Error";
+	let heading = "Download could not be completed";
+	let suggestion = "";
+	let actionText = "";
+	let onAction = null;
+
+	if (isFfmpeg) {
+		title = "Media Assembly Required";
+		heading = "FFmpeg is required to combine video and audio tracks";
+		suggestion = "Install FFmpeg to automatically assemble the downloaded video and audio tracks into a single playable MP4.";
+		actionText = "Install FFmpeg & Assemble";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openMediaToolDialog("ffmpeg", d.id);
+		};
+	} else if (isYtdlp) {
+		title = "YouTube Stream Decryption Required";
+		heading = "yt-dlp is required to process this encrypted YouTube stream";
+		suggestion = "YouTube blocked direct streaming. Install yt-dlp to decrypt signatures and automatically resume downloading the full video.";
+		actionText = "Install yt-dlp & Resume";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openMediaToolDialog("yt-dlp", d.id);
+		};
+	} else if (isPremature) {
+		title = "Stream Interrupted";
+		heading = "The connection was interrupted before all data was received";
+		suggestion = "Click Retry to re-connect and resume downloading the remaining data.";
+		actionText = "Retry Now";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	} else if (/expired|HTTP 401|HTTP 403|HTTP 410/i.test(errText)) {
+		title = "Link or Session Expired";
+		heading = "The download link expired or authentication token timed out";
+		suggestion = "Open the media page in your browser to refresh the link automatically, or click Resume after refreshing.";
+		actionText = "Resume Transfer";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	} else if (/proxy/i.test(errText)) {
+		title = "Proxy Connection Failed";
+		heading = "Could not reach the host through the configured proxy";
+		suggestion = "Check your proxy host, port, and credentials in Options.";
+		actionText = "Check Proxy Settings";
+		onAction = () => {
+			hideDialog("#error-dialog");
+			openSettings();
+		};
+	}
+
+	$("#error-dialog-title").textContent = title;
+	$("#error-dialog-heading").textContent = heading;
+	$("#error-dialog-description").textContent = errText;
+
+	const suggEl = $("#error-dialog-fix-suggestion");
+	const suggTextEl = $("#error-dialog-suggestion-text");
+	const suggActionBtn = $("#error-dialog-suggestion-action");
+	if (suggEl && suggestion) {
+		suggEl.hidden = false;
+		suggTextEl.textContent = suggestion;
+		if (actionText && onAction) {
+			suggActionBtn.textContent = actionText;
+			suggActionBtn.onclick = onAction;
+			suggActionBtn.hidden = false;
+		} else {
+			suggActionBtn.hidden = true;
+		}
+	} else if (suggEl) {
+		suggEl.hidden = true;
+	}
+
+	// Technical details
+	const techPre = $("#error-dialog-tech-text");
+	const diagnosticData = [
+		`File: ${d.filename || "unknown"}`,
+		`URL: ${redactUrl(d.url) || "unknown"}`,
+		`Kind: ${d.kind || "standard"}`,
+		`Downloaded: ${d.downloaded || 0} bytes`,
+		`Total: ${d.total || "unknown"} bytes`,
+		`Status: ${d.status || "error"}`,
+		`Error: ${errText}`,
+		`Timestamp: ${new Date().toISOString()}`,
+	].join("\n");
+	if (techPre) {
+		techPre.textContent = diagnosticData;
+	}
+
+	const copyBtn = $("#error-dialog-copy-btn");
+	if (copyBtn) {
+		copyBtn.onclick = async () => {
+			try {
+				if (navigator.clipboard) {
+					await navigator.clipboard.writeText(diagnosticData);
+				}
+				notify("Diagnostic details copied to clipboard.");
+			} catch (_) {
+				notify("Could not copy to clipboard.", true);
+			}
+		};
+	}
+
+	const retryBtn = $("#error-dialog-retry-btn");
+	if (retryBtn) {
+		retryBtn.onclick = () => {
+			hideDialog("#error-dialog");
+			performAction(d, "resume");
+		};
+	}
+
+	showDialog("#error-dialog");
+}
+let cachedQueues = [];
+
+async function refreshQueuesUI() {
+	try {
+		cachedQueues = await call("listQueues");
+	} catch (e) {
+		console.warn("Failed to load queues:", e);
+		cachedQueues = [];
+	}
+
+	// Populate Add Dialog select
+	const queueSelect = $("#download-queue");
+	if (queueSelect && Array.isArray(cachedQueues)) {
+		const prevVal = queueSelect.value || "default";
+		queueSelect.innerHTML = "";
+		for (const q of cachedQueues) {
+			const opt = document.createElement("option");
+			opt.value = q.id;
+			opt.textContent = q.name + (q.id === "default" ? " (Default)" : "");
+			queueSelect.appendChild(opt);
+		}
+		if ([...queueSelect.options].some((o) => o.value === prevVal)) {
+			queueSelect.value = prevVal;
+		}
+	}
+
+	// Populate Scheduler queues panel
+	const container = $("#queues-list-container");
+	if (!container) return;
+	container.innerHTML = "";
+	if (!Array.isArray(cachedQueues) || cachedQueues.length === 0) {
+		container.innerHTML = "<p class='field-help'>No queues available.</p>";
+		return;
+	}
+
+	for (const q of cachedQueues) {
+		const card = document.createElement("div");
+		card.className = "queue-card";
+
+		const info = document.createElement("div");
+		info.className = "queue-card-info";
+
+		const header = document.createElement("div");
+		header.className = "queue-card-header";
+		const nameSpan = document.createElement("span");
+		nameSpan.textContent = q.name + (q.id === "default" ? " (Default)" : "");
+		const badge = document.createElement("span");
+		badge.className = `queue-badge ${q.running ? "running" : "paused"}`;
+		badge.textContent = q.running ? "Running" : "Paused";
+		header.append(nameSpan, badge);
+
+		const meta = document.createElement("div");
+		meta.className = "queue-card-meta";
+		const itemCount = Array.isArray(q.itemIds) ? q.itemIds.length : 0;
+		const activeLimit = `Max ${q.concurrencyLimit} active`;
+		const speed =
+			q.speedLimitKbps > 0 ? `${q.speedLimitKbps} KB/s` : "Unlimited speed";
+		let schedInfo = "No schedule";
+		if (q.schedule && q.schedule.enabled) {
+			schedInfo = `Schedule: ${q.schedule.startTime}${q.schedule.stopTime ? " - " + q.schedule.stopTime : ""}`;
+			if (q.schedule.nextRunAt) {
+				schedInfo += ` (Next: ${date(q.schedule.nextRunAt)})`;
+			}
+		}
+		meta.textContent = `${itemCount} downloads • ${activeLimit} • ${speed} • ${schedInfo}`;
+		info.append(header, meta);
+
+		const actions = document.createElement("div");
+		actions.className = "queue-card-actions";
+
+		const toggleBtn = document.createElement("button");
+		toggleBtn.type = "button";
+		toggleBtn.className = "small-button";
+		toggleBtn.textContent = q.running ? "Pause" : "Start";
+		toggleBtn.onclick = async () => {
+			if (q.running) {
+				await call("pauseQueue", { id: q.id });
+			} else {
+				await call("startQueue", { id: q.id });
+			}
+			await refreshQueuesUI();
+			await refresh();
+		};
+		actions.appendChild(toggleBtn);
+
+		const editBtn = document.createElement("button");
+		editBtn.type = "button";
+		editBtn.className = "small-button";
+		editBtn.textContent = "Edit…";
+		editBtn.onclick = () => openQueueEditDialog(q);
+		actions.appendChild(editBtn);
+
+		if (q.id !== "default") {
+			const deleteBtn = document.createElement("button");
+			deleteBtn.type = "button";
+			deleteBtn.className = "small-button";
+			deleteBtn.textContent = "Delete";
+			deleteBtn.onclick = async () => {
+				if (
+					confirm(
+						`Delete queue "${q.name}"? Downloads will be moved to the Default Queue.`,
+					)
+				) {
+					await call("deleteQueue", {
+						id: q.id,
+						disposition: "moveToDefault",
+					});
+					await refreshQueuesUI();
+					await refresh();
+				}
+			};
+			actions.appendChild(deleteBtn);
+		}
+
+		card.append(info, actions);
+		container.appendChild(card);
+	}
+}
+
+function openQueueEditDialog(queue = null) {
+	const errorEl = $("#queue-edit-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	$("#queue-edit-id").value = queue ? queue.id : "";
+	$("#queue-edit-title").textContent = queue
+		? `Edit Queue: ${queue.name}`
+		: "Create Download Queue";
+	$("#queue-edit-name").value = queue ? queue.name : "";
+	$("#queue-edit-name").disabled = queue ? queue.id === "default" : false;
+	$("#queue-edit-concurrency").value = queue ? queue.concurrencyLimit : 2;
+	$("#queue-edit-speed").value = queue ? queue.speedLimitKbps : 0;
+
+	const sched = queue ? queue.schedule : null;
+	const schedEnabled = Boolean(sched && sched.enabled);
+	$("#queue-edit-schedule-enabled").checked = schedEnabled;
+	const schedFields = $("#queue-schedule-fields");
+	if (schedFields) schedFields.hidden = !schedEnabled;
+
+	if (sched) {
+		$("#queue-edit-start-time").value = sched.startTime || "22:00";
+		$("#queue-edit-stop-time").value = sched.stopTime || "06:00";
+		$("#queue-edit-missed-policy").value =
+			sched.missedRunPolicy || "runOnStartup";
+		const days = Array.isArray(sched.daysOfWeek)
+			? sched.daysOfWeek
+			: [1, 2, 3, 4, 5, 6, 7];
+		$$("input[name=q-day]").forEach((cb) => {
+			cb.checked = days.includes(Number(cb.value));
+		});
+	} else {
+		$("#queue-edit-start-time").value = "22:00";
+		$("#queue-edit-stop-time").value = "06:00";
+		$("#queue-edit-missed-policy").value = "runOnStartup";
+		$$("input[name=q-day]").forEach((cb) => {
+			cb.checked = [1, 2, 3, 4, 5].includes(Number(cb.value));
+		});
+	}
+
+	showDialog("#queue-edit-dialog");
+}
+
 function renderScheduler() {
+	refreshQueuesUI();
 	const downloads = state.downloads
 		.filter((d) => statusOf(d) === "scheduled")
 		.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
@@ -1161,6 +2347,20 @@ $("#detail-open").addEventListener("click", () =>
 $("#detail-folder").addEventListener("click", () =>
 	performAction(detailDownload(), "reveal"),
 );
+$("#detail-retry-actions")?.addEventListener("click", async () => {
+	if (!detailId) return;
+	try {
+		$("#detail-retry-actions").disabled = true;
+		await call("retryDownloadActions", { id: detailId });
+		await refresh();
+		renderDetails();
+		notify("Post-download actions re-executed.");
+	} catch (e) {
+		notify(messageOf(e), true);
+	} finally {
+		$("#detail-retry-actions").disabled = false;
+	}
+});
 $("#detail-stop").addEventListener("click", () =>
 	performAction(detailDownload(), "pause"),
 );
@@ -1219,6 +2419,98 @@ $("#completion-form").addEventListener("submit", async (event) => {
 });
 $("#scheduler-start").addEventListener("click", commands.resumeAll);
 $("#scheduler-stop").addEventListener("click", commands.pauseAll);
+$("#tab-scheduler-queues")?.addEventListener("click", () => {
+	$("#tab-scheduler-queues").classList.add("active-tab");
+	$("#tab-scheduler-queues").setAttribute("aria-selected", "true");
+	$("#tab-scheduler-oneoff")?.classList.remove("active-tab");
+	$("#tab-scheduler-oneoff")?.setAttribute("aria-selected", "false");
+	const qPanel = $("#scheduler-queues-panel");
+	if (qPanel) qPanel.hidden = false;
+	const oPanel = $("#scheduler-oneoff-panel");
+	if (oPanel) oPanel.hidden = true;
+	refreshQueuesUI();
+});
+$("#tab-scheduler-oneoff")?.addEventListener("click", () => {
+	$("#tab-scheduler-oneoff").classList.add("active-tab");
+	$("#tab-scheduler-oneoff").setAttribute("aria-selected", "true");
+	$("#tab-scheduler-queues")?.classList.remove("active-tab");
+	$("#tab-scheduler-queues")?.setAttribute("aria-selected", "false");
+	const oPanel = $("#scheduler-oneoff-panel");
+	if (oPanel) oPanel.hidden = false;
+	const qPanel = $("#scheduler-queues-panel");
+	if (qPanel) qPanel.hidden = true;
+});
+$("#queue-create-btn")?.addEventListener("click", () => {
+	openQueueEditDialog(null);
+});
+$("#queue-edit-close-btn")?.addEventListener("click", () => {
+	$("#queue-edit-dialog")?.close();
+});
+$("#queue-edit-cancel-btn")?.addEventListener("click", () => {
+	$("#queue-edit-dialog")?.close();
+});
+$("#queue-edit-schedule-enabled")?.addEventListener("change", (e) => {
+	const fields = $("#queue-schedule-fields");
+	if (fields) fields.hidden = !e.target.checked;
+});
+$("#queue-edit-form")?.addEventListener("submit", async (e) => {
+	e.preventDefault();
+	const errorEl = $("#queue-edit-error");
+	if (errorEl) {
+		errorEl.hidden = true;
+		errorEl.textContent = "";
+	}
+	const id = $("#queue-edit-id")?.value.trim() || null;
+	const name = $("#queue-edit-name")?.value.trim() || "";
+	const concurrencyLimit = Number($("#queue-edit-concurrency")?.value || 2);
+	const speedLimitKbps = Number($("#queue-edit-speed")?.value || 0);
+
+	const schedEnabled = $("#queue-edit-schedule-enabled")?.checked;
+	let schedule = null;
+	if (schedEnabled) {
+		const startTime = $("#queue-edit-start-time")?.value || "22:00";
+		const stopTime = $("#queue-edit-stop-time")?.value || null;
+		const missedRunPolicy = $("#queue-edit-missed-policy")?.value || "runOnStartup";
+		const days = [];
+		$$("input[name=q-day]:checked").forEach((cb) => {
+			days.push(Number(cb.value));
+		});
+		schedule = {
+			enabled: true,
+			startTime,
+			stopTime: stopTime || null,
+			daysOfWeek: days.length > 0 ? days : [1, 2, 3, 4, 5, 6, 7],
+			missedRunPolicy,
+		};
+	}
+
+	try {
+		if (id) {
+			await call("updateQueue", {
+				id,
+				name,
+				concurrencyLimit,
+				speedLimitKbps,
+				schedule,
+			});
+		} else {
+			await call("createQueue", {
+				name,
+				concurrencyLimit,
+				speedLimitKbps,
+				schedule,
+			});
+		}
+		$("#queue-edit-dialog")?.close();
+		await refreshQueuesUI();
+		await refresh();
+	} catch (err) {
+		if (errorEl) {
+			errorEl.textContent = messageOf(err);
+			errorEl.hidden = false;
+		}
+	}
+});
 $("#schedule-new").addEventListener("click", () => {
 	const future = new Date(Date.now() + 3600000),
 		scheduled = new Date(
@@ -1564,12 +2856,122 @@ $("#playlist-banner-btn")?.addEventListener("click", async () => {
 	}
 });
 
+$("#video-banner-btn")?.addEventListener("click", async () => {
+	const url = $("#download-urls").value.trim();
+	if (!url) return;
+	const btn = $("#video-banner-btn");
+	const errorEl = $("#add-error");
+	errorEl.hidden = true;
+	try {
+		btn.disabled = true;
+		btn.textContent = "Loading formats…";
+		const choices = await call("getVideoFormats", url);
+		currentVideoChoices = choices || [];
+		if (!currentVideoChoices.length) throw new Error("No available formats found for this video.");
+		$("#video-formats-name").textContent = currentVideoChoices[0].title || "YouTube Video";
+		const dur = currentVideoChoices[0].duration;
+		$("#video-formats-details").textContent = dur ? `Duration: ${Math.floor(dur / 60)}m ${Math.floor(dur % 60)}s` : "";
+		const select = $("#video-format-select");
+		select.innerHTML = "";
+		currentVideoChoices.forEach((choice, idx) => {
+			const opt = document.createElement("option");
+			opt.value = String(idx);
+			const sizeStr = choice.estimatedSize ? ` (~${(choice.estimatedSize / (1024 * 1024)).toFixed(1)} MB)` : "";
+			opt.textContent = `${choice.format} ${choice.quality || ""} - ${choice.audioState}${sizeStr}`;
+			select.appendChild(opt);
+		});
+		$("#video-formats-error").hidden = true;
+		showDialog("#video-formats-dialog");
+	} catch (err) {
+		errorEl.textContent = messageOf(err);
+		errorEl.hidden = false;
+	} finally {
+		btn.disabled = false;
+		btn.textContent = "Choose Quality / Format…";
+	}
+});
+
+$("#video-formats-form")?.addEventListener("submit", (e) => {
+	e.preventDefault();
+	const select = $("#video-format-select");
+	const idx = Number(select.value);
+	const choice = currentVideoChoices[idx];
+	if (choice) {
+		chosenYouTubeFormat = choice.youtubeFormat;
+		const ext = choice.outputFormat || (choice.format === "MP3" ? "mp3" : "mp4");
+		let title = choice.title;
+		if (!title || title.trim().toLowerCase() === "video") {
+			try {
+				const currentUrl = $("#download-url")?.value || "";
+				const u = new URL(currentUrl);
+				const host = u.hostname.replace(/^www\./, "").replace(/\./g, "_");
+				title = host ? `download_${host}` : "download";
+			} catch {
+				title = "download";
+			}
+		}
+		$("#download-filename").value = `${title}.${ext}`;
+		$("#download-category").value = ext === "mp3" ? "Audio" : "Video";
+		$("#video-banner-btn").textContent = `Selected: ${choice.quality || choice.format} (${ext.toUpperCase()})`;
+	}
+	$("#video-formats-dialog").close();
+});
+
 $("#playlist-select-all")?.addEventListener("click", () => {
 	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = true));
 });
 
 $("#playlist-deselect-all")?.addEventListener("click", () => {
 	$$("#playlist-items input[type='checkbox']").forEach((cb) => (cb.checked = false));
+});
+
+$("#install-ffmpeg-btn")?.addEventListener("click", () => installMediaToolAction("ffmpeg"));
+$("#install-ytdlp-btn")?.addEventListener("click", () => installMediaToolAction("yt-dlp"));
+$("#media-tool-install-btn")?.addEventListener("click", () => {
+	openMediaToolDialog("ffmpeg", state.selectedId);
+});
+
+$("#media-tool-confirm-btn")?.addEventListener("click", async () => {
+	const confirmBtn = $("#media-tool-confirm-btn");
+	const cancelBtn = $("#media-tool-cancel-btn");
+	const progressArea = $("#media-tool-dialog-progress");
+	const statusText = $("#media-tool-dialog-status-text");
+	const errorEl = $("#media-tool-dialog-error");
+	const tool = activeMediaToolType || "ffmpeg";
+	const toolLabel = tool === "yt-dlp" ? "yt-dlp" : "FFmpeg";
+
+	confirmBtn.disabled = true;
+	cancelBtn.disabled = true;
+	progressArea.hidden = false;
+	errorEl.hidden = true;
+	statusText.textContent = `Downloading & installing ${toolLabel} into managed tools directory… Please wait.`;
+
+	try {
+		await api.installMediaTool(tool);
+		statusText.textContent = `${toolLabel} installed successfully! Resuming download…`;
+		notify(`${toolLabel} installed successfully.`);
+		await refreshMediaToolsStatus();
+
+		const downloadIdToResume = activeMediaToolDownloadId;
+		setTimeout(async () => {
+			$("#media-tool-dialog")?.close();
+			if (downloadIdToResume) {
+				try {
+					const d = state.downloads.find((item) => item.id === downloadIdToResume);
+					if (d) await performAction(d, "resume");
+				} catch (e) {
+					console.error("Resume after tool install error:", e);
+				}
+			}
+		}, 800);
+	} catch (err) {
+		errorEl.textContent = `Installation failed: ${messageOf(err)}`;
+		errorEl.hidden = false;
+		confirmBtn.disabled = false;
+		confirmBtn.textContent = "Retry Install";
+		cancelBtn.disabled = false;
+		progressArea.hidden = true;
+	}
 });
 
 $("#playlist-form")?.addEventListener("submit", async (e) => {
@@ -1647,9 +3049,9 @@ $("#add-form").addEventListener("submit", async (event) => {
 			} catch {
 				throw new Error(`Invalid address: ${url}`);
 			}
-			if (!["http:", "https:"].includes(parsed.protocol))
+			if (!["http:", "https:", "ftp:"].includes(parsed.protocol))
 				throw new Error(
-					"Download addresses must begin with http:// or https://.",
+					"Download addresses must begin with http://, https://, or ftp://.",
 				);
 		}
 		if (filename && urls.length !== 1)
@@ -1675,11 +3077,18 @@ $("#add-form").addEventListener("submit", async (event) => {
 					[selectedCategory]: directory,
 				},
 			});
+		const authEnabled = $("#add-auth-enabled")?.checked;
+		const authUser = $("#add-auth-user")?.value.trim();
+		const authPass = $("#add-auth-pass")?.value || "";
+		const credentials = (authEnabled && authUser) ? { username: authUser, password: authPass || null } : undefined;
 		const data = {
 			...(filename ? { filename } : {}),
 			...(scheduledAt ? { scheduledAt } : {}),
 			...(directory ? { directory } : {}),
 			...(selectedCategory ? { category: selectedCategory } : {}),
+			...(chosenYouTubeFormat ? { youtubeFormat: chosenYouTubeFormat } : {}),
+			...(credentials ? { credentials } : {}),
+			...($("#download-queue")?.value ? { queueId: $("#download-queue").value } : {}),
 			description,
 			queueOnly: event.submitter?.dataset.queueOnly === "true",
 		};
@@ -1687,6 +3096,7 @@ $("#add-form").addEventListener("submit", async (event) => {
 			? await call("review", { id: pendingReviewId, ...data })
 			: await call("add", { urls, ...data });
 		pendingReviewId = null;
+		chosenYouTubeFormat = null;
 		if (!addMode) $("#add-dialog").close();
 		setView("all");
 		await refresh();
@@ -1709,6 +3119,12 @@ $("#add-form").addEventListener("submit", async (event) => {
 		$("#add-later").disabled = false;
 	}
 });
+$("#app-theme")?.addEventListener("change", (e) => {
+	applyTheme(e.target.value);
+});
+$("#settings-dialog")?.addEventListener("close", () => {
+	applyTheme(state.settings?.theme || "system");
+});
 $("#choose-directory").addEventListener("click", async () => {
 	try {
 		const path = await call("chooseDirectory");
@@ -1719,18 +3135,301 @@ $("#choose-directory").addEventListener("click", async () => {
 		$("#settings-error").hidden = false;
 	}
 });
+$("#options-category-select")?.addEventListener("change", (e) => {
+	const cat = e.target.value;
+	$("#category-directory").value = optionsCategoryDirectories[cat] || "";
+});
+$("#category-directory")?.addEventListener("input", (e) => {
+	const cat = $("#options-category-select").value;
+	const val = e.target.value.trim();
+	if (val) {
+		optionsCategoryDirectories[cat] = val;
+	} else {
+		delete optionsCategoryDirectories[cat];
+	}
+});
+$("#choose-category-directory")?.addEventListener("click", async () => {
+	try {
+		const path = await call("chooseDirectory");
+		if (typeof path === "string" && path) {
+			const cat = $("#options-category-select").value;
+			optionsCategoryDirectories[cat] = path;
+			$("#category-directory").value = path;
+		}
+	} catch (error) {
+		$("#settings-error").textContent = messageOf(error);
+		$("#settings-error").hidden = false;
+	}
+});
+$("#reset-category-directory")?.addEventListener("click", () => {
+	const cat = $("#options-category-select").value;
+	delete optionsCategoryDirectories[cat];
+	$("#category-directory").value = "";
+});
+$("#choose-temporary-directory")?.addEventListener("click", async () => {
+	try {
+		const path = await call("chooseDirectory");
+		if (typeof path === "string" && path)
+			$("#temporary-directory").value = path;
+	} catch (error) {
+		$("#settings-error").textContent = messageOf(error);
+		$("#settings-error").hidden = false;
+	}
+});
+$("#reset-temporary-directory")?.addEventListener("click", () => {
+	$("#temporary-directory").value = "";
+});
+$("#clipboard-monitoring-enabled")?.addEventListener("change", () => {
+	if ($("#clipboard-auto-enqueue")) {
+		$("#clipboard-auto-enqueue").disabled = !$("#clipboard-monitoring-enabled").checked;
+	}
+});
+$("#add-override-button")?.addEventListener("click", () => {
+	const hostInput = $("#new-override-host");
+	const connsInput = $("#new-override-connections");
+	if (!hostInput || !connsInput) return;
+	let host = hostInput.value.trim().toLowerCase().replace(/^https?:\/\//, "");
+	if (host.includes("/")) host = host.split("/")[0];
+	if (host.includes(":")) host = host.split(":")[0];
+	const conns = Math.max(1, Math.min(32, Number(connsInput.value) || 1));
+
+	if (!host) {
+		alert("Please enter a valid host pattern (e.g. example.com or *.domain.com)");
+		return;
+	}
+
+	optionsConnectionOverrides.push({ hostPattern: host, connections: conns });
+	hostInput.value = "";
+	connsInput.value = "1";
+	renderSiteOverrides();
+});
+$("#site-overrides-list")?.addEventListener("click", (e) => {
+	const button = e.target.closest(".remove-override-button");
+	if (!button) return;
+	const index = Number(button.dataset.index);
+	if (!isNaN(index) && index >= 0 && index < optionsConnectionOverrides.length) {
+		optionsConnectionOverrides.splice(index, 1);
+		renderSiteOverrides();
+	}
+});
+$("#window-limit-enabled")?.addEventListener("change", () => {
+	updateWindowLimitFieldsState();
+});
+$("#proxy-enabled").addEventListener("change", () => {
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+});
+$("#proxy-protocol")?.addEventListener("change", (e) => {
+	const protocol = e.target.value;
+	const portInput = $("#proxy-port");
+	if (portInput) {
+		if (protocol === "socks5" && (portInput.value === "8080" || !portInput.value)) {
+			portInput.value = "1080";
+		} else if ((protocol === "http" || protocol === "https") && portInput.value === "1080") {
+			portInput.value = "8080";
+		}
+	}
+	updateProxyFieldsState();
+	resetProxyTestStatus();
+});
+$("#test-proxy-button").addEventListener("click", async () => {
+	const statusEl = $("#proxy-test-status");
+	const protocol = $("#proxy-protocol").value;
+	const isDirect = protocol === "direct";
+	const host = $("#proxy-host").value.trim();
+	const port = Number($("#proxy-port").value) || (protocol === "socks5" ? 1080 : 8080);
+	const username = $("#proxy-username").value.trim() || null;
+	const password = $("#proxy-password").value || null;
+	const resolveDnsRemotely = Boolean($("#proxy-resolve-dns-remotely")?.checked);
+
+	if (!isDirect && !host) {
+		statusEl.textContent = "Please enter a proxy host.";
+		statusEl.className = "proxy-test-status error";
+		return;
+	}
+
+	statusEl.textContent = isDirect ? "Testing direct connection…" : "Testing proxy connection…";
+	statusEl.className = "proxy-test-status testing";
+	$("#test-proxy-button").disabled = true;
+
+	try {
+		const res = await call("testProxy", {
+			proxy: {
+				enabled: true,
+				protocol,
+				host,
+				port,
+				username,
+				password,
+				resolveDnsRemotely,
+			},
+		});
+		if (res && res.success) {
+			statusEl.textContent = res.message || "Connection successful.";
+			statusEl.className = "proxy-test-status success";
+		} else {
+			statusEl.textContent = res?.message || "Connection failed.";
+			statusEl.className = "proxy-test-status error";
+		}
+	} catch (err) {
+		statusEl.textContent = messageOf(err);
+		statusEl.className = "proxy-test-status error";
+	} finally {
+		$("#test-proxy-button").disabled = !$("#proxy-enabled").checked;
+	}
+});
+
+$("#detect-proxy-button")?.addEventListener("click", async () => {
+	const btn = $("#detect-proxy-button");
+	const origText = btn.textContent;
+	btn.disabled = true;
+	btn.textContent = "Detecting…";
+	try {
+		const detected = await call("detectProxy");
+		openProxyDiscoveryDialog(detected);
+	} catch (err) {
+		const statusEl = $("#proxy-test-status");
+		if (statusEl) {
+			statusEl.textContent = `Discovery error: ${messageOf(err)}`;
+			statusEl.className = "proxy-test-status error";
+		}
+	} finally {
+		btn.disabled = false;
+		btn.textContent = origText;
+	}
+});
+
+$("#proxy-discovery-close-btn")?.addEventListener("click", () => {
+	$("#proxy-discovery-dialog")?.close();
+});
+
+$("#proxy-discovery-cancel-btn")?.addEventListener("click", () => {
+	$("#proxy-discovery-dialog")?.close();
+});
+
+$("#proxy-discovery-import-btn")?.addEventListener("click", async () => {
+	if (!currentDetectedProxyConfig || !currentDetectedProxyConfig.importSettings) return;
+	const btn = $("#proxy-discovery-import-btn");
+	const errorEl = $("#proxy-discovery-error");
+	btn.disabled = true;
+	btn.textContent = "Importing…";
+	if (errorEl) errorEl.hidden = true;
+
+	try {
+		const updated = await call("applyDetectedProxy", {
+			detected: currentDetectedProxyConfig,
+		});
+		const p =
+			(updated && updated.proxy) ||
+			currentDetectedProxyConfig.importSettings;
+		$("#proxy-enabled").checked = p.enabled === true;
+		$("#proxy-protocol").value = p.protocol || "http";
+		$("#proxy-host").value = p.host || "";
+		$("#proxy-port").value = p.port || 8080;
+		$("#proxy-username").value = p.username || "";
+		$("#proxy-password").value = "";
+		if ($("#proxy-resolve-dns-remotely")) {
+			$("#proxy-resolve-dns-remotely").checked =
+				p.resolveDnsRemotely === true;
+		}
+		updateProxyFieldsState();
+		resetProxyTestStatus();
+
+		$("#proxy-discovery-dialog")?.close();
+		const statusEl = $("#proxy-test-status");
+		if (statusEl) {
+			statusEl.textContent = "Discovered proxy settings applied.";
+			statusEl.className = "proxy-test-status success";
+		}
+	} catch (err) {
+		if (errorEl) {
+			errorEl.textContent = messageOf(err);
+			errorEl.hidden = false;
+		}
+		btn.disabled = false;
+		btn.textContent = "Import Settings";
+	}
+});
 $("#settings-form").addEventListener("submit", async (event) => {
 	event.preventDefault();
 	const button = $("button[type=submit]", event.target);
 	$("#settings-error").hidden = true;
 	button.disabled = true;
 	try {
+		const proxy = {
+			enabled: $("#proxy-enabled").checked,
+			protocol: $("#proxy-protocol").value,
+			host: $("#proxy-host").value.trim(),
+			port: Number($("#proxy-port").value) || ($("#proxy-protocol").value === "socks5" ? 1080 : 8080),
+			username: $("#proxy-username").value.trim() || null,
+			password: $("#proxy-password").value || null,
+			resolveDnsRemotely: Boolean($("#proxy-resolve-dns-remotely")?.checked),
+		};
+		const capturePolicy = {
+			enabled: $("#capture-enabled").checked,
+			confirmationMode: $("#capture-mode").value,
+			fileTypes: $("#capture-file-types").value.split(/[\s,]+/).map(s => s.trim().toLowerCase().replace(/^\./, "")).filter(Boolean),
+			excludedHosts: $("#capture-excluded-hosts").value.split(",").map(s => s.trim()).filter(Boolean),
+			excludedAddresses: $("#capture-excluded-addresses").value.split(",").map(s => s.trim()).filter(Boolean),
+		};
+		const completionActions = [];
+		if ($("#settings-play-sound").checked) {
+			const soundFile = $("#settings-sound-file").value.trim() || null;
+			completionActions.push({ type: "playSound", soundFile });
+		}
+		if ($("#settings-scan-antivirus").checked) {
+			const executable = $("#settings-scanner-executable").value.trim();
+			if (executable) {
+				const args = $("#settings-scanner-args").value.trim().split(/\s+/).filter(Boolean);
+				completionActions.push({ type: "antivirusScan", executable, arguments: args });
+			}
+		}
+		if ($("#settings-post-command").checked) {
+			const executable = $("#settings-command-executable").value.trim();
+			if (executable) {
+				const args = $("#settings-command-args").value.trim().split(/\s+/).filter(Boolean);
+				completionActions.push({ type: "executeCommand", executable, arguments: args });
+			}
+		}
+		const powerKind = $("#settings-power-action").value;
+		if (powerKind && powerKind !== "none") {
+			completionActions.push({
+				type: "powerAction",
+				kind: powerKind,
+				confirmed: $("#settings-power-confirm").checked,
+			});
+		}
+		const clipboardMonitoring = {
+			enabled: Boolean($("#clipboard-monitoring-enabled")?.checked),
+			autoEnqueue: Boolean($("#clipboard-auto-enqueue")?.checked),
+		};
+		const windowLimitEnabled = Boolean($("#window-limit-enabled")?.checked);
+		const maxMb = Number($("#window-limit-max-mb")?.value) || 2048;
+		const windowHours = Number($("#window-limit-hours")?.value) || 12;
+		const existingLimit = state.settings?.windowLimit || {};
+		const windowLimit = {
+			enabled: windowLimitEnabled,
+			windowHours,
+			maxBytes: maxMb * 1024 * 1024,
+			windowAnchor: existingLimit.windowAnchor || new Date().toISOString(),
+			currentBytes: existingLimit.currentBytes || 0,
+			stoppedUntil: existingLimit.stoppedUntil || null,
+		};
 		await call("settings", {
+			theme: $("#app-theme")?.value || "system",
 			startWithWindows: $("#start-with-windows").checked,
 			defaultDirectory: $("#default-directory").value.trim(),
 			maxConcurrent: Number($("#max-concurrent").value),
 			connections: Number($("#connections").value),
 			speedLimitKbps: Number($("#speed-limit").value),
+			categoryDirectories: optionsCategoryDirectories,
+			temporaryDirectory: $("#temporary-directory").value.trim() || undefined,
+			proxy,
+			capturePolicy,
+			completionActions,
+			clipboardMonitoring,
+			connectionOverrides: optionsConnectionOverrides,
+			windowLimit,
 		});
 		await refresh();
 		if (optionsMode) await call("closeProgress");
@@ -1779,6 +3478,13 @@ async function start() {
 				)
 					commands[command]?.();
 			});
+		if (window.__TAURI__?.event?.listen) {
+			window.__TAURI__.event.listen("clipboard:candidate", (event) => {
+				const candidate = event.payload;
+				if (!candidate || !candidate.url) return;
+				handleClipboardCandidate(candidate);
+			});
+		}
 	} catch (error) {
 		$("#download-list").setAttribute("aria-busy", "false");
 		$("#list-count").textContent = "Download service unavailable";
@@ -1815,11 +3521,126 @@ if (schedulerMode)
 		call("closeProgress").catch((error) => notify(messageOf(error), true));
 	});
 start().then(async () => {
+	$("#add-auth-enabled")?.addEventListener("change", (e) => {
+		const fields = $("#add-auth-fields");
+		if (fields) fields.hidden = !e.target.checked;
+		fitWindowToContent("#add-dialog");
+	});
+
 	if (progressMode) {
 		showDetails(progressMode);
 		return;
 	}
-	if (optionsMode) {
+
+$("#cred-save-btn")?.addEventListener("click", async () => {
+	const scheme = $("#cred-scheme").value;
+	const host = $("#cred-host").value.trim();
+	const portVal = $("#cred-port").value.trim();
+	const pathPrefix = $("#cred-path").value.trim() || "/";
+	const username = $("#cred-user").value.trim();
+	const secret = $("#cred-pass").value;
+	const statusEl = $("#cred-status");
+
+	if (!host) {
+		if (statusEl) {
+			statusEl.textContent = "Please enter a valid host.";
+			statusEl.style.color = "#dc2626";
+		}
+		return;
+	}
+	if (!username) {
+		if (statusEl) {
+			statusEl.textContent = "Please enter a username.";
+			statusEl.style.color = "#dc2626";
+		}
+		return;
+	}
+
+	const port = portVal ? parseInt(portVal, 10) : null;
+	try {
+		await api.saveCredentialRule({
+			scheme,
+			host,
+			port,
+			pathPrefix,
+			username,
+			secret
+		});
+		$("#cred-host").value = "";
+		$("#cred-port").value = "";
+		$("#cred-path").value = "/";
+		$("#cred-user").value = "";
+		$("#cred-pass").value = "";
+		if (statusEl) {
+			statusEl.textContent = "Login rule saved.";
+			statusEl.style.color = "#166534";
+			setTimeout(() => { statusEl.textContent = ""; }, 3000);
+		}
+		await refreshCredentialRules();
+	} catch (err) {
+		if (statusEl) {
+			statusEl.textContent = `Error: ${messageOf(err)}`;
+			statusEl.style.color = "#dc2626";
+		}
+	}
+});
+
+$("#credentials-list")?.addEventListener("click", async (e) => {
+	const btn = e.target.closest(".delete-cred-btn");
+	if (!btn) return;
+	const id = btn.dataset.id;
+	if (!id) return;
+	try {
+		await api.deleteCredentialRule(id);
+		await refreshCredentialRules();
+	} catch (err) {
+		notify(`Failed to delete credential rule: ${messageOf(err)}`, true);
+	}
+});
+
+let currentClipboardCandidate = null;
+
+function handleClipboardCandidate(candidate) {
+	if (!candidate || !candidate.url) return;
+	currentClipboardCandidate = candidate;
+	if (state?.settings?.clipboardMonitoring?.autoEnqueue) {
+		openAdd(candidate.url);
+		return;
+	}
+	const descEl = $("#clipboard-prompt-desc");
+	if (descEl) {
+		descEl.textContent = `Download "${candidate.filename}" from ${candidate.host}?`;
+	}
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) {
+		promptEl.hidden = false;
+	}
+}
+
+function dismissClipboardPrompt() {
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	if (currentClipboardCandidate) {
+		if (typeof api.dismissClipboardCandidate === "function") {
+			api.dismissClipboardCandidate(currentClipboardCandidate.url);
+		}
+		currentClipboardCandidate = null;
+	}
+}
+
+$("#clipboard-prompt-close")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-dismiss")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-add")?.addEventListener("click", () => {
+	const cand = currentClipboardCandidate;
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	currentClipboardCandidate = null;
+	if (cand?.url) {
+		openAdd(cand.url);
+	}
+});
+
+if (optionsMode) {
 		openSettings();
 		return;
 	}

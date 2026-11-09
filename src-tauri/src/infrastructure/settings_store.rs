@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat: scaffold Tauri settings shell
+// Last updated: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Description: Persistent JSON settings store with atomic write guarantees and schema migration.
+
 mod legacy_settings;
 mod legacy_state;
 mod persisted_settings;

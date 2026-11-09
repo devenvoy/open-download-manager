@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: feat(updater): implement auto-updater, periodic background checks, and active transfer safety guard (Phase F)
+// Last updated: 2026-11-05
+// Reason: rebrand: migrate project to Open Download Manager
+// Description: Integration tests verifying updater functionality, edge cases, and error recovery.
+
 use std::{
     path::Path,
     sync::{

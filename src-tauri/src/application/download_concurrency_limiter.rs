@@ -1,3 +1,9 @@
+// Created: 2026-11-05
+// Reason: refactor: modularize native download architecture
+// Last updated: 2026-11-07
+// Reason: fix(transfer): implement automatic queue pump, live HLS speed tracking, referer propagation, and browser extension ID matching
+// Description: Concurrency limiter controlling active transfers against user-defined maximum limits.
+
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -22,6 +28,10 @@ impl DownloadConcurrencyLimiter {
             max_concurrent: AtomicUsize::new(usize::from(max_concurrent)),
             changed: Notify::new(),
         })
+    }
+
+    pub(super) fn max_concurrent(&self) -> usize {
+        self.max_concurrent.load(Ordering::Acquire)
     }
 
     pub(super) async fn acquire(self: &Arc<Self>) -> AppResult<DownloadConcurrencyPermit> {
