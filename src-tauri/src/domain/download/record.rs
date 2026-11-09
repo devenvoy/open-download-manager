@@ -106,6 +106,30 @@ pub struct DownloadSegmentProgress {
 
 impl DownloadRecord {
     pub fn prepare_for_restart(&mut self) {
+        if let Some(total) = self.total {
+            if total > 0 && self.downloaded >= total {
+                self.status = DownloadStatus::Completed;
+                self.speed = 0;
+                return;
+            }
+        }
+        if let (Some(dir), filename) = (&self.directory, &self.filename) {
+            let dest = std::path::Path::new(dir).join(filename);
+            if let Ok(meta) = std::fs::metadata(&dest) {
+                let file_len = meta.len();
+                if let Some(total) = self.total {
+                    if total > 0 && file_len == total {
+                        self.status = DownloadStatus::Completed;
+                        self.downloaded = total;
+                        self.speed = 0;
+                        if self.path.is_none() {
+                            self.path = Some(dest.to_string_lossy().into_owned());
+                        }
+                        return;
+                    }
+                }
+            }
+        }
         self.status = self.status.clone().after_restart();
         self.speed = 0;
     }

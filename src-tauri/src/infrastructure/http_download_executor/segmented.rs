@@ -29,7 +29,7 @@ use crate::{
 
 use super::{
     assembler::segment_path,
-    policy::{MAX_TRANSIENT_RETRIES, READ_TIMEOUT_SECONDS},
+    policy::{MAX_TRANSIENT_RETRIES, PROGRESS_EVENT_INTERVAL_MILLISECONDS, READ_TIMEOUT_SECONDS},
     retry::{retry_delay, send_with_retry, wait_before_retry},
     validator::{content_range, extract_validator, SegmentValidator},
 };
@@ -49,6 +49,7 @@ pub(crate) async fn discover_ranges(
     control: &mut DownloadControl,
     override_creds: Option<&(String, String)>,
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
+    referer: Option<&str>,
 ) -> AppResult<Option<RangeDiscovery>> {
     let resolved = super::auth::send_authenticated_request_with_redirects(
         client,
@@ -59,6 +60,7 @@ pub(crate) async fn discover_ranges(
         Some(0),
         Some(0),
         None,
+        referer,
     )
     .await?;
 
@@ -206,10 +208,12 @@ pub(crate) async fn download_segments(
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
     auth_header: Option<String>,
+    referer: Option<String>,
 ) -> AppResult<Vec<DownloadSegmentProgress>> {
     let segments_shared = Arc::new(Mutex::new(segments));
     let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
     let auth_shared: Option<Arc<str>> = auth_header.map(Arc::from);
+    let referer_shared: Option<Arc<str>> = referer.map(Arc::from);
 
     // Initial progress report
     {
@@ -226,13 +230,61 @@ pub(crate) async fn download_segments(
             notice: None,
             transfer_kind: Some("segmented_http".to_string()),
             effective_concurrency: Some(count),
-            etag: Some(validator.value().to_string()),
-            validator: Some(validator.validator.clone()),
+            etag: validator.value().map(|s| s.to_string()),
+            validator: validator.validator.clone(),
         });
     }
 
     let worker_count = usize::from(connections.max(1));
     let mut jobs = tokio::task::JoinSet::new();
+
+    let ticker_segments = segments_shared.clone();
+    let ticker_meter = meter.clone();
+    let ticker_validator = validator.clone();
+    let ticker_progress = progress_handler.clone();
+    let mut ticker_control = control.clone();
+
+    let ticker_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(PROGRESS_EVENT_INTERVAL_MILLISECONDS));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let (total_downloaded, connections_progress) = {
+                        let Ok(guard) = ticker_segments.lock() else { break; };
+                        let total: u64 = guard.iter().map(|s| s.downloaded).sum();
+                        (total, guard.clone())
+                    };
+                    let speed = ticker_meter
+                        .lock()
+                        .ok()
+                        .and_then(|mut m| {
+                            if let Some(s) = m.update(total_downloaded) {
+                                Some(s)
+                            } else {
+                                Some(m.current_throughput())
+                            }
+                        })
+                        .unwrap_or(0);
+                    let count = u8::try_from(connections_progress.len()).unwrap_or(1);
+                    ticker_progress(DownloadProgress {
+                        downloaded: total_downloaded,
+                        total: Some(ticker_validator.total),
+                        bytes_per_second: speed,
+                        connections_progress,
+                        notice: None,
+                        transfer_kind: Some("segmented_http".to_string()),
+                        effective_concurrency: Some(count),
+                        etag: ticker_validator.value().map(|s| s.to_string()),
+                        validator: ticker_validator.validator.clone(),
+                    });
+                }
+                _ = ticker_control.stopped() => {
+                    break;
+                }
+            }
+        }
+    });
 
     for worker_id in 0..worker_count {
         let worker_client = client.clone();
@@ -246,6 +298,7 @@ pub(crate) async fn download_segments(
         let worker_progress = progress_handler.clone();
         let worker_meter = meter.clone();
         let worker_auth = auth_shared.clone();
+        let worker_referer = referer_shared.clone();
 
         jobs.spawn(async move {
             run_segment_worker(
@@ -261,6 +314,7 @@ pub(crate) async fn download_segments(
                 worker_progress,
                 worker_meter,
                 worker_auth,
+                worker_referer,
             )
             .await
         });
@@ -270,16 +324,19 @@ pub(crate) async fn download_segments(
         match result {
             Ok(Ok(())) => {}
             Ok(Err(error)) if matches!(error.code, "download_paused" | "download_cancelled") => {
+                ticker_handle.abort();
                 jobs.abort_all();
                 while jobs.join_next().await.is_some() {}
                 return Err(error);
             }
             Ok(Err(error)) => {
+                ticker_handle.abort();
                 jobs.abort_all();
                 while jobs.join_next().await.is_some() {}
                 return Err(error);
             }
             Err(error) => {
+                ticker_handle.abort();
                 jobs.abort_all();
                 while jobs.join_next().await.is_some() {}
                 return Err(AppError::download(format!(
@@ -289,10 +346,26 @@ pub(crate) async fn download_segments(
         }
     }
 
+    ticker_handle.abort();
+
     let final_segments = segments_shared
         .lock()
         .map_err(|_| AppError::storage("Download progress is unavailable."))?
         .clone();
+    let final_downloaded: u64 = final_segments.iter().map(|s| s.downloaded).sum();
+    let final_speed = meter.lock().ok().map(|m| m.current_throughput()).unwrap_or(0);
+    let final_count = u8::try_from(final_segments.len()).unwrap_or(1);
+    progress_handler(DownloadProgress {
+        downloaded: final_downloaded,
+        total: Some(validator.total),
+        bytes_per_second: final_speed,
+        connections_progress: final_segments.clone(),
+        notice: None,
+        transfer_kind: Some("segmented_http".to_string()),
+        effective_concurrency: Some(final_count),
+        etag: validator.value().map(|s| s.to_string()),
+        validator: validator.validator.clone(),
+    });
     Ok(final_segments)
 }
 
@@ -309,6 +382,7 @@ async fn run_segment_worker(
     progress_handler: DownloadProgressHandler,
     meter: Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
     auth_header: Option<Arc<str>>,
+    referer: Option<Arc<str>>,
 ) -> AppResult<()> {
     loop {
         if let Some(reason) = control.current_stop_reason() {
@@ -380,7 +454,13 @@ async fn run_segment_worker(
                             let bytes_per_second = meter
                                 .lock()
                                 .ok()
-                                .and_then(|mut m| m.update(total_downloaded))
+                                .and_then(|mut m| {
+                                    if let Some(s) = m.update(total_downloaded) {
+                                        Some(s)
+                                    } else {
+                                        Some(m.current_throughput())
+                                    }
+                                })
                                 .unwrap_or(0);
                             progress_handler(DownloadProgress {
                                 downloaded: total_downloaded,
@@ -390,8 +470,8 @@ async fn run_segment_worker(
                                 notice: Some(notice),
                                 transfer_kind: Some("segmented_http".to_string()),
                                 effective_concurrency: Some(worker_id as u8 + 1),
-                                etag: Some(validator.value().to_string()),
-                                validator: Some(validator.validator.clone()),
+                                etag: validator.value().map(|s| s.to_string()),
+                                validator: validator.validator.clone(),
                             });
 
                             Some(new_chunk_idx)
@@ -422,6 +502,7 @@ async fn run_segment_worker(
                     &progress_handler,
                     &meter,
                     auth_header.clone(),
+                    referer.clone(),
                 )
                 .await?;
             }
@@ -446,6 +527,7 @@ async fn download_chunk(
     progress_handler: &DownloadProgressHandler,
     meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
     auth_header: Option<Arc<str>>,
+    referer: Option<Arc<str>>,
 ) -> AppResult<()> {
     let (start_offset, end_offset, downloaded_init) = {
         let guard = segments
@@ -475,14 +557,20 @@ async fn download_chunk(
     let req_end = end_offset;
 
     let auth_for_init = auth_header.clone();
+    let ref_for_init = referer.clone();
     let mut response = send_with_retry(control, || {
         let mut req = client
             .get(url.clone())
             .header(reqwest::header::RANGE, format!("bytes={req_start}-{req_end}"))
-            .header(reqwest::header::ACCEPT_ENCODING, "identity")
-            .header(validator.header(), validator.if_range_value());
+            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+        if let Some(if_range) = validator.if_range_value() {
+            req = req.header(validator.header(), if_range);
+        }
         if let Some(ref auth) = auth_for_init {
             req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+        }
+        if let Some(ref r) = ref_for_init {
+            req = req.header(reqwest::header::REFERER, r.as_ref());
         }
         req
     })
@@ -508,14 +596,18 @@ async fn download_chunk(
         ));
     }
     let (actual_start, actual_end, actual_total) = content_range(&response)?;
+    let entity_ok = match (validator.entity_header(), validator.value()) {
+        (Some(h), Some(v)) => response
+            .headers()
+            .get(&h)
+            .and_then(|value| value.to_str().ok())
+            .map_or(true, |value| value == v),
+        _ => true,
+    };
     if actual_start != req_start
         || actual_end != req_end
         || actual_total != Some(validator.total)
-        || response
-            .headers()
-            .get(&validator.entity_header())
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value != validator.value())
+        || !entity_ok
         || response
             .headers()
             .get(reqwest::header::CONTENT_ENCODING)
@@ -612,6 +704,7 @@ async fn download_chunk(
                         };
                         let start = cur_start + downloaded;
                         let auth_retry1 = auth_header.clone();
+                        let ref_retry1 = referer.clone();
                         let next_resp = send_with_retry(control, || {
                             let mut req = client
                                 .get(url.clone())
@@ -619,10 +712,15 @@ async fn download_chunk(
                                     reqwest::header::RANGE,
                                     format!("bytes={start}-{cur_end}"),
                                 )
-                                .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                                .header(validator.header(), validator.if_range_value());
+                                .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                            if let Some(if_range) = validator.if_range_value() {
+                                req = req.header(validator.header(), if_range);
+                            }
                             if let Some(ref auth) = auth_retry1 {
                                 req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+                            }
+                            if let Some(ref r) = ref_retry1 {
+                                req = req.header(reqwest::header::REFERER, r.as_ref());
                             }
                             req
                         })
@@ -644,11 +742,14 @@ async fn download_chunk(
                                 }
                                 if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                     if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
-                                        let entity_ok = new_resp
-                                            .headers()
-                                            .get(&validator.entity_header())
-                                            .and_then(|v| v.to_str().ok())
-                                            .map_or(true, |v| v == validator.value());
+                                        let entity_ok = match (validator.entity_header(), validator.value()) {
+                                            (Some(h), Some(expected_val)) => new_resp
+                                                .headers()
+                                                .get(&h)
+                                                .and_then(|hdr| hdr.to_str().ok())
+                                                .map_or(true, |actual| actual == expected_val),
+                                            _ => true,
+                                        };
                                         let encoding_ok = !new_resp
                                             .headers()
                                             .get(reqwest::header::CONTENT_ENCODING)
@@ -695,6 +796,7 @@ async fn download_chunk(
                     };
                     let start = cur_start + downloaded;
                     let auth_retry2 = auth_header.clone();
+                    let ref_retry2 = referer.clone();
                     let next_resp = send_with_retry(control, || {
                         let mut req = client
                             .get(url.clone())
@@ -702,10 +804,15 @@ async fn download_chunk(
                                 reqwest::header::RANGE,
                                 format!("bytes={start}-{cur_end}"),
                             )
-                            .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                            .header(validator.header(), validator.if_range_value());
+                            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                        if let Some(if_range) = validator.if_range_value() {
+                            req = req.header(validator.header(), if_range);
+                        }
                         if let Some(ref auth) = auth_retry2 {
                             req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
+                        }
+                        if let Some(ref r) = ref_retry2 {
+                            req = req.header(reqwest::header::REFERER, r.as_ref());
                         }
                         req
                     })
@@ -727,11 +834,14 @@ async fn download_chunk(
                             }
                             if new_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
                                 if let Ok((act_s, act_e, act_tot)) = content_range(&new_resp) {
-                                    let entity_ok = new_resp
-                                        .headers()
-                                        .get(&validator.entity_header())
-                                        .and_then(|v| v.to_str().ok())
-                                        .map_or(true, |v| v == validator.value());
+                                    let entity_ok = match (validator.entity_header(), validator.value()) {
+                                        (Some(h), Some(expected_val)) => new_resp
+                                            .headers()
+                                            .get(&h)
+                                            .and_then(|hdr| hdr.to_str().ok())
+                                            .map_or(true, |actual| actual == expected_val),
+                                        _ => true,
+                                    };
                                     let encoding_ok = !new_resp
                                         .headers()
                                         .get(reqwest::header::CONTENT_ENCODING)
@@ -805,16 +915,11 @@ async fn download_chunk(
             })?;
         downloaded += to_write;
 
-        update_segment_progress(
-            segments,
-            index,
-            downloaded,
-            "downloading",
-            &validator,
-            progress_handler,
-            meter,
-            None,
-        )?;
+        if let Ok(mut guard) = segments.lock() {
+            if let Some(segment) = guard.get_mut(index) {
+                segment.downloaded = downloaded;
+            }
+        }
 
         if downloaded >= current_target {
             break 'chunk_stream;
@@ -874,7 +979,13 @@ fn update_segment_progress(
     let bytes_per_second = meter
         .lock()
         .ok()
-        .and_then(|mut m| m.update(total_downloaded))
+        .and_then(|mut m| {
+            if let Some(s) = m.update(total_downloaded) {
+                Some(s)
+            } else {
+                Some(m.current_throughput())
+            }
+        })
         .unwrap_or(0);
     let count = u8::try_from(connections_progress.len()).unwrap_or(1);
 
@@ -886,8 +997,8 @@ fn update_segment_progress(
         notice,
         transfer_kind: Some("segmented_http".to_string()),
         effective_concurrency: Some(count),
-        etag: Some(validator.value().to_string()),
-        validator: Some(validator.validator.clone()),
+        etag: validator.value().map(|s| s.to_string()),
+        validator: validator.validator.clone(),
     });
     Ok(())
 }

@@ -604,7 +604,9 @@ impl DownloadTransferService {
                     let msg = explanation.unwrap_or_else(|| "Download limit reached.".to_string());
                     return Err(AppError::download(format!("Cannot resume download: {msg}")));
                 }
-                self.start_download(id, false)
+                let record = self.history.download(id)?;
+                let retry = matches!(record.status, DownloadStatus::Failed | DownloadStatus::Cancelled);
+                self.start_download(id, retry)
             }
             DownloadAction::Retry => self.start_download(id, true),
             DownloadAction::Pause => self.stop_download(id, DownloadStopReason::Pause),
@@ -938,7 +940,7 @@ impl DownloadTransferService {
                         });
                     }
                     "destination_conflict" => {
-                        let _ = service.history.update_active_download(&id, |d| {
+                        let _ = service.history.update_download(&id, |d| {
                             d.status = DownloadStatus::Paused;
                             d.needs_review = true;
                             d.speed = 0;
@@ -1048,7 +1050,7 @@ impl DownloadTransferService {
             .await?;
         self.quota_service.remove_download_tracker(&id);
         let _permit = permit;
-        self.history.update_active_download(&id, |download| {
+        self.history.update_download(&id, |download| {
             download.status = DownloadStatus::Completed;
             download.downloaded = result.downloaded;
             download.total = result.total;
@@ -1063,6 +1065,7 @@ impl DownloadTransferService {
                 download.notice = Some("The file size was not supplied by the server. The file may be incomplete.".to_owned());
             }
         })?;
+        let _ = self.history.notify_complete(&id);
         self.run_completion_actions(&id, &result.path).await;
         Ok(())
     }
@@ -1291,6 +1294,7 @@ impl DownloadTransferService {
         let history = self.history.clone();
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
+            .user_agent(crate::infrastructure::http_download_executor::client::DEFAULT_USER_AGENT)
             .build();
         let Ok(client) = client else { return; };
 

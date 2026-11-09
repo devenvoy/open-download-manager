@@ -13,29 +13,39 @@ use crate::{
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct SegmentValidator {
-    pub(crate) validator: TransferValidator,
+    pub(crate) validator: Option<TransferValidator>,
     pub(crate) total: u64,
 }
 
 impl SegmentValidator {
     pub(crate) fn new(validator: TransferValidator, total: u64) -> Self {
-        Self { validator, total }
+        Self {
+            validator: Some(validator),
+            total,
+        }
+    }
+
+    pub(crate) fn without_validator(total: u64) -> Self {
+        Self {
+            validator: None,
+            total,
+        }
     }
 
     pub(crate) fn header(&self) -> HeaderName {
         reqwest::header::IF_RANGE
     }
 
-    pub(crate) fn entity_header(&self) -> HeaderName {
-        self.validator.entity_header_name()
+    pub(crate) fn entity_header(&self) -> Option<HeaderName> {
+        self.validator.as_ref().map(|v| v.entity_header_name())
     }
 
-    pub(crate) fn value(&self) -> &str {
-        self.validator.value()
+    pub(crate) fn value(&self) -> Option<&str> {
+        self.validator.as_ref().map(|v| v.value())
     }
 
-    pub(crate) fn if_range_value(&self) -> &str {
-        self.validator.if_range_value()
+    pub(crate) fn if_range_value(&self) -> Option<&str> {
+        self.validator.as_ref().map(|v| v.if_range_value())
     }
 }
 
@@ -51,7 +61,7 @@ pub(crate) fn extract_validator(
         .map(|value| TransferValidator::ETag(value.to_owned()));
 
     if let Some(validator) = strong_etag {
-        return Some(SegmentValidator { validator, total });
+        return Some(SegmentValidator::new(validator, total));
     }
 
     let last_modified = response
@@ -62,10 +72,10 @@ pub(crate) fn extract_validator(
         .map(|value| TransferValidator::LastModified(value.to_owned()));
 
     if let Some(validator) = last_modified {
-        return Some(SegmentValidator { validator, total });
+        return Some(SegmentValidator::new(validator, total));
     }
 
-    None
+    Some(SegmentValidator::without_validator(total))
 }
 
 pub(crate) fn content_range(response: &reqwest::Response) -> AppResult<(u64, u64, Option<u64>)> {

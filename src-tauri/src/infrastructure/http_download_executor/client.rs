@@ -89,9 +89,13 @@ pub fn build_reqwest_proxy(proxy: &ProxySettings) -> AppResult<reqwest::Proxy> {
     Ok(req_proxy)
 }
 
+pub const DEFAULT_USER_AGENT: &str =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+
 /// Creates a reqwest client configured with optional proxy settings.
 pub fn create_http_client(proxy: Option<&ProxySettings>) -> AppResult<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
+        .user_agent(DEFAULT_USER_AGENT)
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
         .redirect(reqwest::redirect::Policy::none());
 

@@ -80,6 +80,7 @@ let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },
 const selectedIds = new Set();
 const pending = new Set();
 let pendingReviewId = null;
+let detailsCollapsed = false;
 let selectionDrag = null,
 	suppressRowClick = false;
 const dismissedReviews = new Set();
@@ -1056,6 +1057,7 @@ function fitWindowToContent(dialogSelector) {
 			}
 		} else {
 			const form = dialog.querySelector("form");
+			const title = dialog.querySelector(".dialog-title");
 			const body = form
 				? form.querySelector(".dialog-body")
 				: dialog.querySelector(".dialog-body");
@@ -1076,10 +1078,15 @@ function fitWindowToContent(dialogSelector) {
 						parseFloat(cs.marginTop || 0) +
 						parseFloat(cs.marginBottom || 0);
 				}
-				targetHeight = bodyContentH + footer.offsetHeight + 4;
+				const titleH = title ? title.offsetHeight : 0;
+				targetHeight = titleH + bodyContentH + footer.offsetHeight + 24;
 			} else if (dialog) {
-				targetHeight = dialog.scrollHeight;
+				targetHeight = dialog.scrollHeight + 24;
 			}
+		}
+
+		if (dialog.id === "media-tool-dialog") {
+			targetHeight = Math.max(targetHeight, 460);
 		}
 
 		if (targetHeight >= 180) {
@@ -1169,7 +1176,11 @@ function showDetails(id) {
 	document.body.classList.remove("review-window");
 	detailId = id;
 	const details = $("#connection-details");
-	call("resizeProgress", { expanded: !details?.hidden }).catch(() => {});
+	if (details) {
+		details.hidden = detailsCollapsed;
+	}
+	document.body.classList.toggle("details-collapsed", detailsCollapsed);
+	call("resizeProgress", { expanded: !detailsCollapsed }).catch(() => {});
 	$("#detail-speed-limit").value = state.settings.speedLimitKbps || 0;
 	$("#notify-complete").checked = state.settings.notifyOnComplete !== false;
 	$("#reveal-complete").checked = state.settings.revealOnComplete === true;
@@ -1229,22 +1240,6 @@ function renderDetails() {
 					: "Checking…",
 		],
 	];
-	if (d.referer && d.referer !== d.url) {
-		rows.push(["Referrer", d.referer]);
-	}
-	if (d.transferKind) {
-		const transferKindLabels = {
-			segmented_http: `Segmented HTTP (${d.connections || 1} connections)`,
-			single_http: "Single HTTP stream",
-			paired: "Paired audio & video streams",
-			sabr: "YouTube SABR streaming",
-			ytdlp: "yt-dlp fragment stream",
-			hls: "HLS segment stream",
-		};
-		if (transferKindLabels[d.transferKind]) {
-			rows.push(["Transfer type", transferKindLabels[d.transferKind]]);
-		}
-	}
 	if (numeric(d.duration))
 		rows.splice(1, 0, [
 			"Video duration",
@@ -1265,9 +1260,19 @@ function renderDetails() {
 	if (percent === null && ["downloading", "connecting"].includes(status))
 		progress.removeAttribute("value");
 	else progress.value = percent || 0;
-	const segments = Array.isArray(d.connectionsProgress)
+	let segments = Array.isArray(d.connectionsProgress) && d.connectionsProgress.length > 0
 		? d.connectionsProgress
 		: [];
+	if (segments.length === 0 && (d.downloaded > 0 || status === "downloading")) {
+		const totalBytes = numeric(d.total) || d.downloaded;
+		segments = [{
+			start: 0,
+			end: totalBytes > 0 ? totalBytes - 1 : d.downloaded,
+			downloaded: d.downloaded,
+			total: totalBytes,
+			status: status === "downloading" ? "downloading" : status === "complete" ? "complete" : status,
+		}];
+	}
 	const bars = $("#segment-bars"),
 		map = $("#segment-map"),
 		caption = document.querySelector(".connection-caption");
@@ -1278,26 +1283,20 @@ function renderDetails() {
 	const isPaired = d.transferKind === "paired" || d.kind === "paired";
 	const isHls = d.transferKind === "hls" || d.kind === "hls";
 
-	// Show per-range map bar ONLY for segmented HTTP downloads with multiple connections.
-	// Never display a duplicate overall bar for single stream, paired media, or SABR.
-	if (isSegmented && segments.length > 1) {
+	if (segments.length > 0) {
 		map.style.display = "flex";
 		if (caption) {
 			caption.style.display = "";
-			caption.textContent = "Start positions and download progress by connections";
+			caption.textContent = isPaired
+				? "Media tracks"
+				: isHls
+					? "HLS download streams"
+					: "Start positions and download progress by connections";
 		}
 	} else {
 		map.style.display = "none";
 		if (caption) {
-			if (isPaired && segments.length > 0) {
-				caption.style.display = "";
-				caption.textContent = "Media tracks";
-			} else if (isHls && segments.length > 0) {
-				caption.style.display = "";
-				caption.textContent = "HLS download streams";
-			} else {
-				caption.style.display = "none";
-			}
+			caption.style.display = "none";
 		}
 	}
 
@@ -1321,17 +1320,15 @@ function renderDetails() {
 		);
 		bars.append(row);
 
-		if (isSegmented && segments.length > 1) {
-			const bar = element("progress");
-			bar.max = 100;
-			const total = numeric(segment.total);
-			bar.value = total
-				? Math.min(100, (numeric(segment.downloaded) / total) * 100)
-				: 0;
-			bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
-			if (!total && status === "downloading") bar.removeAttribute("value");
-			map.append(bar);
-		}
+		const bar = element("progress");
+		bar.max = 100;
+		const total = numeric(segment.total);
+		bar.value = total
+			? Math.min(100, (numeric(segment.downloaded) / total) * 100)
+			: 0;
+		bar.setAttribute("aria-label", `Connection ${index + 1} progress`);
+		if (!total && status === "downloading") bar.removeAttribute("value");
+		map.append(bar);
 	}
 	const noteText = isPaired
 		? (segments.length === 2 ? "2 tracks (Video + Audio)" : `${segments.length} track(s)`)
@@ -1382,7 +1379,11 @@ function renderDetails() {
 	}
 	const connDetails = $("#connection-details");
 	if (connDetails) {
-		connDetails.hidden = isError;
+		connDetails.hidden = isError || detailsCollapsed;
+	}
+	const toggleBtn = $("#toggle-details");
+	if (toggleBtn) {
+		toggleBtn.textContent = detailsCollapsed ? ">> Show details" : "<< Hide details";
 	}
 
 	const isFfmpegError = Boolean(d.error && /ffmpeg is required/i.test(d.error));
@@ -1896,7 +1897,7 @@ let activeMediaToolDownloadId = null;
 
 function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
 	activeMediaToolType = tool === "yt-dlp" ? "yt-dlp" : "ffmpeg";
-	activeMediaToolDownloadId = downloadId || state.selectedId || null;
+	activeMediaToolDownloadId = downloadId || progressMode || state.selectedId || null;
 	const dialog = $("#media-tool-dialog");
 	if (!dialog) return;
 
@@ -1955,6 +1956,7 @@ function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
 	showDialog("#media-tool-dialog");
 	if (typeof fitWindowToContent === "function") {
 		fitWindowToContent("#media-tool-dialog");
+		setTimeout(() => fitWindowToContent("#media-tool-dialog"), 50);
 	}
 }
 
@@ -2375,15 +2377,18 @@ $("#detail-resume").addEventListener("click", () => {
 	);
 });
 $("#toggle-details").addEventListener("click", async () => {
+	detailsCollapsed = !detailsCollapsed;
 	const details = $("#connection-details");
-	details.hidden = !details.hidden;
-	document.body.classList.toggle("details-collapsed", details.hidden);
-	$("#toggle-details").textContent = details.hidden
+	if (details) {
+		details.hidden = detailsCollapsed;
+	}
+	document.body.classList.toggle("details-collapsed", detailsCollapsed);
+	$("#toggle-details").textContent = detailsCollapsed
 		? ">> Show details"
 		: "<< Hide details";
 	if (progressMode)
 		try {
-			await call("resizeProgress", { expanded: !details.hidden });
+			await call("resizeProgress", { expanded: !detailsCollapsed });
 		} catch (error) {
 			notify(messageOf(error), true);
 		}
@@ -2937,7 +2942,7 @@ $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
 	const progressArea = $("#media-tool-dialog-progress");
 	const statusText = $("#media-tool-dialog-status-text");
 	const errorEl = $("#media-tool-dialog-error");
-	const tool = activeMediaToolType || "ffmpeg";
+	const tool = activeMediaToolType || "yt-dlp";
 	const toolLabel = tool === "yt-dlp" ? "yt-dlp" : "FFmpeg";
 
 	confirmBtn.disabled = true;
@@ -2952,18 +2957,28 @@ $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
 		notify(`${toolLabel} installed successfully.`);
 		await refreshMediaToolsStatus();
 
-		const downloadIdToResume = activeMediaToolDownloadId;
-		setTimeout(async () => {
-			$("#media-tool-dialog")?.close();
-			if (downloadIdToResume) {
-				try {
-					const d = state.downloads.find((item) => item.id === downloadIdToResume);
-					if (d) await performAction(d, "resume");
-				} catch (e) {
-					console.error("Resume after tool install error:", e);
+		const downloadIdToResume = activeMediaToolDownloadId || progressMode || state.selectedId;
+		if (downloadIdToResume) {
+			try {
+				await refresh();
+				const d = state.downloads.find((item) => item.id === downloadIdToResume);
+				const act = d && ["failed", "cancelled"].includes(statusOf(d)) ? "retry" : "resume";
+				if (d) {
+					await performAction(d, act);
+				} else {
+					await call("action", { id: downloadIdToResume, action: "resume" });
 				}
+			} catch (resumeErr) {
+				console.error("Resume after tool install error:", resumeErr);
 			}
-		}, 800);
+		}
+
+		setTimeout(() => {
+			$("#media-tool-dialog")?.close();
+			if (progressMode && typeof showDetails === "function") {
+				showDetails(progressMode);
+			}
+		}, 600);
 	} catch (err) {
 		errorEl.textContent = `Installation failed: ${messageOf(err)}`;
 		errorEl.hidden = false;
@@ -3447,11 +3462,20 @@ window.addEventListener("downloader:api-error", (event) =>
 async function start() {
 	try {
 		await refresh();
-		if (typeof api.subscribe === "function")
+		if (typeof api.subscribe === "function") {
+			let refreshScheduled = false;
 			unsubscribe = api.subscribe((snapshot) => {
-				if (snapshot?.downloads) acceptSnapshot(snapshot);
-				else refresh().catch((error) => notify(messageOf(error), true));
+				if (snapshot?.downloads) {
+					acceptSnapshot(snapshot);
+				} else if (!refreshScheduled) {
+					refreshScheduled = true;
+					requestAnimationFrame(() => {
+						refreshScheduled = false;
+						refresh().catch((error) => notify(messageOf(error), true));
+					});
+				}
 			});
+		}
 		if (typeof api.onCommand === "function")
 			unsubscribeCommands = api.onCommand(async (payload) => {
 				const command =
@@ -3499,7 +3523,10 @@ window.addEventListener("beforeunload", () => {
 if (progressMode) {
 	$("#details-dialog").addEventListener("close", () => call("closeProgress"));
 	new MutationObserver(() => {
-		document.title = $("#details-title").textContent;
+		const nextTitle = $("#details-title").textContent;
+		if (document.title !== nextTitle) {
+			document.title = nextTitle;
+		}
 	}).observe($("#details-title"), {
 		childList: true,
 		characterData: true,

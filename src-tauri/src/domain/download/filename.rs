@@ -96,11 +96,19 @@ pub fn sanitize_diagnostic_text(text: &str) -> String {
 
 pub fn is_generic_filename(name: &str) -> bool {
     let lower = name.trim().to_ascii_lowercase();
-    // Strip extension to normalize: "video.mp4" -> "video"
+    let has_extension = std::path::Path::new(&lower)
+        .extension()
+        .is_some_and(|ext| !ext.is_empty());
+    if !has_extension {
+        return true;
+    }
     let stem = std::path::Path::new(&lower)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(&lower);
+    if stem.len() > 32 && !stem.contains(' ') {
+        return true;
+    }
     matches!(
         stem,
         "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"

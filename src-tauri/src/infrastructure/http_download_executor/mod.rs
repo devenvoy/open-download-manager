@@ -161,6 +161,23 @@ impl HttpDownloadExecutor {
         })?;
         let is_claimed = self.allocator.is_claimed(&destination);
 
+        if destination_exists {
+            if let Ok(meta) = fs::metadata(&destination).await {
+                let dest_len = meta.len();
+                let is_already_done = match download.total {
+                    Some(tot) if tot > 0 => dest_len == tot,
+                    _ => download.downloaded > 0 && dest_len == download.downloaded,
+                };
+                if is_already_done {
+                    return Ok(DownloadResult {
+                        downloaded: dest_len,
+                        total: Some(dest_len),
+                        path: destination,
+                    });
+                }
+            }
+        }
+
         if destination_exists || is_claimed {
             match download.conflict_policy {
                 Some(FileConflictPolicy::Overwrite) => {
@@ -195,6 +212,7 @@ impl HttpDownloadExecutor {
 
         let matcher = self.credential_store.as_ref().and_then(|s| s.matcher().ok());
         let override_creds = download.credentials_override.as_ref();
+        let ref_str = download.referer.as_deref();
 
         let mut metrics = crate::infrastructure::metrics::TransferMetrics::new(
             &download.id,
@@ -230,7 +248,7 @@ impl HttpDownloadExecutor {
             )
             .await?;
             let range_info =
-                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref()).await?;
+                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref(), ref_str).await?;
             if let Some(discovery) = range_info {
                 let final_host = discovery.final_url.host_str().unwrap_or("");
                 effective_connections = self.resolve_connections(final_host, effective_connections);
@@ -241,14 +259,13 @@ impl HttpDownloadExecutor {
                             .file_stem()
                             .and_then(|s| s.to_str())
                             .unwrap_or("");
-                        if crate::domain::download::is_generic_filename(current_stem) {
-                            let sanitized_better = sanitize_filename(&better_name);
-                            if !sanitized_better.is_empty() {
-                                if download.conflict_policy == Some(FileConflictPolicy::Rename) {
-                                    destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
-                                } else {
-                                    destination = directory.join(sanitized_better);
-                                }
+                        let has_ext = destination.extension().is_some();
+                        let sanitized_better = sanitize_filename(&better_name);
+                        if !sanitized_better.is_empty() && (!has_ext || crate::domain::download::is_generic_filename(current_stem) || sanitized_better != current_stem) {
+                            if download.conflict_policy == Some(FileConflictPolicy::Rename) {
+                                destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
+                            } else {
+                                destination = directory.join(sanitized_better);
                             }
                         }
                     }
@@ -264,6 +281,13 @@ impl HttpDownloadExecutor {
                             download
                                 .resume_validator()
                                 .map(|v| SegmentValidator::new(v, validator.total))
+                                .or_else(|| {
+                                    if download.total == Some(validator.total) && validator.total > 0 {
+                                        Some(SegmentValidator::without_validator(validator.total))
+                                    } else {
+                                        None
+                                    }
+                                })
                         });
                     let mut restart_notice = None;
                     if existing_parts {
@@ -294,8 +318,8 @@ impl HttpDownloadExecutor {
                             notice: Some(notice),
                             transfer_kind: Some("segmented_http".to_string()),
                             effective_concurrency: Some(effective_connections),
-                            etag: Some(validator.value().to_string()),
-                            validator: Some(validator.validator.clone()),
+                            etag: validator.value().map(|s| s.to_string()),
+                            validator: validator.validator.clone(),
                         });
                     }
                     let segments = segmented::segment_ranges(
@@ -322,6 +346,7 @@ impl HttpDownloadExecutor {
                         rate_limiter.clone(),
                         &progress_handler,
                         discovery.auth_header,
+                        download.referer.clone(),
                     )
                     .await;
 
@@ -416,6 +441,9 @@ impl HttpDownloadExecutor {
                 download
                     .resume_validator()
                     .map(|v| SegmentValidator::new(v, download.total.unwrap_or(0)))
+                    .or_else(|| {
+                        download.total.map(|tot| SegmentValidator::without_validator(tot))
+                    })
             });
 
         let (result, new_val) = single_stream::download_single_stream(
@@ -430,6 +458,7 @@ impl HttpDownloadExecutor {
             rate_limiter,
             override_creds,
             matcher.as_ref(),
+            ref_str,
         )
         .await?;
 

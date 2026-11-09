@@ -146,7 +146,7 @@ async function enqueue(item, tabId) {
       startNow = false;
     }
   }
-  const requestHeaders=requestContext.get(tabId)?.get(url);
+  const requestHeaders=tabId !== undefined ? requestContext.get(tabId)?.get(url) : undefined;
   const effectiveReferer = item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null) || item.referer || requestHeaders?.referer;
   return nativeSend({
     action: 'download',
@@ -156,7 +156,7 @@ async function enqueue(item, tabId) {
     startNow,
     audioUrl: httpUrl(item.audioUrl) || undefined,
     outputFormat: item.outputFormat,
-    filename: item.filename,
+    filename: (typeof item.filename === 'string' && item.filename.trim()) ? item.filename.trim() : undefined,
     referer: httpUrl(effectiveReferer) || undefined,
     canonicalUrl: item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : undefined),
     videoId: item.videoId,
@@ -353,24 +353,82 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   task().then(respond, error => respond({ok: false, error: error.message}));
   return true;
 });
-const pendingHandoffs=new Map();
-function sharedHandoff(url,item){
-  const key=JSON.stringify([item.tabId,item.referrer||'',url]);
-  let pending=pendingHandoffs.get(key);if(pending)return pending;
-  pending=enqueue({url,filename:item.filename?.split(/[\\/]/).pop(),referer:item.referrer},item.tabId).finally(()=>pendingHandoffs.delete(key));
-  pendingHandoffs.set(key,pending);pending.catch(()=>{});return pending;
+const pendingHandoffs = new Map();
+
+function sharedHandoff(url, payload, tabId) {
+  const key = JSON.stringify([tabId, payload.referer || '', url]);
+  let pending = pendingHandoffs.get(key);
+  if (pending) return pending;
+  pending = enqueue(payload, tabId).finally(() => pendingHandoffs.delete(key));
+  pendingHandoffs.set(key, pending);
+  pending.catch(() => {});
+  return pending;
 }
-api.downloads.onCreated.addListener(async item => {
-  const url=item.finalUrl||item.url;
-  let paused=false,accepted=false;
+
+async function handleInterceptedDownload(item) {
+  if (!item) return;
+  const url = item.finalUrl || item.url;
+  if (!httpUrl(url) || item.state === 'complete') return;
+
+  let paused = false, accepted = false;
   try {
-    if (!httpUrl(url) || item.state==='complete') return;
-    // IDM's observed ownership model: pause during handoff, resume on failure.
-    await api.downloads.pause(item.id); paused=true;
-    await sharedHandoff(url,item);accepted=true;
-    await api.downloads.cancel(item.id);
+    try { await api.downloads.pause(item.id); paused = true; } catch {}
+
+    let tabId = (item.tabId !== undefined && item.tabId >= 0) ? item.tabId : undefined;
+    let referer = item.referrer || '';
+    if ((!referer || tabId === undefined) && typeof api.tabs?.query === 'function') {
+      try {
+        const tabs = await api.tabs.query({ active: true, currentWindow: true });
+        if (tabs && tabs[0]) {
+          if (tabId === undefined && tabs[0].id >= 0) tabId = tabs[0].id;
+          if (!referer && tabs[0].url && tabs[0].url.startsWith('http')) {
+            referer = tabs[0].url;
+          }
+        }
+      } catch {}
+    }
+
+    let rawFilename = item.filename ? item.filename.split(/[\\/]/).pop().trim() : '';
+    if (!rawFilename) {
+      try {
+        const parsed = new URL(url);
+        const leaf = parsed.pathname.split('/').filter(Boolean).pop();
+        if (leaf && leaf.includes('.')) {
+          rawFilename = decodeURIComponent(leaf);
+        }
+      } catch {}
+    }
+
+    const payload = {
+      url,
+      filename: rawFilename || undefined,
+      referer: referer || undefined,
+      startNow: true,
+    };
+
+    await sharedHandoff(url, payload, tabId ?? item.tabId);
+    accepted = true;
+
+    try {
+      await api.downloads.cancel(item.id);
+      if (typeof api.downloads.erase === 'function') {
+        await api.downloads.erase({ id: item.id });
+      }
+    } catch {}
   } catch (e) {
-    if(paused&&!accepted)await api.downloads.resume(item.id).catch(()=>{});
-    await api.storage.local.set({lastError:accepted?`The browser download could not be canceled; Open Download Manager continues the transfer: ${e.message}`:`Browser download was kept: ${e.message}`});
+    if (paused && !accepted) {
+      await api.downloads.resume(item.id).catch(() => {});
+    }
+    await api.storage.local.set({
+      lastError: accepted
+        ? `The browser download could not be canceled; Open Download Manager continues the transfer: ${e.message}`
+        : `Browser download was kept: ${e.message}`,
+    });
   }
-});
+}
+
+api.downloads.onCreated.addListener(item => handleInterceptedDownload(item));
+
+if (api.downloads.onDeterminingFilename) {
+  api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item));
+}

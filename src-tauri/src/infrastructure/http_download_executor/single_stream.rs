@@ -27,7 +27,7 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::download::{is_generic_filename, parse_content_disposition_filename},
+    domain::download::{is_generic_filename, parse_content_disposition_filename, DownloadSegmentProgress},
 };
 
 use super::{
@@ -51,6 +51,7 @@ pub(crate) async fn download_single_stream(
     rate_limiter: Arc<DownloadRateLimiter>,
     override_creds: Option<&(String, String)>,
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
+    referer: Option<&str>,
 ) -> AppResult<(DownloadResult, Option<SegmentValidator>)> {
     let mut downloaded = match fs::metadata(&temporary).await {
         Ok(metadata) => metadata.len(),
@@ -62,22 +63,7 @@ pub(crate) async fn download_single_stream(
         }
     };
     let initial_downloaded = downloaded;
-
     let mut restart_notice = None;
-    if downloaded > 0 && previous_validator.is_none() {
-        if let Err(err) = fs::remove_file(&temporary).await {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                return Err(AppError::download(format!(
-                    "Could not restart the partial download: {err}"
-                )));
-            }
-        }
-        downloaded = 0;
-        restart_notice = Some(
-            "The download could not be verified with a saved validator; restarted download from the beginning."
-                .to_owned(),
-        );
-    }
 
     let mut active_url = url;
     let mut resolved = send_stream_request(
@@ -88,6 +74,7 @@ pub(crate) async fn download_single_stream(
         control,
         override_creds,
         matcher,
+        referer,
     )
     .await?;
     active_url = resolved.final_url;
@@ -102,7 +89,7 @@ pub(crate) async fn download_single_stream(
             "The server could not satisfy the byte range; restarted download from the beginning."
                 .to_owned(),
         );
-        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await?;
+        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer).await?;
         active_url = resolved.final_url;
         response = resolved.response;
     }
@@ -127,21 +114,23 @@ pub(crate) async fn download_single_stream(
             ));
         }
         if let Some(ref prev) = previous_validator {
-            if let Some(resp_val) = response
-                .headers()
-                .get(&prev.entity_header())
-                .and_then(|v| v.to_str().ok())
-            {
-                if resp_val != prev.value() {
-                    let _ = fs::remove_file(&temporary).await;
-                    downloaded = 0;
-                    restart_notice = Some(
-                        "The remote file changed on the server; restarted download from the beginning."
-                            .to_owned(),
-                    );
-                    resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await?;
-                    active_url = resolved.final_url;
-                    response = resolved.response;
+            if let (Some(entity_hdr), Some(prev_val)) = (prev.entity_header(), prev.value()) {
+                if let Some(resp_val) = response
+                    .headers()
+                    .get(&entity_hdr)
+                    .and_then(|v| v.to_str().ok())
+                {
+                    if resp_val != prev_val {
+                        let _ = fs::remove_file(&temporary).await;
+                        downloaded = 0;
+                        restart_notice = Some(
+                            "The remote file changed on the server; restarted download from the beginning."
+                                .to_owned(),
+                        );
+                        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer).await?;
+                        active_url = resolved.final_url;
+                        response = resolved.response;
+                    }
                 }
             }
         }
@@ -183,20 +172,22 @@ pub(crate) async fn download_single_stream(
     let new_validator = extract_validator(&response, total.unwrap_or(downloaded));
 
     // Wire Content-Disposition filename: if the current destination has a
-    // generic stem, prefer a better name from the server's response header.
+    // generic stem or no extension, prefer a better name from the server's response header.
     let destination = {
         let current_stem = destination
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("");
-        if is_generic_filename(current_stem) {
-            if let Some(cd_value) = response
-                .headers()
-                .get(reqwest::header::CONTENT_DISPOSITION)
-                .and_then(|v| v.to_str().ok())
-            {
-                if let Some(better_name) = parse_content_disposition_filename(cd_value) {
-                    destination.with_file_name(better_name)
+        let has_ext = destination.extension().is_some();
+        if let Some(cd_value) = response
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|v| v.to_str().ok())
+        {
+            if let Some(better_name) = parse_content_disposition_filename(cd_value) {
+                let sanitized = crate::domain::download::sanitize_filename(&better_name);
+                if !sanitized.is_empty() && (!has_ext || is_generic_filename(current_stem) || sanitized != current_stem) {
+                    destination.with_file_name(&sanitized)
                 } else {
                     destination
                 }
@@ -221,16 +212,24 @@ pub(crate) async fn download_single_stream(
             ))
         })?;
 
+    let initial_conn_progress = vec![DownloadSegmentProgress {
+        start: 0,
+        end: total.unwrap_or(downloaded).saturating_sub(1).max(downloaded),
+        downloaded,
+        total: total.unwrap_or(downloaded),
+        status: "downloading".to_string(),
+    }];
+
     progress_handler(DownloadProgress {
         downloaded,
         total,
         bytes_per_second: 0,
-        connections_progress: Vec::new(),
+        connections_progress: initial_conn_progress,
         notice: restart_notice,
         transfer_kind: Some("single_http".to_string()),
         effective_concurrency: Some(1),
-        etag: new_validator.as_ref().map(|v| v.value().to_string()),
-        validator: new_validator.as_ref().map(|v| v.validator.clone()),
+        etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
+        validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -274,9 +273,9 @@ pub(crate) async fn download_single_stream(
                         wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                         let next_request = if supports_range && downloaded > 0 {
-                            send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher).await
+                            send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer).await
                         } else {
-                            send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await
+                            send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer).await
                         };
 
                         match next_request {
@@ -298,11 +297,14 @@ pub(crate) async fn download_single_stream(
                                 {
                                     if let Ok((start, _, _)) = content_range(&new_response) {
                                         let entity_ok = if let Some(ref v) = new_validator {
-                                            new_response
-                                                .headers()
-                                                .get(&v.entity_header())
-                                                .and_then(|val| val.to_str().ok())
-                                                .map_or(true, |val| val == v.value())
+                                            match (v.entity_header(), v.value()) {
+                                                (Some(h), Some(expected_val)) => new_response
+                                                    .headers()
+                                                    .get(&h)
+                                                    .and_then(|hdr| hdr.to_str().ok())
+                                                    .map_or(true, |actual| actual == expected_val),
+                                                _ => true,
+                                            }
                                         } else {
                                             true
                                         };
@@ -373,9 +375,9 @@ pub(crate) async fn download_single_stream(
                     wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                     let next_request = if supports_range && downloaded > 0 {
-                        send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher).await
+                        send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer).await
                     } else {
-                        send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher).await
+                        send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer).await
                     };
 
                     match next_request {
@@ -397,11 +399,14 @@ pub(crate) async fn download_single_stream(
                             {
                                 if let Ok((start, _, _)) = content_range(&new_response) {
                                     let entity_ok = if let Some(ref v) = new_validator {
-                                        new_response
-                                            .headers()
-                                            .get(&v.entity_header())
-                                            .and_then(|val| val.to_str().ok())
-                                            .map_or(true, |val| val == v.value())
+                                        match (v.entity_header(), v.value()) {
+                                            (Some(h), Some(expected_val)) => new_response
+                                                .headers()
+                                                .get(&h)
+                                                .and_then(|hdr| hdr.to_str().ok())
+                                                .map_or(true, |actual| actual == expected_val),
+                                            _ => true,
+                                        }
                                     } else {
                                         true
                                     };
@@ -489,16 +494,23 @@ pub(crate) async fn download_single_stream(
         if last_tick.elapsed() >= Duration::from_millis(PROGRESS_EVENT_INTERVAL_MILLISECONDS) {
             let elapsed = last_tick.elapsed().as_secs_f64().max(0.001);
             let speed = (bytes_since_tick as f64 / elapsed) as u64;
+            let conn_progress = vec![DownloadSegmentProgress {
+                start: 0,
+                end: total.unwrap_or(downloaded).saturating_sub(1).max(downloaded),
+                downloaded,
+                total: total.unwrap_or(downloaded),
+                status: "downloading".to_string(),
+            }];
             progress_handler(DownloadProgress {
                 downloaded,
                 total,
                 bytes_per_second: speed,
-                connections_progress: Vec::new(),
+                connections_progress: conn_progress,
                 notice: None,
                 transfer_kind: Some("single_http".to_string()),
                 effective_concurrency: Some(1),
-                etag: new_validator.as_ref().map(|v| v.value().to_string()),
-                validator: new_validator.as_ref().map(|v| v.validator.clone()),
+                etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
+                validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;
@@ -554,6 +566,7 @@ pub(crate) async fn send_stream_request(
     control: &mut DownloadControl,
     override_creds: Option<&(String, String)>,
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
+    referer: Option<&str>,
 ) -> AppResult<super::auth::ResolvedResponse> {
     let resolved = super::auth::send_authenticated_request_with_redirects(
         client,
@@ -564,6 +577,7 @@ pub(crate) async fn send_stream_request(
         if offset > 0 { Some(offset) } else { None },
         None,
         if offset > 0 { validator } else { None },
+        referer,
     )
     .await?;
 

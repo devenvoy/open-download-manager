@@ -32,6 +32,12 @@ pub fn resolve_integration_root() -> PathBuf {
         if dir.join("extension").join("manifest.json").exists() {
             return dir;
         }
+        if dir.join("_up_").join("extension").join("manifest.json").exists() {
+            return dir.join("_up_");
+        }
+        if dir.join("resources").join("extension").join("manifest.json").exists() {
+            return dir.join("resources");
+        }
     }
 
     if let Ok(exe) = std::env::current_exe() {
@@ -39,9 +45,21 @@ pub fn resolve_integration_root() -> PathBuf {
             if parent.join("extension").join("manifest.json").exists() {
                 return parent.to_path_buf();
             }
+            if parent.join("_up_").join("extension").join("manifest.json").exists() {
+                return parent.join("_up_");
+            }
+            if parent.join("resources").join("extension").join("manifest.json").exists() {
+                return parent.join("resources");
+            }
             if let Some(grandparent) = parent.parent() {
                 if grandparent.join("extension").join("manifest.json").exists() {
                     return grandparent.to_path_buf();
+                }
+                if grandparent.join("_up_").join("extension").join("manifest.json").exists() {
+                    return grandparent.join("_up_");
+                }
+                if grandparent.join("resources").join("extension").join("manifest.json").exists() {
+                    return grandparent.join("resources");
                 }
             }
         }
@@ -51,6 +69,9 @@ pub fn resolve_integration_root() -> PathBuf {
     if let Some(parent) = manifest_dir.parent() {
         if parent.join("extension").join("manifest.json").exists() {
             return parent.to_path_buf();
+        }
+        if parent.join("_up_").join("extension").join("manifest.json").exists() {
+            return parent.join("_up_");
         }
     }
 
@@ -69,6 +90,23 @@ pub fn resolve_host_exe(integration_root: &Path) -> PathBuf {
             if candidate.exists() {
                 return candidate;
             }
+            if let Some(grandparent) = parent.parent() {
+                let candidate = grandparent.join(bin_name);
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    let candidate = integration_root.join(bin_name);
+    if candidate.exists() {
+        return candidate;
+    }
+    if let Some(parent) = integration_root.parent() {
+        let candidate = parent.join(bin_name);
+        if candidate.exists() {
+            return candidate;
         }
     }
 
@@ -501,10 +539,15 @@ pub fn scan_browsers(
                 .to_string_lossy()
                 .into_owned()
         } else {
-            integration_root
-                .join("extension")
-                .to_string_lossy()
-                .into_owned()
+            let direct = integration_root.join("extension");
+            let data_chrome = data_directory.join("NativeMessaging").join("chrome-extension");
+            if direct.join("manifest.json").exists() {
+                direct.to_string_lossy().into_owned()
+            } else if data_chrome.join("manifest.json").exists() {
+                data_chrome.to_string_lossy().into_owned()
+            } else {
+                direct.to_string_lossy().into_owned()
+            }
         };
 
         if connected {
@@ -530,15 +573,24 @@ pub fn scan_browsers(
         });
     }
 
+    let default_extension_path = {
+        let direct = integration_root.join("extension");
+        let data_chrome = data_directory.join("NativeMessaging").join("chrome-extension");
+        if direct.join("manifest.json").exists() {
+            direct.to_string_lossy().into_owned()
+        } else if data_chrome.join("manifest.json").exists() {
+            data_chrome.to_string_lossy().into_owned()
+        } else {
+            direct.to_string_lossy().into_owned()
+        }
+    };
+
     IntegrationStatus {
         port: bridge_port,
         connected_browsers,
         browsers,
         connection_error: None,
-        extension_path: integration_root
-            .join("extension")
-            .to_string_lossy()
-            .into_owned(),
+        extension_path: default_extension_path,
         integration_path: integration_root
             .join("integration")
             .to_string_lossy()
@@ -549,6 +601,32 @@ pub fn scan_browsers(
             .to_string_lossy()
             .into_owned(),
     }
+}
+
+pub fn prepare_chrome_extension(
+    data_directory: &Path,
+    integration_root: &Path,
+) -> std::io::Result<PathBuf> {
+    let folder = data_directory.join("NativeMessaging").join("chrome-extension");
+    std::fs::create_dir_all(&folder)?;
+
+    let source = if integration_root.join("extension").join("manifest.json").exists() {
+        integration_root.join("extension")
+    } else if integration_root.join("_up_").join("extension").join("manifest.json").exists() {
+        integration_root.join("_up_").join("extension")
+    } else if integration_root.join("resources").join("extension").join("manifest.json").exists() {
+        integration_root.join("resources").join("extension")
+    } else if integration_root.join("manifest.json").exists() {
+        integration_root.to_path_buf()
+    } else {
+        integration_root.join("extension")
+    };
+
+    if source.exists() && source.join("manifest.json").exists() {
+        copy_dir_recursive(&source, &folder)?;
+    }
+
+    Ok(folder)
 }
 
 pub fn prepare_firefox_extension(

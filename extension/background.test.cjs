@@ -22,7 +22,7 @@ function harness({initialData={},webRequest={}}={}) {
   });
   browser.tabs.sendMessage=async()=>({ok:true});
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'background.js'),'utf8'),{browser,URL,URLSearchParams,Uint8Array,btoa:value=>Buffer.from(value,'binary').toString('base64'),youtubeMedia:require('./youtube-media.js'),captureEvaluator:require('./capture-evaluator.js')});
-  return {events,specs,data,nativeRequests,downloadCalls,badges,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
+  return {browser,events,specs,data,nativeRequests,downloadCalls,badges,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
 }
 test('video selection forwards explicit one-click download intent',async()=>{
   const h=harness(),sender={id:'extension-id',tab:{id:3}};
@@ -117,6 +117,16 @@ test('duplicate browser downloads share one native handoff',async()=>{
  await Promise.all([h.events.download(first),h.events.download(second)]);
  assert.equal(h.nativeRequests.length,1);assert.equal(h.download(1),undefined);assert.equal(h.download(2),undefined);
  assert.deepEqual(h.downloadCalls.filter(([name])=>name==='pause').length,2);assert.deepEqual(h.downloadCalls.filter(([name])=>name==='cancel').length,2);
+});
+test('browser download is intercepted even if pausing fails on non-resumable download',async()=>{
+ const h=harness();
+ const download=h.createDownload({id:99,url:'https://example.com/movie.mkv',filename:'movie.mkv'});
+ // Simulate Chrome error when pausing non-resumable downloads ("Download cannot be paused")
+ h.browser.downloads.pause = async () => { throw new Error('Download cannot be paused'); };
+ await h.events.download(download);
+ assert.equal(h.nativeRequests.length,1);
+ assert.equal(h.nativeRequests[0].url,'https://example.com/movie.mkv');
+ assert.deepEqual(h.downloadCalls.filter(([name])=>name==='cancel').length,1);
 });
 test('identical URLs from different tabs do not share a credential-bearing handoff',async()=>{
  const h=harness();

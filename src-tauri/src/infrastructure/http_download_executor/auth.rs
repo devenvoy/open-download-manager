@@ -36,6 +36,7 @@ pub async fn send_authenticated_request_with_redirects(
     range_offset: Option<u64>,
     range_end: Option<u64>,
     validator: Option<&SegmentValidator>,
+    referer: Option<&str>,
 ) -> AppResult<ResolvedResponse> {
     let mut current_url = initial_url.clone();
     let initial_host = initial_url.host_str().unwrap_or("").to_ascii_lowercase();
@@ -65,13 +66,17 @@ pub async fn send_authenticated_request_with_redirects(
         let req_client = client.clone();
         let req_url = current_url.clone();
         let req_auth = auth_header.clone();
-        let val_header = validator.map(|v| v.header());
-        let val_value = validator.map(|v| v.if_range_value().to_owned());
+        let val_header = validator.and_then(|v| v.if_range_value().map(|_| v.header()));
+        let val_value = validator.and_then(|v| v.if_range_value().map(|s| s.to_owned()));
+        let req_referer = referer.map(|r| r.to_string());
 
         let response = send_with_retry(control, move || {
             let mut req = req_client.get(req_url.clone());
             if let Some(ref auth) = req_auth {
                 req = req.header(AUTHORIZATION, auth);
+            }
+            if let Some(ref r) = req_referer {
+                req = req.header(reqwest::header::REFERER, r.as_str());
             }
             if let Some(start) = range_offset {
                 if let Some(end) = range_end {

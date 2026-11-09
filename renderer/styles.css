@@ -747,6 +747,13 @@ td {
 	flex-direction: column;
 	gap: 2px;
 }
+#media-tool-dialog {
+	min-width: 500px;
+	max-width: 580px;
+	min-height: 440px;
+	box-sizing: border-box;
+	overflow: hidden;
+}
 .media-tool-dialog-body {
 	display: flex;
 	gap: 14px;
@@ -1874,6 +1881,16 @@ td {
 	border: 1px dotted #225b8b;
 	background: #78b8eb26;
 	pointer-events: none;
+}
+#connection-details {
+	transition: opacity 0.2s ease-in-out;
+}
+:root body.details-collapsed #connection-details,
+:root body.progress-window.details-collapsed #connection-details,
+#connection-details[hidden] {
+	display: none !important;
+	opacity: 0 !important;
+	pointer-events: none !important;
 }
 :root body.progress-window.details-collapsed #details-dialog {
 	overflow: hidden;

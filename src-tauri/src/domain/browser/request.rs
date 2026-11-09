@@ -109,24 +109,29 @@ pub fn sanitize_browser_request(
     }
 
     let filename = if let Some(raw_name) = msg.filename {
-        if raw_name.chars().count() > 255 || raw_name == "." || raw_name == ".." {
-            return Err("Invalid filename.".to_owned());
-        }
-        let sanitized = sanitize_filename(&raw_name);
-        if sanitized.is_empty() {
-            return Err("Invalid filename.".to_owned());
-        }
-        let lower = sanitized.to_ascii_lowercase();
-        if lower == "watch"
-            || lower == "watch.mp4"
-            || lower == "watch.webm"
-            || lower == "video"
-            || lower == "video.mp4"
-            || lower == "videoplayback"
-        {
+        let trimmed = raw_name.trim();
+        if trimmed.is_empty() {
             None
+        } else if trimmed.chars().count() > 255 || trimmed == "." || trimmed == ".." {
+            return Err("Invalid filename.".to_owned());
         } else {
-            Some(sanitized)
+            let sanitized = sanitize_filename(trimmed);
+            if sanitized.is_empty() {
+                None
+            } else {
+                let lower = sanitized.to_ascii_lowercase();
+                if lower == "watch"
+                    || lower == "watch.mp4"
+                    || lower == "watch.webm"
+                    || lower == "video"
+                    || lower == "video.mp4"
+                    || lower == "videoplayback"
+                {
+                    None
+                } else {
+                    Some(sanitized)
+                }
+            }
         }
     } else {
         None

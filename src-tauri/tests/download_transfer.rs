@@ -1558,3 +1558,235 @@ async fn server_200_ok_on_range_request_safely_restarts_and_discards_partial() {
     );
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
+
+#[tokio::test]
+async fn download_with_referer_passes_referer_header_to_server() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = vec![42_u8; 1024];
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("address");
+    let body_clone = body.clone();
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("connect");
+        let mut request = Vec::new();
+        let mut chunk = [0; 1024];
+        while !request.windows(4).any(|b| b == b"\r\n\r\n") {
+            let n = stream.read(&mut chunk).expect("read");
+            if n == 0 { break; }
+            request.extend_from_slice(&chunk[..n]);
+        }
+        let req_str = String::from_utf8_lossy(&request).to_ascii_lowercase();
+        let has_expected_referer = req_str.contains("referer: https://example.com/source-page");
+        if has_expected_referer {
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body_clone.len()
+            ).unwrap();
+            stream.write_all(&body_clone).unwrap();
+        } else {
+            write!(
+                stream,
+                "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"
+            ).unwrap();
+        }
+        let _ = stream.flush();
+    });
+
+    let url = format!("http://{address}/protected.bin");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let mut req = download_request(url, "protected.bin");
+    req.referer = Some("https://example.com/source-page".to_owned());
+
+    let ids = service
+        .add(req, &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("protected.bin")).unwrap(),
+        body
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn segmented_download_with_referer_passes_referer_header_to_all_chunks() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = vec![77_u8; 128 * 1024];
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("address");
+    let body_clone = body.clone();
+
+    // 1 discovery request + 2 segment requests = 3 requests total
+    thread::spawn(move || {
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().expect("connect");
+            let mut request = Vec::new();
+            let mut chunk = [0; 1024];
+            while !request.windows(4).any(|b| b == b"\r\n\r\n") {
+                let n = stream.read(&mut chunk).expect("read");
+                if n == 0 { break; }
+                request.extend_from_slice(&chunk[..n]);
+            }
+            let req_str = String::from_utf8_lossy(&request).to_ascii_lowercase();
+            let has_expected_referer = req_str.contains("referer: https://example.com/source-page");
+            if !has_expected_referer {
+                let _ = write!(stream, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                let _ = stream.flush();
+                continue;
+            }
+            let range = req_str
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.trim().eq_ignore_ascii_case("range")
+                        .then(|| value.trim().strip_prefix("bytes="))
+                        .flatten()
+                })
+                .expect("range");
+            let (start, end) = range.split_once('-').expect("range start-end");
+            let start: usize = start.parse().unwrap();
+            let end: usize = end.parse().unwrap();
+            let response_body = &body_clone[start..=end];
+            let _ = write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{end}/{}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                response_body.len(),
+                body_clone.len()
+            );
+            let _ = stream.write_all(response_body);
+            let _ = stream.flush();
+        }
+    });
+
+    let url = format!("http://{address}/segmented_protected.bin");
+    let settings = settings(directory.clone(), 2);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let mut req = download_request(url, "segmented_protected.bin");
+    req.referer = Some("https://example.com/source-page".to_owned());
+
+    let ids = service
+        .add(req, &settings)
+        .expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(
+        fs::read(directory.join("segmented_protected.bin")).unwrap(),
+        body
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn content_disposition_adopts_real_name_over_hash_token() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = b"Game installer binary content".to_vec();
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener.local_addr().expect("address");
+    let body_clone = body.clone();
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("connect");
+        let mut request = Vec::new();
+        let mut chunk = [0; 1024];
+        while !request.windows(4).any(|b| b == b"\r\n\r\n") {
+            let n = stream.read(&mut chunk).expect("read");
+            if n == 0 { break; }
+            request.extend_from_slice(&chunk[..n]);
+        }
+        let _ = write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Disposition: attachment; filename=\"Modern_Warfare_2.mkv\"\r\nConnection: close\r\n\r\n",
+            body_clone.len()
+        );
+        let _ = stream.write_all(&body_clone);
+        let _ = stream.flush();
+    });
+
+    let hash_path = "ADGPM2nhJU91qAJ2JVyWcD4LSbvspZQg2amY_trBT-J_TY66ezQRzuphGKxNxgrrE";
+    let url = format!("http://{address}/{hash_path}");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let req = download_request(url, hash_path);
+    let ids = service.add(req, &settings).expect("download should be accepted");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+
+    // Verify file on disk has the REAL name, not the hash!
+    assert!(directory.join("Modern_Warfare_2.mkv").exists());
+    assert!(!directory.join(hash_path).exists());
+    assert_eq!(
+        fs::read(directory.join("Modern_Warfare_2.mkv")).unwrap(),
+        body
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn completed_download_resumed_completes_instantly_without_conflict() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let file_path = directory.join("already_finished.bin");
+    fs::write(&file_path, b"1234567890").expect("write file");
+
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+    let settings = settings(directory.clone(), 1);
+
+    let mut req = download_request("http://127.0.0.1:9999/already_finished.bin".to_string(), "already_finished.bin");
+    req.queue_only = true;
+    let ids = service.add(req, &settings).expect("download should be accepted");
+
+    history.update_download(&ids[0], |d| {
+        d.status = DownloadStatus::Paused;
+        d.downloaded = 10;
+        d.total = Some(10);
+    }).expect("update download");
+
+    // Resuming this download should recognize the completed file and finish as Completed without conflict
+    service.action(&ids[0], DownloadAction::Resume).expect("action should succeed");
+
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+
+    let updated = history.download(&ids[0]).unwrap();
+    assert_eq!(updated.status, DownloadStatus::Completed);
+    assert_eq!(updated.downloaded, 10);
+    assert_eq!(updated.error, None);
+
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}

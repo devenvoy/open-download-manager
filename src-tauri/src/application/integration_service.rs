@@ -23,9 +23,9 @@ use crate::{
     domain::snapshot::IntegrationStatus,
     infrastructure::{
         browser::{
-            is_store_browser, launch_browser, prepare_firefox_extension, register_browser_manifest,
-            resolve_host_exe, resolve_integration_root, scan_browsers, sync_browser_manifests,
-            BrowserType, EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
+            is_store_browser, launch_browser, prepare_chrome_extension, prepare_firefox_extension,
+            register_browser_manifest, resolve_host_exe, resolve_integration_root, scan_browsers,
+            sync_browser_manifests, BrowserType, EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
         },
         system_shell::SystemShellService,
     },
@@ -63,6 +63,7 @@ impl IntegrationService {
         let integration_root = resolve_integration_root();
         let host_exe = resolve_host_exe(&integration_root);
         sync_browser_manifests(&data_directory, &host_exe);
+        let _ = prepare_chrome_extension(&data_directory, &integration_root);
         Self {
             data_directory,
             integration_root,
@@ -76,11 +77,38 @@ impl IntegrationService {
         integration_root: PathBuf,
         shell_service: impl ShellService + 'static,
     ) -> Self {
+        let _ = prepare_chrome_extension(&data_directory, &integration_root);
         Self {
             data_directory,
             integration_root,
             shell_service: Arc::new(shell_service),
             bridge_port: Arc::new(AtomicU16::new(0)),
+        }
+    }
+
+    pub fn resolve_extension_path(&self, browser: BrowserType) -> PathBuf {
+        if browser.is_firefox() {
+            self.data_directory
+                .join("NativeMessaging")
+                .join("firefox-extension")
+        } else {
+            let direct = self.integration_root.join("extension");
+            let data_chrome = self
+                .data_directory
+                .join("NativeMessaging")
+                .join("chrome-extension");
+            if direct.join("manifest.json").exists() {
+                direct
+            } else if data_chrome.join("manifest.json").exists() {
+                data_chrome
+            } else {
+                let _ = prepare_chrome_extension(&self.data_directory, &self.integration_root);
+                if data_chrome.exists() {
+                    data_chrome
+                } else {
+                    direct
+                }
+            }
         }
     }
 
@@ -140,15 +168,7 @@ impl IntegrationService {
         let browser = BrowserType::parse(browser_name)
             .ok_or_else(|| AppError::browser("Choose Chrome, Edge, Brave, Opera, or Firefox."))?;
 
-        let firefox_path = self
-            .data_directory
-            .join("NativeMessaging")
-            .join("firefox-extension");
-        let extension_path = if browser.is_firefox() {
-            firefox_path
-        } else {
-            self.integration_root.join("extension")
-        };
+        let extension_path = self.resolve_extension_path(browser);
         let extension_path_str = extension_path.to_string_lossy().into_owned();
 
         match action {
@@ -189,7 +209,7 @@ impl IntegrationService {
                 launch_browser(browser, None)?;
                 Ok(BrowserSetupResult {
                     browser: Some(browser_name.to_owned()),
-                    extension_path: None,
+                    extension_path: Some(extension_path_str),
                 })
             }
             "prepare" => {
@@ -212,9 +232,14 @@ impl IntegrationService {
                         extension_path: Some(path.to_string_lossy().into_owned()),
                     })
                 } else {
+                    let path = prepare_chrome_extension(
+                        &self.data_directory,
+                        &self.integration_root,
+                    )
+                    .map_err(|e| AppError::browser(format!("Failed to prepare Chrome extension: {e}")))?;
                     Ok(BrowserSetupResult {
                         browser: Some(browser_name.to_owned()),
-                        extension_path: Some(extension_path_str),
+                        extension_path: Some(path.to_string_lossy().into_owned()),
                     })
                 }
             }
@@ -236,6 +261,14 @@ impl IntegrationService {
                         &self.data_directory,
                         &self.integration_root,
                     );
+                } else if !browser.is_firefox() && !extension_path.exists() {
+                    let _ = prepare_chrome_extension(
+                        &self.data_directory,
+                        &self.integration_root,
+                    );
+                }
+                if !extension_path.exists() {
+                    let _ = std::fs::create_dir_all(&extension_path);
                 }
                 self.shell_service.open_path(&extension_path)?;
                 Ok(BrowserSetupResult {

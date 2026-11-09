@@ -26,6 +26,7 @@ pub struct DownloadHistoryService {
     downloads: Arc<Mutex<Vec<DownloadRecord>>>,
     repository: Arc<dyn DownloadHistoryRepository>,
     events: Option<Arc<dyn DownloadEventPublisher>>,
+    last_disk_save: Arc<Mutex<std::time::Instant>>,
 }
 
 impl Clone for DownloadHistoryService {
@@ -34,6 +35,7 @@ impl Clone for DownloadHistoryService {
             downloads: self.downloads.clone(),
             repository: self.repository.clone(),
             events: self.events.clone(),
+            last_disk_save: self.last_disk_save.clone(),
         }
     }
 }
@@ -59,6 +61,7 @@ impl DownloadHistoryService {
             downloads: Arc::new(Mutex::new(initial_downloads)),
             repository: Arc::new(repository),
             events,
+            last_disk_save: Arc::new(Mutex::new(std::time::Instant::now())),
         })
     }
 
@@ -514,9 +517,23 @@ impl DownloadHistoryService {
         }
         let previous = downloads[index].clone();
         update(&mut downloads[index]);
-        if let Err(error) = self.repository.save(&downloads) {
-            downloads[index] = previous;
-            return Err(error);
+        let should_save = {
+            if let Ok(mut last_save) = self.last_disk_save.lock() {
+                if last_save.elapsed() >= std::time::Duration::from_millis(1000) {
+                    *last_save = std::time::Instant::now();
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+        if should_save {
+            if let Err(error) = self.repository.save(&downloads) {
+                downloads[index] = previous;
+                return Err(error);
+            }
         }
         drop(downloads);
         self.publish_change();
