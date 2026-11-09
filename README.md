@@ -30,6 +30,55 @@
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <b>Desktop Transfer Manager (Light &amp; Dark Mode)</b><br>
+  <i>Multi-threaded download acceleration, real-time segment re-balancing, and IDM-style category filtering.</i>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/01-main-window.png" alt="Open Download Manager — Main Desktop Window" width="850" />
+</p>
+
+<details>
+<summary align="center"><b>🌙 Click to view Dark Mode</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/01-main-window-dark.png" alt="Open Download Manager — Main Desktop Window (Dark Mode)" width="850" />
+</p>
+</details>
+
+<br>
+
+<p align="center">
+  <b>In-Page Video Grabber &amp; Format Chooser</b><br>
+  <i>Floating media download overlay with adaptive stream detection (YouTube SABR), resolution picker, and audio demuxing.</i>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/02-browser-video-grabber.png" alt="Open Download Manager — Browser Video Detection and Format Chooser" width="850" />
+</p>
+
+<br>
+
+<p align="center">
+  <b>Download Review &amp; Browser Integration</b><br>
+  <i>Granular transfer metadata confirmation, category routing, proxy management, and multi-browser health status.</i>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/03-download-file-info.png" alt="Download File Info Review Dialog" width="415" />
+  &nbsp; &nbsp;
+  <img src="assets/screenshots/05-browser-integration.png" alt="Browser Integration Management" width="415" />
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/04-settings-dialog.png" alt="Settings &amp; Options Dialog" width="540" />
+</p>
+
+---
+
 ## ⚡ Key Features
 
 - **🚀 Multi-Threaded Acceleration**: Dynamic file segment splitting with up to 32 concurrent chunks, active throughput re-balancing, and zero-byte thread recovery.

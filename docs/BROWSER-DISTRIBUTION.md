@@ -13,6 +13,8 @@ found this extension in that browser's profile and successfully registered the
 matching native messaging host. An installed browser without the extension is
 shown as **Setup needed**; a missing executable is shown as **Not installed**.
 
+![Browser Integration Dialog](../assets/screenshots/05-browser-integration.png)
+
 For consumer Windows Chrome, external installation requires a published Chrome
 Web Store extension. The desktop installer can register its store update URL;
 Chrome then downloads the extension and asks the user to enable it. It cannot
