@@ -1,12 +1,7 @@
 // Created: 2026-11-05
 // Reason: feat: add native HTTP download engine
-// Last updated: 2026-11-08
-// Reason: feat(settings): expose category folders and temporary directory in options (Closes #32)
-// Reason: feat(limits): add per-site connection overrides and rolling download limits (Closes #36)
-// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
-// Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
-// Reason: fix(transfer): prioritize HLS kind detection over paired fallback for m3u8 addresses
-// Reason: fix(transfer): release controls lock before pump_queue to prevent pause deadlock
+// Last updated: 2026-11-10
+// Reason: refactor: modularize monolithic download_transfer_service into focused coordinators
 // Description: Application service orchestrating download requests, transfers, scheduler pumps, and completion actions.
 
 use std::{
@@ -28,7 +23,6 @@ use crate::{
         download_rate_limiter::DownloadRateLimiter,
         download_transfer_policy::{
             HTTP_DOWNLOAD_KIND, NEW_DOWNLOAD_IS_ESTIMATED, NEW_DOWNLOAD_IS_RESUMABLE,
-            SCHEDULER_POLL_INTERVAL_MILLISECONDS,
         },
         error::{AppError, AppResult},
         quota_service::{QuotaEnforcementService, QuotaStatus},
@@ -50,6 +44,11 @@ use crate::{
         system_shell::SystemShellService,
     },
 };
+
+pub mod completion;
+pub mod quota;
+pub mod recovery;
+pub mod scheduler;
 
 #[derive(Clone)]
 pub struct DownloadTransferService {
@@ -568,34 +567,6 @@ impl DownloadTransferService {
         Ok(vec![id])
     }
 
-    pub fn refresh_download(
-        &self,
-        id: &str,
-        new_url: Option<String>,
-        new_audio_url: Option<String>,
-        new_sabr: Option<crate::domain::media::sabr::NormalizedSabrSession>,
-    ) -> AppResult<String> {
-        let record = self.history.download(id)?;
-        self.history.update_download(id, |d| {
-            if let Some(u) = new_url {
-                d.url = u;
-            }
-            if let Some(a) = new_audio_url {
-                d.audio_url = Some(a);
-            }
-            if let Some(s) = new_sabr {
-                d.sabr = Some(s);
-            }
-            d.error = None;
-            d.notice = Some("Download link refreshed from browser; resuming transfer.".to_owned());
-        })?;
-        if record.status == DownloadStatus::Failed || record.status == DownloadStatus::Paused {
-            let retry = record.status == DownloadStatus::Failed;
-            self.start_download(id, retry)?;
-        }
-        Ok(id.to_owned())
-    }
-
     pub fn action(&self, id: &str, action: DownloadAction) -> AppResult<()> {
         match action {
             DownloadAction::Resume => {
@@ -706,145 +677,7 @@ impl DownloadTransferService {
         Err(AppError::download("The file or folder cannot be found."))
     }
 
-    pub fn pump_queue(&self) {
-        if self.quota_service.is_quota_exceeded().0 {
-            return;
-        }
-        let _guard = match self.queue_pump_lock.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let max = self.concurrency.max_concurrent();
-        let active = match self.history.active_download_count() {
-            Ok(count) => count,
-            Err(_) => return,
-        };
-        if active >= max {
-            return;
-        }
-        let mut available = max - active;
-
-        if let Some(qs) = self.queue_service() {
-            let running = qs.running_queues();
-            for queue in running {
-                if available == 0 {
-                    break;
-                }
-                let mut queue_active = 0;
-                if let Ok(controls) = self.controls.lock() {
-                    for item_id in &queue.item_ids {
-                        if controls.contains_key(item_id) {
-                            queue_active += 1;
-                        }
-                    }
-                }
-
-                let queue_limit = queue.concurrency_limit as usize;
-                if queue_active < queue_limit {
-                    let queue_available = (queue_limit - queue_active).min(available);
-                    let mut started_for_queue = 0;
-                    for item_id in &queue.item_ids {
-                        if started_for_queue >= queue_available {
-                            break;
-                        }
-                        if let Ok(record) = self.history.download(item_id) {
-                            if record.status == DownloadStatus::Queued {
-                                if let Err(error) = self.start_download(item_id, false) {
-                                    eprintln!(
-                                        "Failed to auto-start queued download {item_id}: {}",
-                                        error.message
-                                    );
-                                } else {
-                                    started_for_queue += 1;
-                                    available = available.saturating_sub(1);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else if let Ok(next_ids) = self.history.next_queued_download_ids(available) {
-            for id in next_ids {
-                if let Err(error) = self.start_download(&id, false) {
-                    eprintln!("Failed to auto-start queued download {id}: {}", error.message);
-                }
-            }
-        }
-    }
-
-    pub fn pause_queue_downloads(&self, queue_id: &str) {
-        if let Some(qs) = self.queue_service() {
-            if let Some(q) = qs.get_queue(queue_id) {
-                for item_id in q.item_ids {
-                    let _ = self.action(&item_id, DownloadAction::Pause);
-                }
-            }
-        }
-    }
-
-    pub fn set_max_concurrent(&self, value: u8) {
-        self.concurrency.set_max_concurrent(value);
-        self.pump_queue();
-    }
-
-    pub fn set_speed_limit(&self, value_kbps: u32) {
-        self.rate_limiter.set_limit_kbps(value_kbps);
-    }
-
-    pub fn set_proxy(&self, proxy: Option<&crate::domain::settings::ProxySettings>) -> AppResult<()> {
-        self.executor.set_proxy(proxy)
-    }
-
-    pub fn start_scheduler(&self) {
-        let service = self.clone();
-        tauri::async_runtime::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(
-                SCHEDULER_POLL_INTERVAL_MILLISECONDS,
-            ));
-            loop {
-                interval.tick().await;
-                if service.quota_service.check_window_roll() {
-                    service.resume_quota_paused_downloads();
-                    service.persist_quota_state();
-                }
-                if let Err(error) = service.start_due_downloads() {
-                    eprintln!("Could not start scheduled downloads: {}", error.message);
-                }
-                if let Some(qs) = service.queue_service() {
-                    let (_started, stopped) = qs.check_schedules();
-                    for stop_id in stopped {
-                        service.pause_queue_downloads(&stop_id);
-                    }
-                }
-                service.pump_queue();
-            }
-        });
-    }
-
-    fn start_due_downloads(&self) -> AppResult<()> {
-        let mut controls = self
-            .controls
-            .lock()
-            .map_err(|_| AppError::storage("Download controls are unavailable."))?;
-        let records = self
-            .history
-            .begin_due_scheduled_downloads(chrono::Utc::now(), chrono::Utc::now().to_rfc3339())?;
-        let started = records
-            .into_iter()
-            .map(|record| {
-                let (sender, receiver) = watch::channel(None);
-                controls.insert(record.id.clone(), sender);
-                (record, DownloadControl::new(receiver))
-            })
-            .collect::<Vec<_>>();
-        drop(controls);
-        for (record, control) in started {
-            self.spawn_download(record, control);
-        }
-        Ok(())
-    }
-
-    fn start_download(&self, id: &str, retry: bool) -> AppResult<()> {
+    pub(crate) fn start_download(&self, id: &str, retry: bool) -> AppResult<()> {
         let (exceeded, explanation) = self.quota_service.is_quota_exceeded();
         if exceeded {
             let msg = explanation.unwrap_or_else(|| "Download limit reached.".to_string());
@@ -869,7 +702,7 @@ impl DownloadTransferService {
         Ok(())
     }
 
-    fn stop_download(&self, id: &str, reason: DownloadStopReason) -> AppResult<()> {
+    pub(crate) fn stop_download(&self, id: &str, reason: DownloadStopReason) -> AppResult<()> {
         self.quota_service.remove_download_tracker(id);
         let record = self.history.download(id)?;
         self.history.stop_download(id, reason)?;
@@ -905,7 +738,7 @@ impl DownloadTransferService {
         Ok(())
     }
 
-    fn spawn_download(&self, record: DownloadRecord, control: DownloadControl) {
+    pub(crate) fn spawn_download(&self, record: DownloadRecord, control: DownloadControl) {
         let id = record.id.clone();
         let cleanup_record = record.clone();
         let service = self.clone();
@@ -1070,325 +903,6 @@ impl DownloadTransferService {
         Ok(())
     }
 
-    pub async fn retry_completion_actions(&self, id: &str) -> AppResult<()> {
-        let record = self.history.download(id)?;
-        if record.status != DownloadStatus::Completed {
-            return Err(AppError::download(
-                "Actions can only be run on completed downloads.",
-            ));
-        }
-        let path_str = record
-            .path
-            .ok_or_else(|| AppError::download("Download file path is missing."))?;
-        let path = std::path::PathBuf::from(path_str);
-        if !path.is_file() {
-            return Err(AppError::download(
-                "Downloaded file does not exist at final destination.",
-            ));
-        }
-        self.history.update_download(id, |d| {
-            d.action_ledger.clear();
-            d.notice = None;
-        })?;
-        self.run_completion_actions(id, &path).await;
-        Ok(())
-    }
-
-    pub fn update_download_completion_actions(
-        &self,
-        id: &str,
-        actions: Option<Vec<crate::domain::completion::CompletionAction>>,
-    ) -> AppResult<()> {
-        if let Some(ref actions) = actions {
-            for action in actions {
-                if let Err(msg) = action.validate() {
-                    return Err(AppError::invalid_download(msg));
-                }
-            }
-        }
-        self.history.update_download(id, |d| {
-            d.completion_actions = actions;
-        })
-    }
-
-    pub async fn run_completion_actions(&self, id: &str, final_path: &Path) {
-        if !final_path.is_file() {
-            eprintln!(
-                "Skipping completion actions for {id}: destination file does not exist or is not a file."
-            );
-            return;
-        }
-
-        let record = match self.history.download(id) {
-            Ok(record) => record,
-            Err(error) => {
-                eprintln!(
-                    "Could not retrieve download record for {id} to run completion actions: {}",
-                    error.message
-                );
-                return;
-            }
-        };
-
-        if record.status != DownloadStatus::Completed {
-            return;
-        }
-
-        let current_settings = self.settings();
-        let effective_actions = if let Some(ref actions) = record.completion_actions {
-            actions.clone()
-        } else if let Some(ref settings) = current_settings {
-            if !settings.completion_actions.is_empty() {
-                settings.completion_actions.clone()
-            } else {
-                let mut legacy = Vec::new();
-                if settings.notify_on_complete {
-                    legacy.push(crate::domain::completion::CompletionAction::Notification);
-                }
-                if settings.reveal_on_complete {
-                    legacy.push(crate::domain::completion::CompletionAction::OpenFolder);
-                }
-                legacy
-            }
-        } else {
-            Vec::new()
-        };
-
-        if effective_actions.is_empty() {
-            return;
-        }
-
-        let timeout_duration = std::time::Duration::from_secs(60);
-
-        for action in effective_actions {
-            let already_run = self
-                .history
-                .with_downloads(|downloads| {
-                    downloads.iter().find(|d| d.id == id).is_some_and(|d| {
-                        d.action_ledger
-                            .iter()
-                            .any(|entry| entry.action_key == action.action_key())
-                    })
-                })
-                .unwrap_or(false);
-
-            if already_run {
-                continue;
-            }
-
-            let entry = match &action {
-                crate::domain::completion::CompletionAction::Notification => {
-                    let _ = self.history.notify_complete(id);
-                    crate::domain::completion::ActionLedgerEntry::success(&action, None)
-                }
-                crate::domain::completion::CompletionAction::PlaySound { sound_file } => {
-                    match self.action_executor.play_sound(sound_file.as_deref()).await {
-                        Ok(()) => {
-                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
-                        }
-                        Err(err) => {
-                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                        }
-                    }
-                }
-                crate::domain::completion::CompletionAction::OpenFile => {
-                    match self.action_executor.open_file(final_path) {
-                        Ok(()) => {
-                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
-                        }
-                        Err(err) => {
-                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                        }
-                    }
-                }
-                crate::domain::completion::CompletionAction::OpenFolder => {
-                    match self.action_executor.open_folder(final_path) {
-                        Ok(()) => {
-                            crate::domain::completion::ActionLedgerEntry::success(&action, None)
-                        }
-                        Err(err) => {
-                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                        }
-                    }
-                }
-                crate::domain::completion::CompletionAction::AntivirusScan { executable, .. } => {
-                    let safe_args = action.resolve_arguments(final_path);
-                    match self
-                        .action_executor
-                        .execute_process(executable, &safe_args, timeout_duration)
-                        .await
-                    {
-                        Ok(output) => {
-                            let msg = if output.is_empty() {
-                                None
-                            } else {
-                                Some(output)
-                            };
-                            crate::domain::completion::ActionLedgerEntry::success(&action, msg)
-                        }
-                        Err(err) => {
-                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                        }
-                    }
-                }
-                crate::domain::completion::CompletionAction::ExecuteCommand {
-                    executable, ..
-                } => {
-                    let safe_args = action.resolve_arguments(final_path);
-                    match self
-                        .action_executor
-                        .execute_process(executable, &safe_args, timeout_duration)
-                        .await
-                    {
-                        Ok(output) => {
-                            let msg = if output.is_empty() {
-                                None
-                            } else {
-                                Some(output)
-                            };
-                            crate::domain::completion::ActionLedgerEntry::success(&action, msg)
-                        }
-                        Err(err) => {
-                            crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                        }
-                    }
-                }
-                crate::domain::completion::CompletionAction::PowerAction {
-                    kind,
-                    confirmed,
-                } => {
-                    if !*confirmed {
-                        crate::domain::completion::ActionLedgerEntry::skipped(
-                            &action,
-                            "Power action requires explicit confirmation.",
-                        )
-                    } else {
-                        match self.action_executor.power_action(*kind).await {
-                            Ok(()) => crate::domain::completion::ActionLedgerEntry::success(
-                                &action, None,
-                            ),
-                            Err(err) => {
-                                crate::domain::completion::ActionLedgerEntry::failed(&action, err)
-                            }
-                        }
-                    }
-                }
-            };
-
-            let is_failure = entry.status == crate::domain::completion::ActionStatus::Failed;
-            let failure_message = entry.message.clone();
-            let action_type = entry.action_type.clone();
-
-            let _ = self.history.update_download(id, |d| {
-                d.action_ledger.push(entry);
-                if is_failure {
-                    if let Some(msg) = failure_message {
-                        d.notice = Some(format!("Action '{action_type}' failed: {msg}"));
-                    }
-                }
-            });
-        }
-    }
-
-    fn probe_unreviewed_download(&self, id: String, url_str: String, referer: Option<String>) {
-        let history = self.history.clone();
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .user_agent(crate::infrastructure::http_download_executor::client::DEFAULT_USER_AGENT)
-            .build();
-        let Ok(client) = client else { return; };
-
-        let task = async move {
-            let Ok(url) = url::Url::parse(&url_str) else { return; };
-            let mut req = client.get(url).header(reqwest::header::RANGE, "bytes=0-0");
-            if let Some(ref r) = referer {
-                req = req.header(reqwest::header::REFERER, r);
-            }
-            if let Ok(resp) = req.send().await {
-                let status = resp.status();
-                let headers = resp.headers().clone();
-                let cd_name = headers
-                    .get(reqwest::header::CONTENT_DISPOSITION)
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(crate::domain::download::parse_content_disposition_filename);
-
-                let (total, resumable) = if status == reqwest::StatusCode::PARTIAL_CONTENT {
-                    let total = headers
-                        .get(reqwest::header::CONTENT_RANGE)
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|cr| cr.rsplit('/').next())
-                        .and_then(|s| s.parse::<u64>().ok());
-                    (total, true)
-                } else if status == reqwest::StatusCode::OK {
-                    let total = headers
-                        .get(reqwest::header::CONTENT_LENGTH)
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|s| s.parse::<u64>().ok());
-                    let has_ranges = headers
-                        .get(reqwest::header::ACCEPT_RANGES)
-                        .is_some_and(|v| v.as_bytes() == b"bytes");
-                    (total, has_ranges)
-                } else {
-                    (None, false)
-                };
-
-                let validator = headers
-                    .get(reqwest::header::ETAG)
-                    .and_then(|v| v.to_str().ok())
-                    .filter(|v| !v.starts_with("W/") && v.starts_with('"') && v.ends_with('"'))
-                    .map(|s| crate::domain::download::TransferValidator::ETag(s.to_owned()))
-                    .or_else(|| {
-                        headers
-                            .get(reqwest::header::LAST_MODIFIED)
-                            .and_then(|v| v.to_str().ok())
-                            .filter(|v| !v.trim().is_empty())
-                            .map(|s| {
-                                crate::domain::download::TransferValidator::LastModified(
-                                    s.to_owned(),
-                                )
-                            })
-                    });
-
-                let _ = history.update_download(&id, |d| {
-                    if d.needs_review {
-                        if let Some(tot) = total {
-                            d.total = Some(tot);
-                        }
-                        d.resumable = Some(resumable);
-                        if let Some(ref val) = validator {
-                            d.validator = Some(val.clone());
-                            if let crate::domain::download::TransferValidator::ETag(ref e) = val {
-                                d.etag = Some(e.clone());
-                            }
-                        }
-                        if let Some(better_name) = cd_name {
-                            let current_stem = std::path::Path::new(&d.filename)
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("");
-                            if crate::domain::download::is_generic_filename(current_stem) {
-                                d.filename = better_name;
-                            }
-                        }
-                    }
-                });
-            }
-        };
-
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(task);
-        } else {
-            std::thread::spawn(move || {
-                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    rt.block_on(task);
-                }
-            });
-        }
-    }
-
     fn fail_download(&self, id: &str, message: String) {
         let sanitized = crate::domain::download::sanitize_diagnostic_text(&message);
         if let Err(error) = self.history.update_active_download(id, |download| {
@@ -1397,55 +911,6 @@ impl DownloadTransferService {
             download.error = Some(sanitized);
         }) {
             eprintln!("Could not save failed download {id}: {}", error.message);
-        }
-    }
-
-    pub fn pause_active_for_quota(&self, explanation: &str) {
-        let active_ids = match self.history.with_downloads(|downloads| {
-            downloads
-                .iter()
-                .filter(|d| {
-                    matches!(
-                        d.status,
-                        DownloadStatus::Downloading
-                            | DownloadStatus::Connecting
-                            | DownloadStatus::Assembling
-                    )
-                })
-                .map(|d| d.id.clone())
-                .collect::<Vec<_>>()
-        }) {
-            Ok(ids) => ids,
-            Err(_) => return,
-        };
-
-        for id in active_ids {
-            self.quota_service.mark_quota_paused(&id);
-            let _ = self.stop_download(&id, DownloadStopReason::Pause);
-            let _ = self.history.update_active_download(&id, |d| {
-                d.notice = Some(explanation.to_string());
-            });
-        }
-    }
-
-    pub fn resume_quota_paused_downloads(&self) {
-        let paused_ids = self.quota_service.drain_quota_paused();
-        for id in paused_ids {
-            let _ = self.history.update_active_download(&id, |d| {
-                d.notice = None;
-                d.status = DownloadStatus::Queued;
-            });
-        }
-        self.pump_queue();
-    }
-
-    pub fn persist_quota_state(&self) {
-        if let (Some(mut settings), Some(repo)) = (
-            self.settings.read().ok().and_then(|g| g.clone()),
-            self.settings_repository.read().ok().and_then(|g| g.clone()),
-        ) {
-            settings.window_limit = self.quota_service.current_limit();
-            let _ = repo.save(&settings);
         }
     }
 }
