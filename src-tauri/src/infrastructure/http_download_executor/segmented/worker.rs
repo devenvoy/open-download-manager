@@ -1,18 +1,17 @@
-// Created: 2026-11-07
-// Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
-// Last updated: 2026-11-08
-// Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
-// Reason: feat(transfer): recover interrupted transfers and refresh expired links (Closes #3)
-// Description: Segmented HTTP download engine splitting files across concurrent range connections.
+// Created: 2026-11-10
+// Reason: refactor: modularize segmented download engine into discovery, worker, progress submodules
+// Description: Segment worker task and chunk streaming engine with dynamic range rebalancing.
 
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use tokio::fs::{self, OpenOptions};
-use tokio::io::AsyncWriteExt;
+use tokio::{
+    fs::OpenOptions,
+    io::AsyncWriteExt,
+};
 use url::Url;
 
 use crate::{
@@ -28,348 +27,17 @@ use crate::{
 };
 
 use super::{
-    assembler::segment_path,
-    policy::{MAX_TRANSIENT_RETRIES, PROGRESS_EVENT_INTERVAL_MILLISECONDS, READ_TIMEOUT_SECONDS},
-    retry::{retry_delay, send_with_retry, wait_before_retry},
-    validator::{content_range, extract_validator, SegmentValidator},
+    super::{
+        assembler::segment_path,
+        policy::{MAX_TRANSIENT_RETRIES, READ_TIMEOUT_SECONDS},
+        retry::{retry_delay, send_with_retry, wait_before_retry},
+        validator::{content_range, SegmentValidator},
+    },
+    progress::{stop_status, update_segment_progress},
+    MIN_CHUNK_REASSIGN_BYTES,
 };
 
-pub const MIN_CHUNK_REASSIGN_BYTES: u64 = 2 * 1024 * 1024; // 2 MB minimum remaining to split a chunk
-
-pub struct RangeDiscovery {
-    pub validator: SegmentValidator,
-    pub cd_filename: Option<String>,
-    pub final_url: Url,
-    pub auth_header: Option<String>,
-}
-
-pub(crate) async fn discover_ranges(
-    client: &reqwest::Client,
-    url: Url,
-    control: &mut DownloadControl,
-    override_creds: Option<&(String, String)>,
-    matcher: Option<&crate::domain::credentials::CredentialMatcher>,
-    referer: Option<&str>,
-) -> AppResult<Option<RangeDiscovery>> {
-    let resolved = super::auth::send_authenticated_request_with_redirects(
-        client,
-        &url,
-        control,
-        override_creds,
-        matcher,
-        Some(0),
-        Some(0),
-        None,
-        referer,
-    )
-    .await?;
-
-    let response = resolved.response;
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError::link_expired(
-            "Authentication required or session expired (HTTP 401). Refresh the link to resume.",
-        ));
-    }
-    if response.status() == reqwest::StatusCode::FORBIDDEN
-        || response.status() == reqwest::StatusCode::GONE
-    {
-        return Err(AppError::link_expired(format!(
-            "The download link has expired (HTTP {}). Refresh the link to resume.",
-            response.status().as_u16()
-        )));
-    }
-
-    if response.status() != reqwest::StatusCode::PARTIAL_CONTENT
-        || response
-            .headers()
-            .get(reqwest::header::CONTENT_ENCODING)
-            .is_some_and(|encoding| encoding.as_bytes() != b"identity")
-    {
-        return Ok(None);
-    }
-    let Ok((0, 0, Some(total))) = content_range(&response) else {
-        return Ok(None);
-    };
-    if total < 2 {
-        return Ok(None);
-    }
-    let cd_filename = response
-        .headers()
-        .get(reqwest::header::CONTENT_DISPOSITION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(crate::domain::download::parse_content_disposition_filename);
-    Ok(extract_validator(&response, total).map(|v| RangeDiscovery {
-        validator: v,
-        cd_filename,
-        final_url: resolved.final_url,
-        auth_header: resolved.auth_header,
-    }))
-}
-
-pub(crate) async fn segment_ranges(
-    total: u64,
-    requested_connections: u8,
-    directory: &Path,
-    id: &str,
-    existing: Option<&[DownloadSegmentProgress]>,
-) -> AppResult<Vec<DownloadSegmentProgress>> {
-    if let Some(existing_segs) = existing {
-        if !existing_segs.is_empty() {
-            let mut valid = true;
-            let mut expected_start = 0_u64;
-            for s in existing_segs {
-                if s.start != expected_start || s.end < s.start {
-                    valid = false;
-                    break;
-                }
-                expected_start = s.end + 1;
-            }
-            if valid && expected_start == total {
-                let mut restored = Vec::with_capacity(existing_segs.len());
-                for (idx, seg) in existing_segs.iter().enumerate() {
-                    let path = segment_path(directory, id, idx);
-                    let downloaded = match fs::metadata(&path).await {
-                        Ok(metadata) => metadata.len().min(seg.total),
-                        Err(_) => 0,
-                    };
-                    restored.push(DownloadSegmentProgress {
-                        start: seg.start,
-                        end: seg.end,
-                        downloaded,
-                        total: seg.total,
-                        status: if downloaded == seg.total {
-                            "complete"
-                        } else {
-                            "queued"
-                        }
-                        .to_owned(),
-                    });
-                }
-                return Ok(restored);
-            }
-        }
-    }
-
-    let count = u64::from(requested_connections.max(1)).min(total);
-    let count =
-        usize::try_from(count).map_err(|_| AppError::download("The segment count is invalid."))?;
-    let mut segments = Vec::with_capacity(count);
-    let count_u64 =
-        u64::try_from(count).map_err(|_| AppError::download("The segment count is invalid."))?;
-    let base_size = total / count_u64;
-    let remainder = total % count_u64;
-    let mut start = 0_u64;
-    for index in 0..count {
-        let index_u64 =
-            u64::try_from(index).map_err(|_| AppError::download("The segment index is invalid."))?;
-        let segment_total = base_size + u64::from(index_u64 < remainder);
-        let end = start + segment_total - 1;
-        let path = segment_path(directory, id, index);
-        let downloaded = match fs::metadata(path).await {
-            Ok(metadata) => metadata.len(),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
-            Err(error) => {
-                return Err(AppError::download(format!(
-                    "Could not inspect a partial segment: {error}"
-                )));
-            }
-        };
-        if downloaded > segment_total {
-            return Err(AppError::download(
-                "A partial segment is larger than its assigned byte range.",
-            ));
-        }
-        segments.push(DownloadSegmentProgress {
-            start,
-            end,
-            downloaded,
-            total: segment_total,
-            status: if downloaded == segment_total {
-                "complete"
-            } else {
-                "queued"
-            }
-            .to_owned(),
-        });
-        start = end + 1;
-    }
-    Ok(segments)
-}
-
-pub(crate) async fn download_segments(
-    client: reqwest::Client,
-    id: &str,
-    url: Url,
-    validator: &SegmentValidator,
-    segments: Vec<DownloadSegmentProgress>,
-    connections: u8,
-    directory: &Path,
-    control: &mut DownloadControl,
-    rate_limiter: Arc<DownloadRateLimiter>,
-    progress_handler: &DownloadProgressHandler,
-    auth_header: Option<String>,
-    referer: Option<String>,
-) -> AppResult<Vec<DownloadSegmentProgress>> {
-    let segments_shared = Arc::new(Mutex::new(segments));
-    let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
-    let auth_shared: Option<Arc<str>> = auth_header.map(Arc::from);
-    let referer_shared: Option<Arc<str>> = referer.map(Arc::from);
-
-    // Initial progress report
-    {
-        let current = segments_shared
-            .lock()
-            .map_err(|_| AppError::storage("Download progress is unavailable."))?
-            .clone();
-        let count = current.len() as u8;
-        progress_handler(DownloadProgress {
-            downloaded: current.iter().map(|segment| segment.downloaded).sum(),
-            total: Some(validator.total),
-            bytes_per_second: 0,
-            connections_progress: current,
-            notice: None,
-            transfer_kind: Some("segmented_http".to_string()),
-            effective_concurrency: Some(count),
-            etag: validator.value().map(|s| s.to_string()),
-            validator: validator.validator.clone(),
-        });
-    }
-
-    let worker_count = usize::from(connections.max(1));
-    let mut jobs = tokio::task::JoinSet::new();
-
-    let ticker_segments = segments_shared.clone();
-    let ticker_meter = meter.clone();
-    let ticker_validator = validator.clone();
-    let ticker_progress = progress_handler.clone();
-    let mut ticker_control = control.clone();
-
-    let ticker_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(PROGRESS_EVENT_INTERVAL_MILLISECONDS));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let (total_downloaded, connections_progress) = {
-                        let Ok(guard) = ticker_segments.lock() else { break; };
-                        let total: u64 = guard.iter().map(|s| s.downloaded).sum();
-                        (total, guard.clone())
-                    };
-                    let speed = ticker_meter
-                        .lock()
-                        .ok()
-                        .and_then(|mut m| {
-                            if let Some(s) = m.update(total_downloaded) {
-                                Some(s)
-                            } else {
-                                Some(m.current_throughput())
-                            }
-                        })
-                        .unwrap_or(0);
-                    let count = u8::try_from(connections_progress.len()).unwrap_or(1);
-                    ticker_progress(DownloadProgress {
-                        downloaded: total_downloaded,
-                        total: Some(ticker_validator.total),
-                        bytes_per_second: speed,
-                        connections_progress,
-                        notice: None,
-                        transfer_kind: Some("segmented_http".to_string()),
-                        effective_concurrency: Some(count),
-                        etag: ticker_validator.value().map(|s| s.to_string()),
-                        validator: ticker_validator.validator.clone(),
-                    });
-                }
-                _ = ticker_control.stopped() => {
-                    break;
-                }
-            }
-        }
-    });
-
-    for worker_id in 0..worker_count {
-        let worker_client = client.clone();
-        let worker_url = url.clone();
-        let worker_dir = directory.to_path_buf();
-        let worker_id_str = id.to_owned();
-        let worker_segments = segments_shared.clone();
-        let worker_control = control.clone();
-        let worker_validator = validator.clone();
-        let worker_rate_limiter = rate_limiter.clone();
-        let worker_progress = progress_handler.clone();
-        let worker_meter = meter.clone();
-        let worker_auth = auth_shared.clone();
-        let worker_referer = referer_shared.clone();
-
-        jobs.spawn(async move {
-            run_segment_worker(
-                worker_client,
-                worker_url,
-                worker_dir,
-                worker_id_str,
-                worker_id,
-                worker_segments,
-                worker_validator,
-                worker_control,
-                worker_rate_limiter,
-                worker_progress,
-                worker_meter,
-                worker_auth,
-                worker_referer,
-            )
-            .await
-        });
-    }
-
-    while let Some(result) = jobs.join_next().await {
-        match result {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) if matches!(error.code, "download_paused" | "download_cancelled") => {
-                ticker_handle.abort();
-                jobs.abort_all();
-                while jobs.join_next().await.is_some() {}
-                return Err(error);
-            }
-            Ok(Err(error)) => {
-                ticker_handle.abort();
-                jobs.abort_all();
-                while jobs.join_next().await.is_some() {}
-                return Err(error);
-            }
-            Err(error) => {
-                ticker_handle.abort();
-                jobs.abort_all();
-                while jobs.join_next().await.is_some() {}
-                return Err(AppError::download(format!(
-                    "A segmented transfer stopped unexpectedly: {error}"
-                )));
-            }
-        }
-    }
-
-    ticker_handle.abort();
-
-    let final_segments = segments_shared
-        .lock()
-        .map_err(|_| AppError::storage("Download progress is unavailable."))?
-        .clone();
-    let final_downloaded: u64 = final_segments.iter().map(|s| s.downloaded).sum();
-    let final_speed = meter.lock().ok().map(|m| m.current_throughput()).unwrap_or(0);
-    let final_count = u8::try_from(final_segments.len()).unwrap_or(1);
-    progress_handler(DownloadProgress {
-        downloaded: final_downloaded,
-        total: Some(validator.total),
-        bytes_per_second: final_speed,
-        connections_progress: final_segments.clone(),
-        notice: None,
-        transfer_kind: Some("segmented_http".to_string()),
-        effective_concurrency: Some(final_count),
-        etag: validator.value().map(|s| s.to_string()),
-        validator: validator.validator.clone(),
-    });
-    Ok(final_segments)
-}
-
-async fn run_segment_worker(
+pub(crate) async fn run_segment_worker(
     client: reqwest::Client,
     url: Url,
     directory: PathBuf,
@@ -545,7 +213,7 @@ async fn download_chunk(
             index,
             downloaded_init,
             "complete",
-            &validator,
+            validator,
             progress_handler,
             meter,
             None,
@@ -634,7 +302,7 @@ async fn download_chunk(
         index,
         downloaded_init,
         "downloading",
-        &validator,
+        validator,
         progress_handler,
         meter,
         None,
@@ -663,7 +331,7 @@ async fn download_chunk(
                     index,
                     downloaded,
                     stop_status(reason),
-                    &validator,
+                    validator,
                     progress_handler,
                     meter,
                     None,
@@ -900,7 +568,7 @@ async fn download_chunk(
                 index,
                 downloaded,
                 stop_status(reason),
-                &validator,
+                validator,
                 progress_handler,
                 meter,
                 None,
@@ -938,67 +606,9 @@ async fn download_chunk(
         index,
         downloaded,
         "complete",
-        &validator,
+        validator,
         progress_handler,
         meter,
         None,
     )
-}
-
-fn stop_status(reason: DownloadStopReason) -> &'static str {
-    match reason {
-        DownloadStopReason::Pause => "paused",
-        DownloadStopReason::Cancel => "cancelled",
-    }
-}
-
-fn update_segment_progress(
-    segments: &Arc<Mutex<Vec<DownloadSegmentProgress>>>,
-    index: usize,
-    downloaded: u64,
-    status: &str,
-    validator: &SegmentValidator,
-    progress_handler: &DownloadProgressHandler,
-    meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
-    notice: Option<String>,
-) -> AppResult<()> {
-    let mut segments_guard = segments
-        .lock()
-        .map_err(|_| AppError::storage("Download progress is unavailable."))?;
-    if let Some(segment) = segments_guard.get_mut(index) {
-        segment.downloaded = downloaded;
-        segment.status = status.to_owned();
-    }
-    let total_downloaded = segments_guard
-        .iter()
-        .map(|segment| segment.downloaded)
-        .fold(0_u64, u64::saturating_add);
-    let connections_progress = segments_guard.clone();
-    drop(segments_guard);
-
-    let bytes_per_second = meter
-        .lock()
-        .ok()
-        .and_then(|mut m| {
-            if let Some(s) = m.update(total_downloaded) {
-                Some(s)
-            } else {
-                Some(m.current_throughput())
-            }
-        })
-        .unwrap_or(0);
-    let count = u8::try_from(connections_progress.len()).unwrap_or(1);
-
-    progress_handler(DownloadProgress {
-        downloaded: total_downloaded,
-        total: Some(validator.total),
-        bytes_per_second,
-        connections_progress,
-        notice,
-        transfer_kind: Some("segmented_http".to_string()),
-        effective_concurrency: Some(count),
-        etag: validator.value().map(|s| s.to_string()),
-        validator: validator.validator.clone(),
-    });
-    Ok(())
 }
