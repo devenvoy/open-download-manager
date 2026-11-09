@@ -171,6 +171,7 @@ pub(crate) async fn download_hls_segment(
                     effective_concurrency: Some(eff_conns),
                     etag: None,
                     validator: None,
+                    filename: None,
                 });
             }
         }
@@ -217,6 +218,7 @@ pub(crate) async fn download_hls_segment(
                 effective_concurrency: Some(eff_conns),
                 etag: None,
                 validator: None,
+                filename: None,
             });
         }
     }

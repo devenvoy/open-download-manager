@@ -17,4 +17,5 @@ pub struct DownloadProgress {
     pub effective_concurrency: Option<u8>,
     pub etag: Option<String>,
     pub validator: Option<TransferValidator>,
+    pub filename: Option<String>,
 }

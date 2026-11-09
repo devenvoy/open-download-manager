@@ -106,10 +106,28 @@ pub fn is_generic_filename(name: &str) -> bool {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(&lower);
-    if stem.len() > 32 && !stem.contains(' ') {
+    if stem.len() >= 32
+        && !stem.contains([' ', '.', '-', '_'])
+        && stem.chars().all(|c| c.is_ascii_hexdigit())
+    {
         return true;
     }
     matches!(
+        stem,
+        "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"
+    )
+}
+
+fn is_valid_disposition_filename(name: &str) -> bool {
+    let lower = name.trim().to_ascii_lowercase();
+    if lower.is_empty() {
+        return false;
+    }
+    let stem = std::path::Path::new(&lower)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&lower);
+    !matches!(
         stem,
         "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"
     )
@@ -149,7 +167,7 @@ pub fn parse_content_disposition_filename(header_value: &str) -> Option<String> 
                 if encoding.eq_ignore_ascii_case("utf-8") {
                     if let Ok(decoded) = percent_encoding_decode(encoded_filename) {
                         let sanitized = sanitize_filename(&decoded);
-                        if !sanitized.is_empty() && !is_generic_filename(&sanitized) {
+                        if is_valid_disposition_filename(&sanitized) {
                             return Some(sanitized);
                         }
                     }
@@ -163,11 +181,103 @@ pub fn parse_content_disposition_filename(header_value: &str) -> Option<String> 
         if let Some(rest) = part.strip_prefix("filename=") {
             let raw = rest.trim().trim_matches('"');
             let sanitized = sanitize_filename(raw);
-            if !sanitized.is_empty() && !is_generic_filename(&sanitized) {
+            if is_valid_disposition_filename(&sanitized) {
                 return Some(sanitized);
             }
         }
     }
+    None
+}
+
+pub fn extension_for_mime_type(mime: &str) -> Option<&'static str> {
+    let clean_mime = mime
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match clean_mime.as_str() {
+        // Video formats
+        "video/x-matroska" | "video/mkv" => Some("mkv"),
+        "video/mp4" => Some("mp4"),
+        "video/webm" => Some("webm"),
+        "video/quicktime" => Some("mov"),
+        "video/x-msvideo" | "video/avi" => Some("avi"),
+        "video/x-flv" => Some("flv"),
+        "video/mpeg" => Some("mpeg"),
+        "video/3gpp" => Some("3gp"),
+        "video/mp2t" => Some("ts"),
+        // Audio formats
+        "audio/mpeg" | "audio/mp3" => Some("mp3"),
+        "audio/aac" => Some("aac"),
+        "audio/flac" | "audio/x-flac" => Some("flac"),
+        "audio/ogg" | "audio/vorbis" => Some("ogg"),
+        "audio/wav" | "audio/x-wav" => Some("wav"),
+        "audio/x-m4a" | "audio/m4a" => Some("m4a"),
+        "audio/opus" => Some("opus"),
+        // Documents and archives
+        "application/pdf" => Some("pdf"),
+        "application/zip" => Some("zip"),
+        "application/x-rar-compressed" | "application/vnd.rar" | "application/x-rar" => Some("rar"),
+        "application/x-7z-compressed" => Some("7z"),
+        "application/x-tar" => Some("tar"),
+        "application/gzip" | "application/x-gzip" => Some("gz"),
+        "application/json" => Some("json"),
+        "application/xml" | "text/xml" => Some("xml"),
+        "text/html" => Some("html"),
+        "text/plain" => Some("txt"),
+        "image/jpeg" => Some("jpg"),
+        "image/png" => Some("png"),
+        "image/gif" => Some("gif"),
+        "image/webp" => Some("webp"),
+        "image/svg+xml" => Some("svg"),
+        // Generic binary streams should NOT be assigned an extension
+        "application/octet-stream" | "" => None,
+        // Fallback to mime_guess crate
+        other => mime_guess::get_mime_extensions_str(other).and_then(|exts| exts.first().copied()),
+    }
+}
+
+pub fn resolve_response_filename(
+    current_name: &str,
+    content_disposition: Option<&str>,
+    content_type: Option<&str>,
+) -> Option<String> {
+    let cd_filename = content_disposition.and_then(parse_content_disposition_filename);
+    let mime_ext = content_type.and_then(extension_for_mime_type);
+
+    if let Some(cd_name) = cd_filename {
+        let has_ext = std::path::Path::new(&cd_name)
+            .extension()
+            .is_some_and(|e| !e.is_empty());
+        if has_ext {
+            return Some(cd_name);
+        } else if let Some(ext) = mime_ext {
+            return Some(format!("{cd_name}.{ext}"));
+        } else {
+            return Some(cd_name);
+        }
+    }
+
+    // No Content-Disposition filename found.
+    let current_has_ext = std::path::Path::new(current_name)
+        .extension()
+        .is_some_and(|e| !e.is_empty());
+
+    if !current_has_ext {
+        if let Some(ext) = mime_ext {
+            return Some(format!("{current_name}.{ext}"));
+        }
+    } else if is_generic_filename(current_name) {
+        if let Some(ext) = mime_ext {
+            let stem = std::path::Path::new(current_name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(current_name);
+            return Some(format!("{stem}.{ext}"));
+        }
+    }
+
     None
 }
 

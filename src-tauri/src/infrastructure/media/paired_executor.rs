@@ -151,6 +151,7 @@ impl PairedDownloadExecutor {
             effective_concurrency: Some(2),
             etag: None,
             validator: None,
+            filename: None,
         });
 
         let state = Arc::new(Mutex::new(PairedState {
@@ -291,6 +292,7 @@ impl PairedDownloadExecutor {
                             effective_concurrency: Some(2),
                             etag: None,
                             validator: None,
+                            filename: None,
                         });
                     }
                 }

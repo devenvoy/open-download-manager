@@ -254,21 +254,38 @@ impl HttpDownloadExecutor {
                 effective_connections = self.resolve_connections(final_host, effective_connections);
                 if effective_connections > 1 {
                     let validator = discovery.validator;
-                    if let Some(better_name) = discovery.cd_filename {
-                        let current_stem = destination
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("");
-                        let has_ext = destination.extension().is_some();
+                    let current_filename = destination
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
+                    let mut resolved_filename: Option<String> = None;
+                    if let Some(better_name) = crate::domain::download::resolve_response_filename(
+                        current_filename,
+                        discovery.cd_filename.as_deref(),
+                        discovery.content_type.as_deref(),
+                    ) {
                         let sanitized_better = sanitize_filename(&better_name);
-                        if !sanitized_better.is_empty() && (!has_ext || crate::domain::download::is_generic_filename(current_stem) || sanitized_better != current_stem) {
+                        if !sanitized_better.is_empty() && sanitized_better != current_filename {
                             if download.conflict_policy == Some(FileConflictPolicy::Rename) {
                                 destination = self.allocator.allocate_conflict_free_destination(&directory, &sanitized_better);
                             } else {
-                                destination = directory.join(sanitized_better);
+                                destination = directory.join(&sanitized_better);
                             }
+                            resolved_filename = Some(sanitized_better);
                         }
                     }
+                    let progress_handler: DownloadProgressHandler = if let Some(ref name) = resolved_filename {
+                        let name = name.clone();
+                        let inner = progress_handler.clone();
+                        Arc::new(move |mut p: DownloadProgress| {
+                            if p.filename.is_none() {
+                                p.filename = Some(name.clone());
+                            }
+                            inner(p);
+                        })
+                    } else {
+                        progress_handler.clone()
+                    };
                     metrics.range_supported = true;
                     metrics.known_total = Some(validator.total);
                     let previous = self
@@ -320,6 +337,7 @@ impl HttpDownloadExecutor {
                             effective_concurrency: Some(effective_connections),
                             etag: validator.value().map(|s| s.to_string()),
                             validator: validator.validator.clone(),
+                            filename: None,
                         });
                     }
                     let segments = segmented::segment_ranges(
@@ -412,6 +430,7 @@ impl HttpDownloadExecutor {
                                 effective_concurrency: Some(1),
                                 etag: None,
                                 validator: None,
+                                filename: None,
                             });
                         }
                     }

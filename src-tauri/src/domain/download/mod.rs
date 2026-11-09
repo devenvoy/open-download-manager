@@ -25,8 +25,9 @@ pub use conflict::{
     DestinationAllocator, FileConflictPolicy,
 };
 pub use filename::{
-    filename_from_url, is_generic_filename, parse_content_disposition_filename, percent_decode,
-    redact_download_url, sanitize_diagnostic_text, sanitize_filename,
+    extension_for_mime_type, filename_from_url, is_generic_filename,
+    parse_content_disposition_filename, percent_decode, redact_download_url,
+    resolve_response_filename, sanitize_diagnostic_text, sanitize_filename,
 };
 pub use protocol::DownloadProtocol;
 pub use record::{DownloadRecord, DownloadSegmentProgress, SerializableDownloadRecordRef};

@@ -72,6 +72,7 @@ pub(crate) async fn download_segments(
             effective_concurrency: Some(count),
             etag: validator.value().map(|s| s.to_string()),
             validator: validator.validator.clone(),
+            filename: None,
         });
     }
 
@@ -117,6 +118,7 @@ pub(crate) async fn download_segments(
                         effective_concurrency: Some(count),
                         etag: ticker_validator.value().map(|s| s.to_string()),
                         validator: ticker_validator.validator.clone(),
+                        filename: None,
                     });
                 }
                 _ = ticker_control.stopped() => {
@@ -205,6 +207,7 @@ pub(crate) async fn download_segments(
         effective_concurrency: Some(final_count),
         etag: validator.value().map(|s| s.to_string()),
         validator: validator.validator.clone(),
+        filename: None,
     });
     Ok(final_segments)
 }

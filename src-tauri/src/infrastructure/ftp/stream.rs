@@ -91,6 +91,7 @@ pub async fn stream_ftp_payload(
                 effective_concurrency: Some(1),
                 etag: None,
                 validator: validator.clone(),
+                filename: None,
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;
@@ -118,6 +119,7 @@ pub async fn stream_ftp_payload(
         effective_concurrency: Some(1),
         etag: None,
         validator,
+        filename: None,
     });
 
     destination_file.flush().await.map_err(|e| {

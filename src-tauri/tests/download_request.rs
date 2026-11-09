@@ -8,8 +8,9 @@
 use std::path::PathBuf;
 
 use open_download_manager_lib::domain::download::{
-    filename_from_url, is_generic_filename, parse_content_disposition_filename,
-    redact_download_url, sanitize_filename, DownloadProtocol, DownloadRequest,
+    extension_for_mime_type, filename_from_url, is_generic_filename,
+    parse_content_disposition_filename, redact_download_url, resolve_response_filename,
+    sanitize_filename, DownloadProtocol, DownloadRequest,
 };
 
 fn request(url: &str) -> DownloadRequest {
@@ -164,6 +165,13 @@ fn generic_filenames_are_identified_and_rejected() {
     assert!(is_generic_filename(""));
     assert!(!is_generic_filename("my_document.pdf"));
     assert!(!is_generic_filename("my_video.mp4"));
+    // Real release and movie filenames longer than 32 characters without spaces MUST NOT be generic
+    assert!(!is_generic_filename(
+        "A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv"
+    ));
+    assert!(!is_generic_filename(
+        "ubuntu-24.04.1-desktop-amd64.iso"
+    ));
 }
 
 #[test]
@@ -176,9 +184,65 @@ fn content_disposition_header_parsing_extracts_and_sanitizes() {
         parse_content_disposition_filename("attachment; filename*=UTF-8''my%20archive%2Ezip"),
         Some("my archive.zip".to_string())
     );
+    // Real movie filename in content-disposition is correctly extracted
+    assert_eq!(
+        parse_content_disposition_filename(
+            "attachment; filename=\"A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv\""
+        ),
+        Some("A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv".to_string())
+    );
     // Generic names in content-disposition are discarded
     assert_eq!(
         parse_content_disposition_filename("attachment; filename=\"video\""),
+        None
+    );
+}
+
+#[test]
+fn mime_type_extension_derivation_and_response_resolution() {
+    assert_eq!(extension_for_mime_type("video/mkv"), Some("mkv"));
+    assert_eq!(extension_for_mime_type("video/x-matroska"), Some("mkv"));
+    assert_eq!(extension_for_mime_type("video/mp4; charset=binary"), Some("mp4"));
+    assert_eq!(extension_for_mime_type("application/pdf"), Some("pdf"));
+    assert_eq!(extension_for_mime_type("application/octet-stream"), None);
+
+    // Resolves Content-Disposition with full filename
+    assert_eq!(
+        resolve_response_filename(
+            "download_video-downloads_googleusercontent_com",
+            Some("attachment; filename=\"A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv\""),
+            Some("video/mkv"),
+        ),
+        Some("A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv".to_string())
+    );
+
+    // Fallback when Content-Disposition has no extension
+    assert_eq!(
+        resolve_response_filename(
+            "download_video-downloads_googleusercontent_com",
+            Some("attachment; filename=\"MyMovie\""),
+            Some("video/mkv"),
+        ),
+        Some("MyMovie.mkv".to_string())
+    );
+
+    // Fallback when no Content-Disposition is present and initial name has no extension
+    assert_eq!(
+        resolve_response_filename(
+            "download_video-downloads_googleusercontent_com",
+            None,
+            Some("video/mkv"),
+        ),
+        Some("download_video-downloads_googleusercontent_com.mkv".to_string())
+    );
+
+    // Keeps good existing filename
+    assert_eq!(
+        resolve_response_filename(
+            "document.pdf",
+            None,
+            Some("application/pdf"),
+        ),
         None
     );
 }

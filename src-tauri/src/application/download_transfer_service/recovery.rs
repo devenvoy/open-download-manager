@@ -30,10 +30,6 @@ impl DownloadTransferService {
             if let Ok(resp) = req.send().await {
                 let status = resp.status();
                 let headers = resp.headers().clone();
-                let cd_name = headers
-                    .get(reqwest::header::CONTENT_DISPOSITION)
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(crate::domain::download::parse_content_disposition_filename);
 
                 let (total, resumable) = if status == reqwest::StatusCode::PARTIAL_CONTENT {
                     let total = headers
@@ -84,13 +80,20 @@ impl DownloadTransferService {
                                 d.etag = Some(e.clone());
                             }
                         }
-                        if let Some(better_name) = cd_name {
-                            let current_stem = std::path::Path::new(&d.filename)
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("");
-                            if crate::domain::download::is_generic_filename(current_stem) {
-                                d.filename = better_name;
+                        let cd_header = headers
+                            .get(reqwest::header::CONTENT_DISPOSITION)
+                            .and_then(|v| v.to_str().ok());
+                        let ct_header = headers
+                            .get(reqwest::header::CONTENT_TYPE)
+                            .and_then(|v| v.to_str().ok());
+                        if let Some(better_name) = crate::domain::download::resolve_response_filename(
+                            &d.filename,
+                            cd_header,
+                            ct_header,
+                        ) {
+                            let sanitized = crate::domain::download::sanitize_filename(&better_name);
+                            if !sanitized.is_empty() && sanitized != d.filename {
+                                d.filename = sanitized;
                             }
                         }
                     }

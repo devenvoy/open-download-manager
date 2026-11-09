@@ -855,6 +855,15 @@ impl DownloadTransferService {
                 if progress.notice.is_some() {
                     download.notice = progress.notice;
                 }
+                if let Some(ref filename) = progress.filename {
+                    if download.filename != *filename {
+                        download.filename = filename.clone();
+                        if let Some(ref current_path) = download.path {
+                            let path_buf = std::path::PathBuf::from(current_path);
+                            download.path = Some(path_buf.with_file_name(filename).to_string_lossy().into_owned());
+                        }
+                    }
+                }
                 if let Some(ref tk) = progress.transfer_kind {
                     download.transfer_kind = Some(tk.clone());
                 }

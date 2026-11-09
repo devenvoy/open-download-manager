@@ -301,6 +301,7 @@ impl MmsDownloadExecutor {
                     effective_concurrency: Some(1),
                     etag: None,
                     validator: None,
+                    filename: None,
                 });
 
                 rate_limiter.throttle(payload_len as u64).await;

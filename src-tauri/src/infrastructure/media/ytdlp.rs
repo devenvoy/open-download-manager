@@ -313,6 +313,7 @@ impl YtDlpTools {
                                         effective_concurrency: Some(8),
                                         etag: None,
                                         validator: None,
+                                        filename: None,
                                     });
                                 }
                             }

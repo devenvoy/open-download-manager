@@ -365,10 +365,35 @@ function sharedHandoff(url, payload, tabId) {
   return pending;
 }
 
-async function handleInterceptedDownload(item) {
-  if (!item) return;
+const interceptedDownloadIds = new Set();
+
+async function handleInterceptedDownload(item, fromDetermining = false) {
+  if (!item || interceptedDownloadIds.has(item.id)) return;
   const url = item.finalUrl || item.url;
   if (!httpUrl(url) || item.state === 'complete') return;
+
+  let rawFilename = item.filename ? item.filename.split(/[\\/]/).pop().trim() : '';
+  if (!rawFilename) {
+    try {
+      const parsed = new URL(url);
+      const leaf = parsed.pathname.split('/').filter(Boolean).pop();
+      if (leaf && leaf.includes('.')) {
+        rawFilename = decodeURIComponent(leaf);
+      }
+    } catch {}
+  }
+
+  // If filename is not yet known and the browser supports onDeterminingFilename,
+  // allow onDeterminingFilename to receive server response headers and resolve filename.
+  if (!fromDetermining && !rawFilename && api.downloads.onDeterminingFilename) {
+    return;
+  }
+
+  interceptedDownloadIds.add(item.id);
+  if (interceptedDownloadIds.size > 200) {
+    const oldest = interceptedDownloadIds.values().next().value;
+    interceptedDownloadIds.delete(oldest);
+  }
 
   let paused = false, accepted = false;
   try {
@@ -384,17 +409,6 @@ async function handleInterceptedDownload(item) {
           if (!referer && tabs[0].url && tabs[0].url.startsWith('http')) {
             referer = tabs[0].url;
           }
-        }
-      } catch {}
-    }
-
-    let rawFilename = item.filename ? item.filename.split(/[\\/]/).pop().trim() : '';
-    if (!rawFilename) {
-      try {
-        const parsed = new URL(url);
-        const leaf = parsed.pathname.split('/').filter(Boolean).pop();
-        if (leaf && leaf.includes('.')) {
-          rawFilename = decodeURIComponent(leaf);
         }
       } catch {}
     }
@@ -427,8 +441,8 @@ async function handleInterceptedDownload(item) {
   }
 }
 
-api.downloads.onCreated.addListener(item => handleInterceptedDownload(item));
+api.downloads.onCreated.addListener(item => handleInterceptedDownload(item, false));
 
 if (api.downloads.onDeterminingFilename) {
-  api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item));
+  api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item, true));
 }

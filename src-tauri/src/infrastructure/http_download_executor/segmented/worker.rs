@@ -140,6 +140,7 @@ pub(crate) async fn run_segment_worker(
                                 effective_concurrency: Some(worker_id as u8 + 1),
                                 etag: validator.value().map(|s| s.to_string()),
                                 validator: validator.validator.clone(),
+                                filename: None,
                             });
 
                             Some(new_chunk_idx)

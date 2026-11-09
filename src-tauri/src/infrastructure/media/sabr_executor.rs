@@ -297,6 +297,7 @@ impl SabrDownloadExecutor {
                 effective_concurrency: Some(2),
                 etag: None,
                 validator: None,
+                filename: None,
             });
         }
 
@@ -324,6 +325,7 @@ impl SabrDownloadExecutor {
                 effective_concurrency: Some(1),
                 etag: None,
                 validator: None,
+                filename: None,
             });
         }
 
@@ -380,6 +382,7 @@ impl SabrDownloadExecutor {
                         effective_concurrency: Some(1),
                         etag: None,
                         validator: None,
+                        filename: None,
                     });
                     return ytdlp.download(
                         &watch_url,

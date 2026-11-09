@@ -22,6 +22,7 @@ use super::super::{
 pub struct RangeDiscovery {
     pub validator: SegmentValidator,
     pub cd_filename: Option<String>,
+    pub content_type: Option<String>,
     pub final_url: Url,
     pub auth_header: Option<String>,
 }
@@ -81,9 +82,15 @@ pub(crate) async fn discover_ranges(
         .get(reqwest::header::CONTENT_DISPOSITION)
         .and_then(|value| value.to_str().ok())
         .and_then(crate::domain::download::parse_content_disposition_filename);
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|s| s.to_owned());
     Ok(extract_validator(&response, total).map(|v| RangeDiscovery {
         validator: v,
         cd_filename,
+        content_type,
         final_url: resolved.final_url,
         auth_header: resolved.auth_header,
     }))

@@ -27,7 +27,7 @@ use crate::{
         download_result::DownloadResult,
         error::{AppError, AppResult},
     },
-    domain::download::{is_generic_filename, parse_content_disposition_filename, DownloadSegmentProgress},
+    domain::download::DownloadSegmentProgress,
 };
 
 use super::{
@@ -171,33 +171,51 @@ pub(crate) async fn download_single_stream(
 
     let new_validator = extract_validator(&response, total.unwrap_or(downloaded));
 
-    // Wire Content-Disposition filename: if the current destination has a
-    // generic stem or no extension, prefer a better name from the server's response header.
-    let destination = {
-        let current_stem = destination
-            .file_stem()
+    // Wire Content-Disposition / Content-Type filename: if the server provides
+    // a better filename or extension, update destination and emit progress notification.
+    let (destination, resolved_filename) = {
+        let current_filename = destination
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("");
-        let has_ext = destination.extension().is_some();
-        if let Some(cd_value) = response
+        let cd_value = response
             .headers()
             .get(reqwest::header::CONTENT_DISPOSITION)
-            .and_then(|v| v.to_str().ok())
-        {
-            if let Some(better_name) = parse_content_disposition_filename(cd_value) {
-                let sanitized = crate::domain::download::sanitize_filename(&better_name);
-                if !sanitized.is_empty() && (!has_ext || is_generic_filename(current_stem) || sanitized != current_stem) {
-                    destination.with_file_name(&sanitized)
-                } else {
-                    destination
-                }
+            .and_then(|v| v.to_str().ok());
+        let ct_value = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok());
+
+        if let Some(better_name) = crate::domain::download::resolve_response_filename(
+            current_filename,
+            cd_value,
+            ct_value,
+        ) {
+            let sanitized = crate::domain::download::sanitize_filename(&better_name);
+            if !sanitized.is_empty() && sanitized != current_filename {
+                (destination.with_file_name(&sanitized), Some(sanitized))
             } else {
-                destination
+                (destination, None)
             }
         } else {
-            destination
+            (destination, None)
         }
     };
+
+    let wrapped_progress_handler: Option<DownloadProgressHandler> = resolved_filename.as_ref().map(|name| {
+        let name = name.clone();
+        let inner = progress_handler.clone();
+        std::sync::Arc::new(move |mut p: DownloadProgress| {
+            if p.filename.is_none() {
+                p.filename = Some(name.clone());
+            }
+            inner(p);
+        }) as DownloadProgressHandler
+    });
+    let progress_handler: &DownloadProgressHandler = wrapped_progress_handler
+        .as_ref()
+        .unwrap_or(progress_handler);
 
     let mut file = OpenOptions::new()
         .write(true)
@@ -230,6 +248,7 @@ pub(crate) async fn download_single_stream(
         effective_concurrency: Some(1),
         etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
         validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
+        filename: None,
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -346,6 +365,7 @@ pub(crate) async fn download_single_stream(
                                     effective_concurrency: Some(1),
                                     etag: None,
                                     validator: None,
+                                    filename: None,
                                 });
                                 response = new_response;
                                 continue 'stream;
@@ -448,6 +468,7 @@ pub(crate) async fn download_single_stream(
                                 effective_concurrency: Some(1),
                                 etag: None,
                                 validator: None,
+                                filename: None,
                             });
                             response = new_response;
                             continue 'stream;
@@ -511,6 +532,7 @@ pub(crate) async fn download_single_stream(
                 effective_concurrency: Some(1),
                 etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
                 validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
+                filename: None,
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;
