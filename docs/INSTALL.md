@@ -52,6 +52,10 @@ Open Download Manager communicates seamlessly with your browser using the Native
 5. Click **Load unpacked** and select the unzipped extension directory (the folder containing `manifest.json`).
 6. Open Open Download Manager desktop app, navigate to **Options → Browser Integration**, and confirm your browser shows as **Connected**.
 
+<p align="center">
+  <img src="../assets/screenshots/05-browser-integration.png" alt="Browser Integration Connected Status" width="600" />
+</p>
+
 ### Mozilla Firefox
 1. Download `open-download-manager_0.2.0_ext_firefox.xpi` from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest).
 2. In Firefox, open `about:addons` (or press `Ctrl+Shift+A` / `Cmd+Shift+A`).
