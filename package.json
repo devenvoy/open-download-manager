@@ -23,6 +23,7 @@
     "clean": "cargo clean",
     "pack:extension": "bun scripts/pack-extension.mjs",
     "pack:extension:firefox": "bun scripts/pack-extension.mjs",
+    "pack:release": "bun scripts/pack-release.mjs",
     "test": "cargo test && bun run test:extension",
     "test:extension": "bun test ./extension ./renderer"
   },

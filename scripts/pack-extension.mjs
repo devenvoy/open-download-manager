@@ -47,44 +47,34 @@ console.log('✓ Cleaned extension folders prepared:');
 console.log(`  - Chrome/Edge/Brave/Opera: ${chromeDist}`);
 console.log(`  - Firefox: ${firefoxDist}`);
 
-// 3. Zip archives
-const chromeZip = path.join(distDir, 'open-download-manager-chrome.zip');
-const firefoxXpi = path.join(distDir, 'open-download-manager-firefox.xpi');
+// 3. Zip archives adhering to appName_version_platform_variant format
+const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const version = pkg.version || '0.2.0';
+const baseName = pkg.name || 'open-download-manager';
+
+const chromeZipFormatted = path.join(distDir, `${baseName}_${version}_ext_chrome.zip`);
+const firefoxXpiFormatted = path.join(distDir, `${baseName}_${version}_ext_firefox.xpi`);
+const firefoxZipFormatted = path.join(distDir, `${baseName}_${version}_ext_firefox.zip`);
+
+const chromeZipLegacy = path.join(distDir, 'open-download-manager-chrome.zip');
+const firefoxXpiLegacy = path.join(distDir, 'open-download-manager-firefox.xpi');
 
 try {
-  // Use zip if available
-  execSync(`cd "${chromeDist}" && zip -r "${chromeZip}" . -x "*.DS_Store"`, { stdio: 'pipe' });
-  execSync(`cd "${firefoxDist}" && zip -r "${firefoxXpi}" . -x "*.DS_Store"`, { stdio: 'pipe' });
-  console.log('✓ Packages generated:');
-  console.log(`  - Chrome Package:  ${chromeZip}`);
-  console.log(`  - Firefox Add-on:  ${firefoxXpi}`);
+  // Use zip to package extensions cleanly without launching desktop browsers
+  execSync(`cd "${chromeDist}" && zip -r "${chromeZipFormatted}" . -x "*.DS_Store"`, { stdio: 'pipe' });
+  execSync(`cd "${firefoxDist}" && zip -r "${firefoxXpiFormatted}" . -x "*.DS_Store"`, { stdio: 'pipe' });
+  
+  // Copy to formatted firefox zip and legacy filenames
+  fs.copyFileSync(firefoxXpiFormatted, firefoxZipFormatted);
+  fs.copyFileSync(chromeZipFormatted, chromeZipLegacy);
+  fs.copyFileSync(firefoxXpiFormatted, firefoxXpiLegacy);
+
+  console.log('✓ Release packages generated:');
+  console.log(`  - Chrome/Edge/Brave: ${chromeZipFormatted}`);
+  console.log(`  - Firefox XPI:       ${firefoxXpiFormatted}`);
+  console.log(`  - Firefox ZIP:       ${firefoxZipFormatted}`);
 } catch (e) {
-  console.warn('Note: zip command failed or not found. Folders are available directly.');
-}
-
-// 4. Try packing .crx with Chrome if Chrome binary exists
-const chromeExecutables = [
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  'google-chrome',
-  'chromium',
-  'chrome'
-];
-
-for (const exe of chromeExecutables) {
-  try {
-    const test = execSync(`which "${exe}" 2>/dev/null || [ -f "${exe}" ] && echo "found"`, { stdio: 'pipe' }).toString().trim();
-    if (test === 'found' || test.length > 0) {
-      execSync(`"${exe}" --pack-extension="${chromeDist}"`, { stdio: 'pipe' });
-      // Chrome writes chrome.crx next to chromeDist (in distDir)
-      const rawCrx = path.join(distDir, 'chrome.crx');
-      const targetCrx = path.join(distDir, 'open-download-manager.crx');
-      if (fs.existsSync(rawCrx)) {
-        fs.renameSync(rawCrx, targetCrx);
-        console.log(`  - Chrome CRX:      ${targetCrx}`);
-      }
-      break;
-    }
-  } catch {}
+  console.warn('Note: zip command failed or not found. Folders are available directly.', e.message);
 }
 
 console.log('\nExtension packs successfully created in: ' + distDir);
