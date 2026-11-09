@@ -1,6 +1,6 @@
 {
   "name": "open-download-manager",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "description": "Open Download Manager desktop application built with Rust and Tauri",
   "repository": {
