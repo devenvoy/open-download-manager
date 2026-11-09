@@ -34,36 +34,7 @@ if (optionsMode) document.title = "Options";
 if (addMode) document.title = "Download File Info";
 if (schedulerMode) document.title = "Scheduler";
 
-let currentThemeSetting = "system";
-
-function getEffectiveTheme(themeSetting) {
-	if (themeSetting === "light" || themeSetting === "dark") {
-		return themeSetting;
-	}
-	return typeof window !== "undefined" &&
-		window.matchMedia &&
-		window.matchMedia("(prefers-color-scheme: dark)").matches
-		? "dark"
-		: "light";
-}
-
-function applyTheme(themeSetting = "system") {
-	currentThemeSetting = themeSetting || "system";
-	const effective = getEffectiveTheme(currentThemeSetting);
-	document.documentElement.setAttribute("data-theme", effective);
-	document.documentElement.setAttribute("data-theme-setting", currentThemeSetting);
-	document.documentElement.style.colorScheme = effective;
-}
-
-if (typeof window !== "undefined" && window.matchMedia) {
-	window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-		if (currentThemeSetting === "system") {
-			applyTheme("system");
-		}
-	});
-}
-
-applyTheme("system");
+initTheme();
 let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },
 	selectedId = null,
 	selectionAnchorId = null,
@@ -537,102 +508,7 @@ renderDetails = function () {
 	suppressCompletion.checked = state.settings.hideCompletionDialog === true;
 	fitWindowToContent("#details-dialog");
 };
-function numeric(value) {
-	const result = Number(value);
-	return Number.isFinite(result) && result > 0 ? result : 0;
-}
-function redactUrl(raw) {
-	if (!raw) return "";
-	try {
-		const u = new URL(raw);
-		if (u.protocol === "ftp:" && (u.username || u.password)) {
-			const port = u.port && u.port !== "21" ? `:${u.port}` : "";
-			return `ftp://******:******@${u.hostname}${port}${u.pathname}`;
-		}
-		u.username = "";
-		u.password = "";
-		u.search = "";
-		u.hash = "";
-		return u.href;
-	} catch {
-		return raw;
-	}
-}
-function statusOf(d) {
-	const value = String(d.status || "queued").toLowerCase();
-	return (
-		{
-			active: "downloading",
-			running: "downloading",
-			probing: "connecting",
-			complete: "completed",
-			done: "completed",
-			error: "failed",
-			canceled: "cancelled",
-			pending: "queued",
-		}[value] || value
-	);
-}
-function categoryOf(d) {
-	const value = String(d.category || "").toLowerCase();
-	if (/video/.test(value)) return "Video";
-	if (/audio|music/.test(value)) return "Audio";
-	if (/doc|text/.test(value)) return "Documents";
-	if (/arch|compress/.test(value)) return "Archives";
-	if (/program/.test(value)) return "Programs";
-	return "Other";
-}
-function bytes(value) {
-	const size = numeric(value);
-	if (!size) return "0 B";
-	const power = Math.min(4, Math.floor(Math.log(size) / Math.log(1024)));
-	return `${(size / 1024 ** power).toFixed(power ? 2 : 0)} ${["B", "KB", "MB", "GB", "TB"][power]}`;
-}
-function date(value) {
-	if (!value) return "";
-	const parsed = new Date(value);
-	return Number.isNaN(parsed.getTime())
-		? ""
-		: parsed.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
-}
-function timeLeft(d) {
-	const total = numeric(d.total) || numeric(d.streamProgress?.estimatedBytes);
-	if (!total || !numeric(d.speed)) return "";
-	const seconds = Math.max(
-		0,
-		Math.ceil((total - numeric(d.downloaded)) / numeric(d.speed)),
-	);
-	return (!d.total || d.estimated ? "≈ " : "") + duration(seconds);
-}
-function sizeLabel(d) {
-	if (statusOf(d) === "connecting" || statusOf(d) === "queued") return "Connecting…";
-	return numeric(d.total)
-		? (d.estimated ? "≈ " : "") + bytes(d.total)
-		: d.streamProgress?.estimatedBytes
-			? "≈ " + bytes(d.streamProgress.estimatedBytes)
-			: d.kind === "hls"
-				? "Calculating from segments…"
-				: "Not supplied by server";
-}
-function duration(seconds) {
-	return seconds < 60
-		? `${Math.ceil(seconds)} sec`
-		: seconds < 3600
-			? `${Math.ceil(seconds / 60)} min`
-			: `${Math.floor(seconds / 3600)} hr ${Math.floor((seconds % 3600) / 60)} min`;
-}
-function percentage(d) {
-	return statusOf(d) === "completed"
-		? 100
-		: numeric(d.total)
-			? Math.min(100, (numeric(d.downloaded) / numeric(d.total)) * 100)
-			: d.streamProgress?.total
-				? (d.streamProgress.completed / d.streamProgress.total) * 100
-				: null;
-}
-function messageOf(error) {
-	return error?.message || String(error || "The operation failed.");
-}
+
 function notify(message, error = false, options = {}) {
 	clearTimeout(toastTimer);
 	$("#toast-text").textContent = message;
@@ -1501,13 +1377,7 @@ function resetProxyTestStatus() {
 
 let currentDetectedProxyConfig = null;
 
-function formatProxyDisplay(proxy) {
-	if (!proxy || !proxy.enabled || proxy.protocol === "direct") {
-		return "Direct (No Proxy)";
-	}
-	const userPrefix = proxy.username ? `${proxy.username}@` : "";
-	return `${String(proxy.protocol || "http").toUpperCase()} ${userPrefix}${proxy.host}:${proxy.port}`;
-}
+
 
 function openProxyDiscoveryDialog(detected) {
 	currentDetectedProxyConfig = detected;
@@ -2586,48 +2456,7 @@ const tablePoint = (event) => {
 		y: event.clientY - bounds.top + tableScroll.scrollTop,
 	};
 };
-function initializeColumnResizing() {
-	const table = $(".downloads-table"),
-		columns = $$(".downloads-table col"),
-		headers = $$(".downloads-table thead th");
-	headers.forEach((header, index) => {
-		const handle = element("span", "column-resizer");
-		handle.setAttribute("aria-hidden", "true");
-		header.append(handle);
-		handle.addEventListener("pointerdown", (event) => {
-			if (event.button !== 0) return;
-			event.preventDefault();
-			event.stopPropagation();
-			const startX = event.clientX,
-				startWidth = header.getBoundingClientRect().width,
-				startTableWidth = table.getBoundingClientRect().width;
-			handle.setPointerCapture(event.pointerId);
-			document.body.classList.add("resizing-columns");
-			const move = (moveEvent) => {
-				const width = Math.max(
-						index === 1 ? 20 : 45,
-						startWidth + moveEvent.clientX - startX,
-					),
-					delta = width - startWidth;
-				columns[index].style.width = `${width}px`;
-				table.style.width = `${Math.max(735, startTableWidth + delta)}px`;
-				table.style.minWidth = table.style.width;
-			};
-			const finish = (finishEvent) => {
-				try {
-					handle.releasePointerCapture(finishEvent.pointerId);
-				} catch {}
-				handle.removeEventListener("pointermove", move);
-				handle.removeEventListener("pointerup", finish);
-				handle.removeEventListener("pointercancel", finish);
-				document.body.classList.remove("resizing-columns");
-			};
-			handle.addEventListener("pointermove", move);
-			handle.addEventListener("pointerup", finish);
-			handle.addEventListener("pointercancel", finish);
-		});
-	});
-}
+
 initializeColumnResizing();
 tableScroll.addEventListener("pointerdown", (event) => {
 	if (

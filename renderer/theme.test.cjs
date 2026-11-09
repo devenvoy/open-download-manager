@@ -12,6 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const themeModule = require('./theme.js');
 
 test('theme helper resolves system, light, and dark modes correctly', () => {
   let isOsDark = false;
@@ -45,6 +46,11 @@ test('theme helper resolves system, light, and dark modes correctly', () => {
   // 5. Explicit modes still override OS dark
   assert.equal(getEffectiveTheme('light'), 'light');
   assert.equal(getEffectiveTheme('dark'), 'dark');
+
+  // 6. Test exported theme.js module directly
+  assert.equal(themeModule.getEffectiveTheme('light', matchMedia), 'light');
+  assert.equal(themeModule.getEffectiveTheme('dark', matchMedia), 'dark');
+  assert.equal(themeModule.getEffectiveTheme('system', matchMedia), 'dark');
 });
 
 test('theme applies attributes to documentElement correctly', () => {
