@@ -22,7 +22,7 @@ use open_download_manager_lib::{
     },
     domain::{
         category::DownloadCategory,
-        download::{DownloadRecord, DownloadRequest, DownloadStatus},
+        download::{BrowserRequestHeaders, DownloadRecord, DownloadRequest, DownloadStatus},
         settings::{Settings, SettingsPatch},
     },
     infrastructure::{
@@ -104,6 +104,7 @@ async fn extension_based_category_detection_routes_to_category_directories() {
             youtube_format: None,
             conflict_policy: None,
             credentials: None,
+            request_headers: None,
             completion_actions: None,
         };
 
@@ -165,6 +166,7 @@ async fn changed_defaults_do_not_relocate_existing_downloads() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
     let ids1 = transfer.add(req1, &settings_a).unwrap();
@@ -196,6 +198,7 @@ async fn changed_defaults_do_not_relocate_existing_downloads() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
     let ids2 = transfer.add(req2, &settings_b).unwrap();
@@ -260,6 +263,7 @@ fn restart_and_resume_retains_recorded_final_and_temp_paths() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
@@ -358,6 +362,7 @@ async fn temporary_parts_directory_is_used_during_download_and_assembled_to_dest
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 

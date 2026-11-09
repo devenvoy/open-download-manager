@@ -415,6 +415,8 @@ fn create_test_record(id: &str, url: &str, filename: &str, dir: &str) -> Downloa
         conflict_policy: None,
         sabr: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     }

@@ -33,6 +33,7 @@ fn request(url: &str) -> DownloadRequest {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     }
 }
@@ -172,6 +173,10 @@ fn generic_filenames_are_identified_and_rejected() {
     assert!(!is_generic_filename(
         "ubuntu-24.04.1-desktop-amd64.iso"
     ));
+    // Hashes and last-path tokens MUST NOT be treated as generic
+    assert!(!is_generic_filename("c4ca4238a0b923820dcc509a6f75849b"));
+    assert!(!is_generic_filename("7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d.zip"));
+    assert!(!is_generic_filename("app-binary-v1.0"));
 }
 
 #[test]
@@ -190,6 +195,13 @@ fn content_disposition_header_parsing_extracts_and_sanitizes() {
             "attachment; filename=\"A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv\""
         ),
         Some("A.Love.Story.Of.Assassin.2024.1080p.WEB-DL.Hindi.x264-AllMoviesHub.mkv".to_string())
+    );
+    // Hash-like names in content-disposition are still server-provided names
+    assert_eq!(
+        parse_content_disposition_filename(
+            "attachment; filename=\"7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d.bin\""
+        ),
+        Some("7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d.bin".to_string())
     );
     // Generic names in content-disposition are discarded
     assert_eq!(
@@ -245,6 +257,34 @@ fn mime_type_extension_derivation_and_response_resolution() {
         ),
         None
     );
+
+    // Bare hash / last-path names are preserved; MIME may only supply an extension
+    assert_eq!(
+        resolve_response_filename(
+            "c4ca4238a0b923820dcc509a6f75849b",
+            None,
+            Some("video/mp4"),
+        ),
+        Some("c4ca4238a0b923820dcc509a6f75849b.mp4".to_string())
+    );
+    assert_eq!(
+        resolve_response_filename(
+            "c4ca4238a0b923820dcc509a6f75849b",
+            None,
+            Some("application/octet-stream"),
+        ),
+        None
+    );
+
+    // A hash from Content-Disposition wins over the URL-derived fallback
+    assert_eq!(
+        resolve_response_filename(
+            "download_example_com",
+            Some("attachment; filename=\"c4ca4238a0b923820dcc509a6f75849b.bin\""),
+            Some("application/octet-stream"),
+        ),
+        Some("c4ca4238a0b923820dcc509a6f75849b.bin".to_string())
+    );
 }
 
 #[test]
@@ -257,4 +297,14 @@ fn filename_from_url_derives_meaningful_names_and_avoids_watch_or_empty() {
 
     let generic_url = url::Url::parse("https://files.example.com/download").unwrap();
     assert_eq!(filename_from_url(&generic_url), "download_files_example_com");
+
+    // URLs where last path segment is a hash or token pick that exact segment as the filename
+    let hash_url = url::Url::parse("https://example.com/files/c4ca4238a0b923820dcc509a6f75849b").unwrap();
+    assert_eq!(filename_from_url(&hash_url), "c4ca4238a0b923820dcc509a6f75849b");
+
+    let hash_with_ext_url = url::Url::parse("https://example.com/d/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.zip").unwrap();
+    assert_eq!(filename_from_url(&hash_with_ext_url), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.zip");
+
+    let slug_url = url::Url::parse("https://example.com/releases/v1.0.0/build-x86_64").unwrap();
+    assert_eq!(filename_from_url(&slug_url), "build-x86_64");
 }

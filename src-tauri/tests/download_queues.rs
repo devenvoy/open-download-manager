@@ -19,7 +19,7 @@ use open_download_manager_lib::{
         shell_service::ShellService,
     },
     domain::{
-        download::{DownloadRecord, DownloadStatus},
+        download::{BrowserRequestHeaders, DownloadRecord, DownloadStatus},
         queue::{
             MissedRunPolicy, QueueDisposition, QueueSchedule, DEFAULT_QUEUE_ID,
         },
@@ -407,6 +407,7 @@ async fn human_scenario_safe_migration_and_one_off_schedules_preservation() {
         action_ledger: Vec::new(),
         sabr: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
     };
     use open_download_manager_lib::application::download_history_repository::DownloadHistoryRepository;
     history_store

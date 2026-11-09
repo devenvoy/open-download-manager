@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use crate::domain::{
     category::DownloadCategory,
-    download::DownloadAddress,
+    download::{BrowserRequestHeaders, DownloadAddress},
     media::sabr::NormalizedSabrSession,
 };
 
@@ -33,5 +33,6 @@ pub struct ValidatedDownloadRequest {
     pub youtube_format: Option<String>,
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     pub credentials: Option<super::request::DownloadCredentials>,
+    pub request_headers: BrowserRequestHeaders,
     pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
 }

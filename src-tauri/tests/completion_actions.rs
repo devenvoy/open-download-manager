@@ -132,6 +132,7 @@ async fn scanner_invocation_uses_safe_arguments_and_substitutes_file() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -204,6 +205,7 @@ async fn scanner_failure_records_error_without_marking_download_failed() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -274,6 +276,7 @@ async fn real_system_executor_reports_missing_executable_safely() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -337,6 +340,7 @@ async fn power_action_requires_explicit_confirmation() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -386,6 +390,7 @@ async fn power_action_requires_explicit_confirmation() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -444,6 +449,7 @@ async fn per_download_actions_override_global_settings_deterministically() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: Some(vec![
             CompletionAction::ExecuteCommand {
                 executable: "/usr/local/bin/notify_slack".to_string(),
@@ -515,6 +521,7 @@ async fn actions_do_not_run_twice_on_restart_but_run_when_retried() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -605,6 +612,7 @@ async fn cancelled_download_never_executes_completion_actions() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 

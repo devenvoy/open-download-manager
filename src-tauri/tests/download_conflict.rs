@@ -23,8 +23,9 @@ use open_download_manager_lib::{
     },
     domain::{
         download::{
-            ConflictResolutionOutcome, DestinationAllocator, DownloadAction, DownloadRecord,
-            DownloadRequest, DownloadStatus, FileConflictPolicy, ReviewDownloadRequest,
+            BrowserRequestHeaders, ConflictResolutionOutcome, DestinationAllocator, DownloadAction,
+            DownloadRecord, DownloadRequest, DownloadStatus, FileConflictPolicy,
+            ReviewDownloadRequest,
         },
         settings::Settings,
     },
@@ -72,6 +73,7 @@ fn download_req(
         youtube_format: None,
         conflict_policy,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     }
 }
@@ -648,6 +650,7 @@ async fn app_restart_during_conflict_retains_state() {
         validator: None,
         conflict_policy: Some(FileConflictPolicy::Ask),
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };

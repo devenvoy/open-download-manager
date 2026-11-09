@@ -4,12 +4,17 @@
 // Reason: feat(credentials): add secure site/path password manager for automated basic auth (#30)
 // Description: HTTP authorization header construction for Basic and Bearer token requests.
 
-use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, LOCATION, RANGE};
+use reqwest::header::{
+    HeaderMap, HeaderName, HeaderValue, ACCEPT_ENCODING, AUTHORIZATION, LOCATION, RANGE,
+};
 use url::Url;
 
 use crate::{
     application::{download_executor::DownloadControl, error::{AppError, AppResult}},
-    domain::credentials::{format_basic_auth_header, CredentialMatcher},
+    domain::{
+        credentials::{format_basic_auth_header, CredentialMatcher},
+        download::BrowserRequestHeaders,
+    },
     infrastructure::http_download_executor::{
         policy::MAX_REDIRECTS, retry::send_with_retry, validator::SegmentValidator,
     },
@@ -19,6 +24,40 @@ pub struct ResolvedResponse {
     pub response: reqwest::Response,
     pub final_url: Url,
     pub auth_header: Option<String>,
+}
+
+/// Builds the forwarded browser header set for one request. Session headers
+/// are only replayed to the original download host so a redirect cannot leak
+/// cookies or authorization to a third-party server.
+pub(crate) fn forwarded_headers(
+    headers: &BrowserRequestHeaders,
+    initial_host: &str,
+    current_host: &str,
+) -> HeaderMap {
+    let mut map = HeaderMap::new();
+    if headers.is_empty() || !initial_host.eq_ignore_ascii_case(current_host) {
+        return map;
+    }
+    for (name, value) in headers.as_map() {
+        // Referer is handled separately because it is validated as a URL.
+        if name == "referer" {
+            continue;
+        }
+        let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
+            continue;
+        };
+        let Ok(value) = HeaderValue::from_str(value) else {
+            continue;
+        };
+        map.insert(name, value);
+    }
+    map
+}
+
+fn insert_header(map: &mut HeaderMap, name: reqwest::header::HeaderName, value: &str) {
+    if let Ok(value) = HeaderValue::from_str(value) {
+        map.insert(name, value);
+    }
 }
 
 /// Dispatches an HTTP GET request with redirect protection and credential matching:
@@ -37,6 +76,7 @@ pub async fn send_authenticated_request_with_redirects(
     range_end: Option<u64>,
     validator: Option<&SegmentValidator>,
     referer: Option<&str>,
+    request_headers: &BrowserRequestHeaders,
 ) -> AppResult<ResolvedResponse> {
     let mut current_url = initial_url.clone();
     let initial_host = initial_url.host_str().unwrap_or("").to_ascii_lowercase();
@@ -69,26 +109,28 @@ pub async fn send_authenticated_request_with_redirects(
         let val_header = validator.and_then(|v| v.if_range_value().map(|_| v.header()));
         let val_value = validator.and_then(|v| v.if_range_value().map(|s| s.to_owned()));
         let req_referer = referer.map(|r| r.to_string());
+        let forwarded = forwarded_headers(request_headers, &initial_host, &current_host);
 
         let response = send_with_retry(control, move || {
-            let mut req = req_client.get(req_url.clone());
+            let mut headers = forwarded.clone();
             if let Some(ref auth) = req_auth {
-                req = req.header(AUTHORIZATION, auth);
+                insert_header(&mut headers, AUTHORIZATION, auth);
             }
             if let Some(ref r) = req_referer {
-                req = req.header(reqwest::header::REFERER, r.as_str());
+                insert_header(&mut headers, reqwest::header::REFERER, r);
             }
             if let Some(start) = range_offset {
                 if let Some(end) = range_end {
-                    req = req.header(RANGE, format!("bytes={start}-{end}"));
+                    insert_header(&mut headers, RANGE, &format!("bytes={start}-{end}"));
                 } else if start > 0 {
-                    req = req.header(RANGE, format!("bytes={start}-"));
+                    insert_header(&mut headers, RANGE, &format!("bytes={start}-"));
                 }
             }
             if let (Some(ref h), Some(ref v)) = (&val_header, &val_value) {
-                req = req.header(h.clone(), v.clone());
+                insert_header(&mut headers, h.clone(), v);
             }
-            req.header(ACCEPT_ENCODING, "identity")
+            headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
+            req_client.get(req_url.clone()).headers(headers)
         })
         .await?;
 

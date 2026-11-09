@@ -176,13 +176,7 @@ pub fn sanitize_browser_request(
 
     let mut filtered_headers = HashMap::new();
     if let Some(headers) = msg.request_headers {
-        let allowed = ["cookie", "authorization", "user-agent", "origin", "referer"];
-        for (k, v) in headers {
-            let lower_key = k.to_ascii_lowercase();
-            if allowed.contains(&lower_key.as_str()) {
-                filtered_headers.insert(lower_key, v);
-            }
-        }
+        filtered_headers = crate::domain::download::sanitize_forward_headers(headers);
     }
 
     let urls = if let Some(raw_urls) = msg.urls {

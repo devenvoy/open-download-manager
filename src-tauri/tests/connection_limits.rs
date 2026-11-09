@@ -24,7 +24,7 @@ use open_download_manager_lib::{
         settings_service::SettingsService,
     },
     domain::{
-        download::{DestinationAllocator, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus},
+        download::{BrowserRequestHeaders, DestinationAllocator, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus},
         settings::{
             resolve_connections_for_host, ConnectionOverride, DownloadWindowLimit, MockClock,
             Settings, SettingsPatch,
@@ -154,6 +154,7 @@ async fn human_scenario_site_override_forces_single_stream_for_non_resumable_ser
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
@@ -253,6 +254,7 @@ async fn human_scenario_site_override_applied_after_redirects() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };

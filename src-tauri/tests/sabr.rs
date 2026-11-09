@@ -381,6 +381,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -411,6 +412,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -439,6 +441,7 @@ fn browser_sabr_reuse_identifies_video_and_quality_rather_than_expiring_url() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -634,6 +637,7 @@ async fn sabr_download_executor_streams_ump_chunks_and_muxes() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
@@ -746,6 +750,7 @@ async fn sabr_download_executor_handles_cancellation_and_cleans_temporary_direct
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };

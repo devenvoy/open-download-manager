@@ -161,6 +161,7 @@ async fn human_scenario_authenticated_http_download_with_stored_rule() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -260,6 +261,7 @@ async fn human_scenario_path_boundary_enforcement_prevents_credential_leak() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -386,6 +388,7 @@ async fn human_scenario_redirect_cross_domain_strips_authorization_header() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -506,6 +509,7 @@ async fn human_scenario_redirect_to_destination_with_its_own_rule_attaches_new_c
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -762,6 +766,7 @@ async fn human_scenario_ftp_download_with_stored_rule_authenticates_clean_url() 
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 

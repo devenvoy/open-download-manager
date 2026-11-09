@@ -66,6 +66,7 @@ api.webRequest.onBeforeRequest?.addListener(details=>{
   youtubeSabrSeed.set(details.requestId,{tabId:details.tabId,url,requestBody:bytesBase64(bytes)});
   if(youtubeSabrSeed.size>100)youtubeSabrSeed.delete(youtubeSabrSeed.keys().next().value);
 },{urls:['https://*.googlevideo.com/videoplayback*','https://googlevideo.com/videoplayback*']},['requestBody']);
+const requestMethods=new Map();
 function rememberRequest(details) {
   if(details.tabId<0 || !httpUrl(details.url))return;
   let tab=requestContext.get(details.tabId);
@@ -75,12 +76,32 @@ function rememberRequest(details) {
     const name=h.name.toLowerCase();
     if(['cookie','authorization','user-agent','referer','origin'].includes(name)&&typeof h.value==='string'&&h.value.length<=16384&&!/[\r\n]/.test(h.value))headers[name]=h.value;
   }
-  tab.set(details.url,headers);if(tab.size>100)tab.delete(tab.keys().next().value);
+  const method=typeof details.method==='string'?details.method.toUpperCase():'GET';
+  tab.set(details.url,{method,headers});if(tab.size>100)tab.delete(tab.keys().next().value);
+  if(method!=='GET'&&method!=='HEAD'){
+    requestMethods.set(details.url,method);
+    if(requestMethods.size>200)requestMethods.delete(requestMethods.keys().next().value);
+  } else requestMethods.delete(details.url);
 }
 // Chromium (which now also defines `browser`) withholds Cookie and Referer unless extraHeaders is requested; Firefox has no such option.
 api.webRequest.onBeforeSendHeaders?.addListener(rememberRequest,{urls:['http://*/*','https://*/*']},['requestHeaders',...(api.webRequest.OnBeforeSendHeadersOptions?.EXTRA_HEADERS?['extraHeaders']:[])]);
 function httpUrl(value) {
   try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password ? u.href : null; } catch { return null; }
+}
+// A download can only be handed to the desktop when its URL can be fetched again.
+// POST form downloads (Google Drive folder archives), blob/data downloads, and
+// other browser-generated responses must stay with the browser.
+function nonReplayableDownload(url, tabId) {
+  const observed = tabId !== undefined && tabId >= 0 ? requestContext.get(tabId)?.get(url) : undefined;
+  const method = observed?.method || requestMethods.get(url);
+  if (method && method !== 'GET' && method !== 'HEAD') return true;
+  try {
+    const parsed = new URL(url);
+    // Drive folder/zip downloads post hidden fields to this bare endpoint; the
+    // POST body is invisible to extensions, so a GET replay returns HTML.
+    if (parsed.hostname === 'drive.usercontent.google.com' && parsed.pathname === '/download' && !parsed.searchParams.has('id')) return true;
+  } catch {}
+  return false;
 }
 function unsupported(url, mime = '') {
   const isDash = globalThis.mediaPolicy ? globalThis.mediaPolicy.isDashMime(mime) : /dash\+xml/i.test(mime);
@@ -146,7 +167,8 @@ async function enqueue(item, tabId) {
       startNow = false;
     }
   }
-  const requestHeaders=tabId !== undefined ? requestContext.get(tabId)?.get(url) : undefined;
+  const requestContextEntry=tabId !== undefined ? requestContext.get(tabId)?.get(url) : undefined;
+  const requestHeaders=requestContextEntry?.headers;
   const effectiveReferer = item.canonicalUrl || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null) || item.referer || requestHeaders?.referer;
   return nativeSend({
     action: 'download',
@@ -371,13 +393,14 @@ async function handleInterceptedDownload(item, fromDetermining = false) {
   if (!item || interceptedDownloadIds.has(item.id)) return;
   const url = item.finalUrl || item.url;
   if (!httpUrl(url) || item.state === 'complete') return;
+  if (nonReplayableDownload(url, item.tabId)) return;
 
   let rawFilename = item.filename ? item.filename.split(/[\\/]/).pop().trim() : '';
   if (!rawFilename) {
     try {
       const parsed = new URL(url);
       const leaf = parsed.pathname.split('/').filter(Boolean).pop();
-      if (leaf && leaf.includes('.')) {
+      if (leaf && (leaf.includes('.') || fromDetermining || !api.downloads.onDeterminingFilename)) {
         rawFilename = decodeURIComponent(leaf);
       }
     } catch {}

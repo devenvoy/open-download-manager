@@ -11,7 +11,7 @@ use std::{
 };
 
 use open_download_manager_lib::{
-    domain::{download::DownloadRecord, download::DownloadStatus, settings::Settings, snapshot::Snapshot},
+    domain::{download::BrowserRequestHeaders, download::DownloadRecord, download::DownloadStatus, settings::Settings, snapshot::Snapshot},
     infrastructure::file_icons::{extension_key, is_safe_extension, FileIconProvider},
 };
 
@@ -75,6 +75,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             validator: None,
             conflict_policy: None,
             credentials_override: None,
+            request_headers: BrowserRequestHeaders::default(),
             completion_actions: None,
             action_ledger: Vec::new(),
         },
@@ -113,6 +114,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             validator: None,
             conflict_policy: None,
             credentials_override: None,
+            request_headers: BrowserRequestHeaders::default(),
             completion_actions: None,
             action_ledger: Vec::new(),
         },
@@ -151,6 +153,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
             validator: None,
             conflict_policy: None,
             credentials_override: None,
+            request_headers: BrowserRequestHeaders::default(),
             completion_actions: None,
             action_ledger: Vec::new(),
         },
@@ -205,6 +208,7 @@ fn file_icon_provider_loads_and_caches_probe_files() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     }];

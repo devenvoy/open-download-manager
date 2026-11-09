@@ -277,6 +277,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -360,6 +361,7 @@ async fn proxy_reconfiguration_failure_surfaces_error_and_preserves_old_client_a
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 

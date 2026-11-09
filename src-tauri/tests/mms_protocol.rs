@@ -24,8 +24,8 @@ use open_download_manager_lib::{
     },
     domain::{
         download::{
-            DestinationAllocator, DownloadAddress, DownloadProtocol, DownloadRecord,
-            FileConflictPolicy,
+            BrowserRequestHeaders, DestinationAllocator, DownloadAddress, DownloadProtocol,
+            DownloadRecord, FileConflictPolicy,
         },
         protocol::mms::{
             AsxPlaylistParser, MmsProtocolDetector, MmsSessionState, MmsSessionStateMachine,
@@ -306,6 +306,7 @@ async fn human_scenario_mms_streaming_execution_with_mock_server() {
         completion_actions: None,
         action_ledger: Vec::new(),
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         sabr: None,
     };
 
@@ -402,6 +403,7 @@ async fn human_scenario_mms_streaming_instant_cancellation() {
         completion_actions: None,
         action_ledger: Vec::new(),
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         sabr: None,
     };
 
@@ -527,6 +529,7 @@ async fn human_scenario_mms_stream_reconnect_and_resume() {
         completion_actions: None,
         action_ledger: Vec::new(),
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         sabr: None,
     };
 
@@ -612,6 +615,7 @@ async fn human_scenario_mms_does_not_accidentally_fall_back_to_generic_http() {
         completion_actions: None,
         action_ledger: Vec::new(),
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         sabr: None,
     };
 

@@ -49,11 +49,15 @@ pub(crate) async fn download_segments(
     progress_handler: &DownloadProgressHandler,
     auth_header: Option<String>,
     referer: Option<String>,
+    request_headers: crate::domain::download::BrowserRequestHeaders,
+    initial_host: String,
 ) -> AppResult<Vec<DownloadSegmentProgress>> {
     let segments_shared = Arc::new(Mutex::new(segments));
     let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
     let auth_shared: Option<Arc<str>> = auth_header.map(Arc::from);
     let referer_shared: Option<Arc<str>> = referer.map(Arc::from);
+    let headers_shared = Arc::new(request_headers);
+    let initial_host_shared: Arc<str> = Arc::from(initial_host);
 
     // Initial progress report
     {
@@ -141,6 +145,8 @@ pub(crate) async fn download_segments(
         let worker_meter = meter.clone();
         let worker_auth = auth_shared.clone();
         let worker_referer = referer_shared.clone();
+        let worker_headers = headers_shared.clone();
+        let worker_initial_host = initial_host_shared.clone();
 
         jobs.spawn(async move {
             run_segment_worker(
@@ -157,6 +163,8 @@ pub(crate) async fn download_segments(
                 worker_meter,
                 worker_auth,
                 worker_referer,
+                worker_headers,
+                worker_initial_host,
             )
             .await
         });

@@ -118,6 +118,44 @@ test('duplicate browser downloads share one native handoff',async()=>{
  assert.equal(h.nativeRequests.length,1);assert.equal(h.download(1),undefined);assert.equal(h.download(2),undefined);
  assert.deepEqual(h.downloadCalls.filter(([name])=>name==='pause').length,2);assert.deepEqual(h.downloadCalls.filter(([name])=>name==='cancel').length,2);
 });
+test('POST form downloads stay with the browser because their body cannot be replayed',async()=>{
+  const h=harness();
+  const url='https://drive.usercontent.google.com/download';
+  h.events.requestHeaders({tabId:3,url,method:'POST',requestHeaders:[]});
+  const item=h.createDownload({id:7,tabId:3,url,filename:'Folder.zip',referrer:'https://drive.google.com/drive/folders/abc'});
+  await h.events.download(item);
+  assert.equal(h.nativeRequests.length,0);
+  assert.deepEqual(h.downloadCalls,[]);
+  assert.ok(h.download(7));
+});
+test('bare Google Drive download endpoint without a file id is not intercepted',async()=>{
+  const h=harness();
+  const item=h.createDownload({id:8,tabId:3,url:'https://drive.usercontent.google.com/download',filename:'Folder.zip',referrer:'https://drive.google.com/drive/folders/abc'});
+  await h.events.download(item);
+  assert.equal(h.nativeRequests.length,0);
+  assert.deepEqual(h.downloadCalls,[]);
+  assert.ok(h.download(8));
+});
+test('replayable GET downloads are still intercepted',async()=>{
+  const h=harness();
+  const url='https://drive.usercontent.google.com/download?id=FILE&export=download&confirm=t';
+  h.events.requestHeaders({tabId:3,url,method:'GET',requestHeaders:[]});
+  const item=h.createDownload({id:9,tabId:3,url,filename:'movie.mkv'});
+  await h.events.download(item);
+  assert.equal(h.nativeRequests.length,1);
+  assert.equal(h.nativeRequests[0].url,url);
+  assert.equal(h.download(9),undefined);
+});
+test('a later GET clears an earlier POST method for the same URL',async()=>{
+  const h=harness();
+  const url='https://example.com/export';
+  h.events.requestHeaders({tabId:3,url,method:'POST',requestHeaders:[]});
+  h.events.requestHeaders({tabId:3,url,method:'GET',requestHeaders:[]});
+  const item=h.createDownload({id:10,tabId:-1,url,filename:'export.bin'});
+  await h.events.download(item);
+  assert.equal(h.nativeRequests.length,1);
+  assert.equal(h.nativeRequests[0].url,url);
+});
 test('browser download is intercepted even if pausing fails on non-resumable download',async()=>{
  const h=harness();
  const download=h.createDownload({id:99,url:'https://example.com/movie.mkv',filename:'movie.mkv'});

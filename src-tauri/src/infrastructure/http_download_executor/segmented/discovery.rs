@@ -34,6 +34,7 @@ pub(crate) async fn discover_ranges(
     override_creds: Option<&(String, String)>,
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
     referer: Option<&str>,
+    request_headers: &crate::domain::download::BrowserRequestHeaders,
 ) -> AppResult<Option<RangeDiscovery>> {
     let resolved = super::super::auth::send_authenticated_request_with_redirects(
         client,
@@ -45,6 +46,7 @@ pub(crate) async fn discover_ranges(
         Some(0),
         None,
         referer,
+        request_headers,
     )
     .await?;
 

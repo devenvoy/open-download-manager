@@ -60,6 +60,8 @@ fn download_request(url: String, filename: &str, queue_only: bool) -> DownloadRe
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
+        request_headers: None,
         completion_actions: None,
     }
 }

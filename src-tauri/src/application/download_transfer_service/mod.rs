@@ -32,9 +32,9 @@ use crate::{
     domain::{
         category::DownloadCategory,
         download::{
-            filename_from_url, sanitize_filename, ConflictResolutionOutcome, DestinationAllocator,
-            DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus, FileConflictPolicy,
-            ReviewDownloadRequest,
+            filename_from_url, sanitize_filename, BrowserRequestHeaders, ConflictResolutionOutcome,
+            DestinationAllocator, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
+            FileConflictPolicy, ReviewDownloadRequest,
         },
         media::AddPlaylistDownloadsRequest,
         settings::Settings,
@@ -315,6 +315,7 @@ impl DownloadTransferService {
                         if request.sabr.is_some() {
                             d.sabr = request.sabr.clone();
                         }
+                        d.request_headers = request.request_headers.clone();
                         d.error = None;
                         d.notice = Some("Download link refreshed from browser; resuming transfer.".to_owned());
                     })?;
@@ -426,6 +427,7 @@ impl DownloadTransferService {
                     credentials_override: request.credentials.as_ref().map(|c| {
                         (c.username.clone(), c.password.clone().unwrap_or_default())
                     }),
+                    request_headers: request.request_headers.clone(),
                     completion_actions: request.completion_actions.clone(),
                     action_ledger: Vec::new(),
                 }
@@ -450,7 +452,12 @@ impl DownloadTransferService {
         if request.review_only {
             for (index, url) in request.urls.iter().enumerate() {
                 if let Some(id) = ids.get(index) {
-                    self.probe_unreviewed_download(id.clone(), url.url().as_str().to_owned(), request.referer.clone());
+                    self.probe_unreviewed_download(
+                        id.clone(),
+                        url.url().as_str().to_owned(),
+                        request.referer.clone(),
+                        request.request_headers.clone(),
+                    );
                 }
             }
         }
@@ -544,6 +551,7 @@ impl DownloadTransferService {
                     validator: None,
                     conflict_policy: None,
                     credentials_override: None,
+                    request_headers: BrowserRequestHeaders::default(),
                     completion_actions: None,
                     action_ledger: Vec::new(),
                 }

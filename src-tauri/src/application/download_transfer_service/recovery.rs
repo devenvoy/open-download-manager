@@ -5,7 +5,7 @@
 use crate::{
     application::error::{AppResult},
     domain::{
-        download::{DownloadStatus, TransferValidator},
+        download::{BrowserRequestHeaders, DownloadStatus, TransferValidator},
         media::sabr::NormalizedSabrSession,
     },
 };
@@ -13,7 +13,13 @@ use crate::{
 use super::DownloadTransferService;
 
 impl DownloadTransferService {
-    pub(crate) fn probe_unreviewed_download(&self, id: String, url_str: String, referer: Option<String>) {
+    pub(crate) fn probe_unreviewed_download(
+        &self,
+        id: String,
+        url_str: String,
+        referer: Option<String>,
+        request_headers: BrowserRequestHeaders,
+    ) {
         let history = self.history.clone();
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -24,6 +30,18 @@ impl DownloadTransferService {
         let task = async move {
             let Ok(url) = url::Url::parse(&url_str) else { return; };
             let mut req = client.get(url).header(reqwest::header::RANGE, "bytes=0-0");
+            for (name, value) in request_headers.as_map() {
+                if name == "referer" {
+                    continue;
+                }
+                let Ok(name) = reqwest::header::HeaderName::from_bytes(name.as_bytes()) else {
+                    continue;
+                };
+                let Ok(value) = reqwest::header::HeaderValue::from_str(value) else {
+                    continue;
+                };
+                req = req.header(name, value);
+            }
             if let Some(ref r) = referer {
                 req = req.header(reqwest::header::REFERER, r);
             }
@@ -121,6 +139,7 @@ impl DownloadTransferService {
         new_url: Option<String>,
         new_audio_url: Option<String>,
         new_sabr: Option<NormalizedSabrSession>,
+        new_headers: Option<BrowserRequestHeaders>,
     ) -> AppResult<String> {
         let record = self.history.download(id)?;
         self.history.update_download(id, |d| {
@@ -132,6 +151,9 @@ impl DownloadTransferService {
             }
             if let Some(s) = new_sabr {
                 d.sabr = Some(s);
+            }
+            if let Some(h) = new_headers {
+                d.request_headers = h;
             }
             d.error = None;
             d.notice = Some("Download link refreshed from browser; resuming transfer.".to_owned());

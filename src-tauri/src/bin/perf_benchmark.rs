@@ -65,6 +65,7 @@ fn generate_mock_records(count: usize) -> Vec<DownloadRecord> {
             validator: None,
             conflict_policy: None,
             credentials_override: None,
+            request_headers: BrowserRequestHeaders::default(),
             completion_actions: None,
             action_ledger: Vec::new(),
         });

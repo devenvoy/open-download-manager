@@ -1108,7 +1108,7 @@ async fn expired_media_link_can_be_refreshed_and_resumed_from_browser() {
 
     // Refresh the expired download with the fresh URL
     service
-        .refresh_download(&ids[0], Some(valid_url), None, None)
+        .refresh_download(&ids[0], Some(valid_url), None, None, None)
         .expect("download should be refreshed");
 
     assert_eq!(
@@ -1228,7 +1228,7 @@ async fn immediate_cancellation_during_retry_wait_stops_promptly() {
 
 #[test]
 fn typed_validator_survives_serialization_and_migrates_safely() {
-    use open_download_manager_lib::domain::download::{DownloadRecord, TransferValidator};
+    use open_download_manager_lib::domain::download::{BrowserRequestHeaders, DownloadRecord, TransferValidator};
 
     // 1. Typed ETag survives serialization/deserialization
     let etag_val = TransferValidator::ETag("\"v1-hash\"".to_string());
@@ -1278,6 +1278,7 @@ fn typed_validator_survives_serialization_and_migrates_safely() {
         validator: Some(lm_val.clone()),
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };

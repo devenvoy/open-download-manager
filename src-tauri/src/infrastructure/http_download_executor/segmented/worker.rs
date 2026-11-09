@@ -51,6 +51,8 @@ pub(crate) async fn run_segment_worker(
     meter: Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
     auth_header: Option<Arc<str>>,
     referer: Option<Arc<str>>,
+    request_headers: Arc<crate::domain::download::BrowserRequestHeaders>,
+    initial_host: Arc<str>,
 ) -> AppResult<()> {
     loop {
         if let Some(reason) = control.current_stop_reason() {
@@ -172,6 +174,8 @@ pub(crate) async fn run_segment_worker(
                     &meter,
                     auth_header.clone(),
                     referer.clone(),
+                    request_headers.clone(),
+                    initial_host.clone(),
                 )
                 .await?;
             }
@@ -197,6 +201,8 @@ async fn download_chunk(
     meter: &Arc<Mutex<crate::application::throughput_meter::ThroughputMeter>>,
     auth_header: Option<Arc<str>>,
     referer: Option<Arc<str>>,
+    request_headers: Arc<crate::domain::download::BrowserRequestHeaders>,
+    initial_host: Arc<str>,
 ) -> AppResult<()> {
     let (start_offset, end_offset, downloaded_init) = {
         let guard = segments
@@ -225,23 +231,37 @@ async fn download_chunk(
     let req_start = start_offset + downloaded_init;
     let req_end = end_offset;
 
-    let auth_for_init = auth_header.clone();
-    let ref_for_init = referer.clone();
+    let mut base_headers = super::super::auth::forwarded_headers(
+        &request_headers,
+        &initial_host,
+        url.host_str().unwrap_or(""),
+    );
+    if let Some(ref auth) = auth_header {
+        if let Ok(value) = reqwest::header::HeaderValue::from_str(auth) {
+            base_headers.insert(reqwest::header::AUTHORIZATION, value);
+        }
+    }
+    if let Some(ref r) = referer {
+        if let Ok(value) = reqwest::header::HeaderValue::from_str(r) {
+            base_headers.insert(reqwest::header::REFERER, value);
+        }
+    }
+
     let mut response = send_with_retry(control, || {
-        let mut req = client
-            .get(url.clone())
-            .header(reqwest::header::RANGE, format!("bytes={req_start}-{req_end}"))
-            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+        let mut headers = base_headers.clone();
+        if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("bytes={req_start}-{req_end}")) {
+            headers.insert(reqwest::header::RANGE, value);
+        }
+        headers.insert(
+            reqwest::header::ACCEPT_ENCODING,
+            reqwest::header::HeaderValue::from_static("identity"),
+        );
         if let Some(if_range) = validator.if_range_value() {
-            req = req.header(validator.header(), if_range);
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(&if_range) {
+                headers.insert(validator.header(), value);
+            }
         }
-        if let Some(ref auth) = auth_for_init {
-            req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
-        }
-        if let Some(ref r) = ref_for_init {
-            req = req.header(reqwest::header::REFERER, r.as_ref());
-        }
-        req
+        client.get(url.clone()).headers(headers)
     })
     .await?;
 
@@ -372,26 +392,21 @@ async fn download_chunk(
                             (guard[index].start, guard[index].end)
                         };
                         let start = cur_start + downloaded;
-                        let auth_retry1 = auth_header.clone();
-                        let ref_retry1 = referer.clone();
                         let next_resp = send_with_retry(control, || {
-                            let mut req = client
-                                .get(url.clone())
-                                .header(
-                                    reqwest::header::RANGE,
-                                    format!("bytes={start}-{cur_end}"),
-                                )
-                                .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                            let mut headers = base_headers.clone();
+                            if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("bytes={start}-{cur_end}")) {
+                                headers.insert(reqwest::header::RANGE, value);
+                            }
+                            headers.insert(
+                                reqwest::header::ACCEPT_ENCODING,
+                                reqwest::header::HeaderValue::from_static("identity"),
+                            );
                             if let Some(if_range) = validator.if_range_value() {
-                                req = req.header(validator.header(), if_range);
+                                if let Ok(value) = reqwest::header::HeaderValue::from_str(&if_range) {
+                                    headers.insert(validator.header(), value);
+                                }
                             }
-                            if let Some(ref auth) = auth_retry1 {
-                                req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
-                            }
-                            if let Some(ref r) = ref_retry1 {
-                                req = req.header(reqwest::header::REFERER, r.as_ref());
-                            }
-                            req
+                            client.get(url.clone()).headers(headers)
                         })
                         .await;
                         match next_resp {
@@ -464,26 +479,21 @@ async fn download_chunk(
                         (guard[index].start, guard[index].end)
                     };
                     let start = cur_start + downloaded;
-                    let auth_retry2 = auth_header.clone();
-                    let ref_retry2 = referer.clone();
                     let next_resp = send_with_retry(control, || {
-                        let mut req = client
-                            .get(url.clone())
-                            .header(
-                                reqwest::header::RANGE,
-                                format!("bytes={start}-{cur_end}"),
-                            )
-                            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                        let mut headers = base_headers.clone();
+                        if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("bytes={start}-{cur_end}")) {
+                            headers.insert(reqwest::header::RANGE, value);
+                        }
+                        headers.insert(
+                            reqwest::header::ACCEPT_ENCODING,
+                            reqwest::header::HeaderValue::from_static("identity"),
+                        );
                         if let Some(if_range) = validator.if_range_value() {
-                            req = req.header(validator.header(), if_range);
+                            if let Ok(value) = reqwest::header::HeaderValue::from_str(&if_range) {
+                                headers.insert(validator.header(), value);
+                            }
                         }
-                        if let Some(ref auth) = auth_retry2 {
-                            req = req.header(reqwest::header::AUTHORIZATION, auth.as_ref());
-                        }
-                        if let Some(ref r) = ref_retry2 {
-                            req = req.header(reqwest::header::REFERER, r.as_ref());
-                        }
-                        req
+                        client.get(url.clone()).headers(headers)
                     })
                     .await;
                     match next_resp {

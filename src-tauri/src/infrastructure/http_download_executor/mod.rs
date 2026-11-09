@@ -213,6 +213,7 @@ impl HttpDownloadExecutor {
         let matcher = self.credential_store.as_ref().and_then(|s| s.matcher().ok());
         let override_creds = download.credentials_override.as_ref();
         let ref_str = download.referer.as_deref();
+        let request_headers = download.request_headers.clone();
 
         let mut metrics = crate::infrastructure::metrics::TransferMetrics::new(
             &download.id,
@@ -248,7 +249,7 @@ impl HttpDownloadExecutor {
             )
             .await?;
             let range_info =
-                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref(), ref_str).await?;
+                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref(), ref_str, &request_headers).await?;
             if let Some(discovery) = range_info {
                 let final_host = discovery.final_url.host_str().unwrap_or("");
                 effective_connections = self.resolve_connections(final_host, effective_connections);
@@ -365,6 +366,8 @@ impl HttpDownloadExecutor {
                         &progress_handler,
                         discovery.auth_header,
                         download.referer.clone(),
+                        request_headers.clone(),
+                        initial_host.to_owned(),
                     )
                     .await;
 
@@ -478,6 +481,7 @@ impl HttpDownloadExecutor {
             override_creds,
             matcher.as_ref(),
             ref_str,
+            &request_headers,
         )
         .await?;
 

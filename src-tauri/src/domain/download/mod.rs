@@ -10,6 +10,7 @@ mod address;
 mod conflict;
 mod download_policy;
 mod filename;
+mod headers;
 mod protocol;
 mod record;
 mod request;
@@ -28,6 +29,9 @@ pub use filename::{
     extension_for_mime_type, filename_from_url, is_generic_filename,
     parse_content_disposition_filename, percent_decode, redact_download_url,
     resolve_response_filename, sanitize_diagnostic_text, sanitize_filename,
+};
+pub use headers::{
+    sanitize_forward_headers, BrowserRequestHeaders, MAX_FORWARDED_HEADER_VALUE_BYTES,
 };
 pub use protocol::DownloadProtocol;
 pub use record::{DownloadRecord, DownloadSegmentProgress, SerializableDownloadRecordRef};

@@ -92,6 +92,8 @@ pub struct DownloadRecord {
     pub sabr: Option<NormalizedSabrSession>,
     #[serde(skip)]
     pub credentials_override: Option<(String, String)>,
+    #[serde(skip)]
+    pub request_headers: super::headers::BrowserRequestHeaders,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

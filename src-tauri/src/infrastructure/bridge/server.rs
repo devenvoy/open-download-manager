@@ -25,7 +25,7 @@ use crate::{
     },
     domain::{
         browser::{sanitize_browser_request, BrowserIncomingMessage},
-        download::DownloadRequest,
+        download::{BrowserRequestHeaders, DownloadRequest},
         settings::Settings,
     },
     infrastructure::{media::ytdlp::YtDlpTools, settings_store::SettingsStore},
@@ -357,6 +357,7 @@ async fn handle_bridge_connection(
                     Some(valid_browser.url.clone()),
                     valid_browser.audio_url.clone(),
                     norm_sabr,
+                    Some(BrowserRequestHeaders::sanitize(valid_browser.headers.clone())),
                 ) {
                     Ok(id) => {
                         let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "id": id})).await;
@@ -427,6 +428,7 @@ async fn handle_bridge_connection(
             youtube_format: valid_browser.youtube_format,
             conflict_policy: None,
             credentials: None,
+            request_headers: Some(BrowserRequestHeaders::sanitize(valid_browser.headers)),
             completion_actions: None,
         };
 

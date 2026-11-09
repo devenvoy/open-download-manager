@@ -96,22 +96,10 @@ pub fn sanitize_diagnostic_text(text: &str) -> String {
 
 pub fn is_generic_filename(name: &str) -> bool {
     let lower = name.trim().to_ascii_lowercase();
-    let has_extension = std::path::Path::new(&lower)
-        .extension()
-        .is_some_and(|ext| !ext.is_empty());
-    if !has_extension {
-        return true;
-    }
     let stem = std::path::Path::new(&lower)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(&lower);
-    if stem.len() >= 32
-        && !stem.contains([' ', '.', '-', '_'])
-        && stem.chars().all(|c| c.is_ascii_hexdigit())
-    {
-        return true;
-    }
     matches!(
         stem,
         "" | "watch" | "video" | "videoplayback" | "media" | "stream" | "download" | "file" | "index"
@@ -268,7 +256,7 @@ pub fn resolve_response_filename(
         if let Some(ext) = mime_ext {
             return Some(format!("{current_name}.{ext}"));
         }
-    } else if is_generic_filename(current_name) {
+    } else if is_generic_filename(current_name) || current_name.starts_with("download_") {
         if let Some(ext) = mime_ext {
             let stem = std::path::Path::new(current_name)
                 .file_stem()

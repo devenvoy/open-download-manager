@@ -19,7 +19,7 @@ use super::{
     download_policy::{
         MAX_DESCRIPTION_CHARACTERS, MAX_DOWNLOAD_FILENAME_CHARACTERS, MAX_DOWNLOAD_URLS,
     },
-    sanitize_filename, DownloadAddress, ValidatedDownloadRequest,
+    sanitize_filename, BrowserRequestHeaders, DownloadAddress, ValidatedDownloadRequest,
 };
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -50,6 +50,8 @@ pub struct DownloadRequest {
     pub conflict_policy: Option<super::conflict::FileConflictPolicy>,
     #[serde(default)]
     pub credentials: Option<DownloadCredentials>,
+    #[serde(default)]
+    pub request_headers: Option<BrowserRequestHeaders>,
     #[serde(default)]
     pub completion_actions: Option<Vec<crate::domain::completion::CompletionAction>>,
 }
@@ -185,6 +187,11 @@ impl DownloadRequest {
             youtube_format: self.youtube_format,
             conflict_policy: self.conflict_policy,
             credentials: self.credentials,
+            request_headers: self
+                .request_headers
+                .map(|headers| BrowserRequestHeaders::sanitize(headers.into_map()))
+                .filter(|headers| !headers.is_empty())
+                .unwrap_or_default(),
             completion_actions: self.completion_actions,
         })
     }

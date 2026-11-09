@@ -22,7 +22,7 @@ use open_download_manager_lib::{
         download_transfer_service::DownloadTransferService,
         settings_service::SettingsService,
     },
-    domain::download::{DownloadRecord, DownloadRequest, DownloadStatus},
+    domain::download::{BrowserRequestHeaders, DownloadRecord, DownloadRequest, DownloadStatus},
     infrastructure::{
         download_history_store::DownloadHistoryStore,
         media::{ffmpeg::FfmpegTools, paired_executor::PairedDownloadExecutor},
@@ -142,6 +142,7 @@ fn paired_request_validation_and_record_mapping() {
         youtube_format: None,
         conflict_policy: None,
         credentials: None,
+        request_headers: None,
         completion_actions: None,
     };
 
@@ -235,6 +236,7 @@ async fn paired_download_streams_both_tracks_and_muxes() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
@@ -345,6 +347,7 @@ async fn paired_download_converts_to_mp3() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
@@ -405,6 +408,7 @@ fn paired_download_discard_partial_cleans_up_directory() {
         validator: None,
         conflict_policy: None,
         credentials_override: None,
+        request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),
     };
