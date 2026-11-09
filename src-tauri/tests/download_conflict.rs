@@ -439,7 +439,7 @@ async fn concurrent_downloads_with_rename_allocate_distinct_filenames() {
 async fn destination_as_existing_directory_is_rejected_cleanly() {
     let dir = temporary_directory();
     fs::create_dir_all(&dir).unwrap();
-    let folder_path = dir.join("some_folder");
+    let folder_path = dir.join("some_folder.bin");
     fs::create_dir_all(&folder_path).unwrap();
 
     let (url, _shutdown) = serve_simple_file(b"BYTES".to_vec());
@@ -453,7 +453,7 @@ async fn destination_as_existing_directory_is_rejected_cleanly() {
         .add(
             download_req(
                 url,
-                "some_folder",
+                "some_folder.bin",
                 Some(FileConflictPolicy::Overwrite),
             ),
             &settings,
