@@ -6,7 +6,9 @@
 
 use std::path::Path;
 
-use crate::application::error::{AppError, AppResult};
+#[cfg(unix)]
+use crate::application::error::AppError;
+use crate::application::error::AppResult;
 
 /// Marks a downloaded or extracted binary executable on platforms that use a
 /// Unix permission model. No-op on Windows.

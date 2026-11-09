@@ -48,26 +48,33 @@ jobs:
           bun tauri build --target ${{ matrix.target }} --bundles dmg,app
 
       - name: Package macOS Assets
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          [ "$VERSION" = "" ] && VERSION="${{ github.event.inputs.tag }}"
-          [ "$VERSION" = "" ] && VERSION="0.2.0"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="0.2.0"
+          fi
           VERSION="${VERSION#v}"
 
           mkdir -p dist/artifacts
-          
-          # Find DMG
-          DMG_FILE=$(find target/${{ matrix.target }}/release/bundle/dmg src-tauri/target/${{ matrix.target }}/release/bundle/dmg target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -n 1)
-          if [ -n "$DMG_FILE" ] && [ -f "$DMG_FILE" ]; then
-            cp "$DMG_FILE" "dist/artifacts/open-download-manager_${VERSION}_mac_${{ matrix.arch }}.dmg"
+          shopt -s nullglob
+
+          dmg_files=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg target/release/bundle/dmg/*.dmg)
+          if [ ${#dmg_files[@]} -gt 0 ]; then
+            cp "${dmg_files[0]}" "dist/artifacts/open-download-manager_${VERSION}_mac_${{ matrix.arch }}.dmg"
+            echo "Packaged DMG: ${dmg_files[0]}"
           fi
 
-          # Find .app and tar.gz
-          APP_DIR=$(find target/${{ matrix.target }}/release/bundle/macos src-tauri/target/${{ matrix.target }}/release/bundle/macos target/release/bundle/macos -name "*.app" 2>/dev/null | head -n 1)
-          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
-            APP_NAME=$(basename "$APP_DIR")
-            PARENT_DIR=$(dirname "$APP_DIR")
-            tar -czf "dist/artifacts/open-download-manager_${VERSION}_mac_${{ matrix.arch }}.app.tar.gz" -C "$PARENT_DIR" "$APP_NAME"
+          app_dirs=(target/${{ matrix.target }}/release/bundle/macos/*.app src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app target/release/bundle/macos/*.app)
+          if [ ${#app_dirs[@]} -gt 0 ]; then
+            app_path="${app_dirs[0]}"
+            app_name=$(basename "$app_path")
+            parent_dir=$(dirname "$app_path")
+            tar -czf "dist/artifacts/open-download-manager_${VERSION}_mac_${{ matrix.arch }}.app.tar.gz" -C "$parent_dir" "$app_name"
+            echo "Packaged App tar: $app_path"
           fi
 
       - uses: actions/upload-artifact@v4
@@ -108,18 +115,22 @@ jobs:
           bun tauri build --target ${{ matrix.target }} --bundles nsis
 
       - name: Package Windows Assets
-        shell: bash
+        shell: pwsh
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          [ "$VERSION" = "" ] && VERSION="${{ github.event.inputs.tag }}"
-          [ "$VERSION" = "" ] && VERSION="0.2.0"
-          VERSION="${VERSION#v}"
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          if (-not $ver) { $ver = "${{ github.event.inputs.tag }}".TrimStart("v") }
+          if (-not $ver) { $ver = "0.2.0" }
 
-          mkdir -p dist/artifacts
-          EXE_FILE=$(find target/${{ matrix.target }}/release/bundle/nsis src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.exe" 2>/dev/null | head -n 1)
-          if [ -n "$EXE_FILE" ] && [ -f "$EXE_FILE" ]; then
-            cp "$EXE_FILE" "dist/artifacts/open-download-manager_${VERSION}_win_${{ matrix.arch }}-setup.exe"
-          fi
+          New-Item -ItemType Directory -Force -Path "dist/artifacts"
+          $exe = Get-ChildItem -Path @("target/${{ matrix.target }}/release/bundle/nsis", "src-tauri/target/${{ matrix.target }}/release/bundle/nsis", "target/release/bundle/nsis") -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          if ($exe) {
+            Copy-Item $exe.FullName -Destination "dist/artifacts/open-download-manager_${ver}_win_${{ matrix.arch }}-setup.exe" -Force
+            Write-Host "Successfully packaged: dist/artifacts/open-download-manager_${ver}_win_${{ matrix.arch }}-setup.exe"
+          } else {
+            Write-Error "No setup executable found!"
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -154,21 +165,30 @@ jobs:
           bun tauri build --bundles deb,appimage
 
       - name: Package Linux Assets
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          [ "$VERSION" = "" ] && VERSION="${{ github.event.inputs.tag }}"
-          [ "$VERSION" = "" ] && VERSION="0.2.0"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="0.2.0"
+          fi
           VERSION="${VERSION#v}"
 
           mkdir -p dist/artifacts
-          DEB_FILE=$(find target/release/bundle/deb src-tauri/target/release/bundle/deb -name "*.deb" 2>/dev/null | head -n 1)
-          if [ -n "$DEB_FILE" ] && [ -f "$DEB_FILE" ]; then
-            cp "$DEB_FILE" "dist/artifacts/open-download-manager_${VERSION}_lin_x64.deb"
+          shopt -s nullglob
+
+          deb_files=(target/release/bundle/deb/*.deb src-tauri/target/release/bundle/deb/*.deb)
+          if [ ${#deb_files[@]} -gt 0 ]; then
+            cp "${deb_files[0]}" "dist/artifacts/open-download-manager_${VERSION}_lin_x64.deb"
+            echo "Packaged DEB: ${deb_files[0]}"
           fi
 
-          APPIMAGE_FILE=$(find target/release/bundle/appimage src-tauri/target/release/bundle/appimage -name "*.AppImage" 2>/dev/null | head -n 1)
-          if [ -n "$APPIMAGE_FILE" ] && [ -f "$APPIMAGE_FILE" ]; then
-            cp "$APPIMAGE_FILE" "dist/artifacts/open-download-manager_${VERSION}_lin_x64.AppImage"
+          appimage_files=(target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/appimage/*.AppImage)
+          if [ ${#appimage_files[@]} -gt 0 ]; then
+            cp "${appimage_files[0]}" "dist/artifacts/open-download-manager_${VERSION}_lin_x64.AppImage"
+            echo "Packaged AppImage: ${appimage_files[0]}"
           fi
 
       - uses: actions/upload-artifact@v4
@@ -198,10 +218,15 @@ jobs:
           path: dist/collected_artifacts
 
       - name: Assemble Release Assets & Generate Checksums
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          [ "$VERSION" = "" ] && VERSION="${{ github.event.inputs.tag }}"
-          [ "$VERSION" = "" ] && VERSION="0.2.0"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="0.2.0"
+          fi
           VERSION="${VERSION#v}"
 
           mkdir -p dist/final_release

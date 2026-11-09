@@ -234,6 +234,7 @@ pub fn find_browser_executable(browser: BrowserType) -> Option<PathBuf> {
     None
 }
 
+#[allow(dead_code)]
 fn user_home_dir() -> Option<PathBuf> {
     std::env::var("HOME")
         .ok()

@@ -2,7 +2,9 @@
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Description: Platform adapters detecting system, browser, and environment proxy settings.
 
-use std::{collections::HashMap, path::PathBuf, process::Command};
+use std::{collections::HashMap, path::PathBuf};
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use std::process::Command;
 
 use url::Url;
 
