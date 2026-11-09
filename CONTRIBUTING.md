@@ -1,13 +1,9 @@
 # Contributing
 
-Issues and pull requests are welcome. This checkout is an early Rust + Tauri migration, not the current published
-Windows preview or a finished replacement for every commercial downloader
-feature.
+Issues and pull requests are welcome! Open Download Manager is an open-source, high-performance desktop download manager built with Rust and Tauri v2.
 
 Read the [contributor start guide](docs/CONTRIBUTOR-START-HERE.md) before choosing
-work. It explains our roadmap, labels and implementation order. For new feature
-work, pick an approved issue and agree your approach and ownership with the
-maintainer before coding. Propose features outside the backlog for approval first.
+work. It explains our architecture, issue guidelines, and development workflow. Propose large features or architectural changes in an issue for discussion first.
 
 ## Development
 
@@ -15,16 +11,13 @@ Install Bun, Rust, and Tauri's platform prerequisites.
 Fork this repository, clone your fork, and create a branch for one focused
 change.
 
-```powershell
+```bash
 bun install --frozen-lockfile
 bun run test
 bun run dev
 ```
 
-`bun run build` builds the current Tauri app. Tauri packaging and the Rust
-download service are still in progress; this branch is not ready to distribute.
-Review the [migration plan](docs/TAURI-MIGRATION-PLAN.md) before choosing work
-and [release requirements](docs/RELEASING.md) before distributing binaries.
+`bun run build` builds the desktop application for your platform. See [INSTALL.md](docs/INSTALL.md) for platform distribution guidelines.
 
 ## Pull requests
 

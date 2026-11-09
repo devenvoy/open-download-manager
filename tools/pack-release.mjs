@@ -76,7 +76,7 @@ for (const { dir, arch: itemArch } of targetSearchList) {
 }
 
 // 3. Generate SHA-256 Checksums
-const releaseFiles = fs.readdirSync(distReleaseDir).filter(f => !f.endsWith('_checksums.txt') && !f.endsWith('.DS_Store'));
+const releaseFiles = fs.readdirSync(distReleaseDir).filter(f => !f.endsWith('_checksums.txt') && !f.endsWith('.DS_Store') && !f.endsWith('.md'));
 const checksums = [];
 
 for (const file of releaseFiles) {

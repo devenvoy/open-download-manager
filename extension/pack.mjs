@@ -20,7 +20,7 @@ fs.mkdirSync(firefoxDist, { recursive: true });
 const files = fs.readdirSync(extDir);
 
 for (const file of files) {
-  if (file.endsWith('.test.cjs')) continue;
+  if (file.endsWith('.test.cjs') || file === 'pack.mjs') continue;
 
   const srcPath = path.join(extDir, file);
   const stat = fs.statSync(srcPath);

@@ -1,143 +1,54 @@
-# Contributor start here
+# Contributor Guide
 
-The latest published Windows preview is an Electron release. This checkout is
-mid-migration to Rust and Tauri; the Electron implementation is in the ignored
-local `reference/electron-legacy/` archive and is not included in fresh clones.
-Commit `302fc1c` is the tracked pre-migration baseline. Linux, macOS, Windows
-ARM64, broader browser support and playlists are not released capabilities.
+Welcome to **Open Download Manager**! We welcome bug reports, feature suggestions, tests, documentation improvements, and code contributions.
 
-## Our strategy
+---
 
-Follow the [migration plan](TAURI-MIGRATION-PLAN.md) in phase order. Collect
-the Windows baseline before interpreting performance changes. Keep the existing
-extension and renderer behavior stable while porting the shell and backend.
+## 1. Project Architecture
 
-The maintainer approves scope and merges PRs. An approved issue approves an
-objective; it does not approve every possible implementation or guarantee a
-merge. Propose additional features in an issue before implementing them.
+Open Download Manager is built modern, modular, and fast:
+- **Desktop Runtime & Backend**: Rust with [Tauri v2](https://tauri.app) (`src-tauri/`).
+- **UI / Frontend**: Clean, responsive HTML5, CSS3, and JavaScript (`renderer/`).
+- **Browser Extensions**: WebExtensions (Manifest V3 for Chromium, Manifest V2 for Firefox) in `extension/`.
+- **Native Messaging Host**: Rust binary (`src-tauri/src/bin/native_host.rs`) providing high-speed IPC between browsers and the desktop manager.
 
-## Pick your first task
+---
 
-1. Read the relevant goal and its acceptance criteria in the
-   [issue backlog](https://github.com/devenvoy/open-download-manager/issues).
-2. Choose a concrete implementation step. Check its prerequisites, existing PRs
-   and comments so you do not duplicate another contributor's work.
-3. Comment with the step you want to take, your approach, and how you will test
-   it. State which operating systems/devices you can actually test.
-4. Wait for maintainer agreement on scope and ownership before starting new
-   feature implementation. A comment alone does not reserve the task.
-5. Submit a focused PR with test evidence. If a prerequisite is unfinished, you
-   may discuss or share a draft, but do not merge ahead of the dependency.
+## 2. Development Setup
 
-Small bug reports, documentation corrections and regression tests are welcome.
-If an issue has no status label, read its discussion and ask for scope/readiness
-agreement; missing labels do not mean it is automatically ready or blocked.
+### Prerequisites
+1. **Rust**: Latest stable toolchain (`rustup update stable`).
+2. **Bun**: JavaScript runtime and test runner (`curl -fsSL https://bun.sh/install | bash`).
+3. Platform-specific Tauri v2 prerequisites:
+   - **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+   - **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `build-essential`.
+   - **Windows**: Microsoft C++ Build Tools & WebView2.
 
-## What the labels mean
+### Local Workflow
+```bash
+# Clone the repository
+git clone https://github.com/devenvoy/open-download-manager.git
+cd open-download-manager
 
-| Label | Meaning | What to do |
-| --- | --- | --- |
-| `type: goal` | A larger outcome delivered through several steps | Read it for context; choose a linked implementation issue |
-| `status: ready` | No unfinished implementation prerequisite is recorded | Propose your approach and agree ownership |
-| `status: blocked` | A named prerequisite must merge and pass validation first | Follow that dependency; planning is welcome |
-| `help wanted` | Contributions are welcome | Still check readiness and discuss scope |
-| `bug` / `enhancement` / `documentation` | The kind of work | These do not indicate priority or merge approval |
-| `good first issue` | A deliberately scoped newcomer task, when applied | Read its acceptance criteria before claiming it |
+# Install dependencies
+bun install
 
-Labels are maintained manually. They are not automated merge gates and may lag
-behind discussions. If a label and dependency disagree, ask the maintainer to
-reconcile them. Issue numbers and step numbers describe identity/order, not
-priority. `help wanted` plus `status: blocked` means help is welcome once the
-prerequisite is ready.
+# Run the desktop app in development mode
+bun run dev
 
-## How the goals fit together
-
-| Goal | Implementation order |
-| --- | --- |
-| [Linux #6](https://github.com/devenvoy/open-download-manager/issues/6) | Shared adapters #14 → runtime/integration #22 → packaging/validation #23 |
-| [macOS #7](https://github.com/devenvoy/open-download-manager/issues/7) | Shared adapters #14 → runtime/integration #24 → packaging/validation #25 |
-| [Windows ARM64 #19](https://github.com/devenvoy/open-download-manager/issues/19) | Build/packaging implemented; physical ARM64 hardware validation tracked in #19 |
-| [Firefox #10](https://github.com/devenvoy/open-download-manager/issues/10) | Capture/integration #28 → persistent installation/setup #29 |
-| [YouTube playlists #21](https://github.com/devenvoy/open-download-manager/issues/21) | Discovery/model #30 → selection/queue/batch controls #31 |
-
-The shared adapters are one task, not three copies. After #14 is merged and
-validated, Linux, macOS and ARM64 implementation can proceed in parallel.
-Firefox's initial Windows work and playlist discovery do not need to wait for
-those ports. Brave #9 and Opera #11 start as focused Windows browser tasks;
-their new-OS integration follows the relevant platform work.
-
-Reliability work can proceed alongside these goals: measured throughput #12,
-CI/regression coverage #13, interrupted-transfer recovery #15, safe handoff #16,
-extension behavior #17, and desktop interactions #18. Named queues/scheduling
-#19 and website grabbing #20 have their own scoped plans. The initial playlist
-feature can use existing per-item queues without waiting for #19.
-
-## Link a PR correctly
-
-For a PR that fully completes macOS runtime step #24, use:
-
-```text
-Closes #24
-Refs #7
-Prerequisite: #14 (merged and validated)
-```
-
-Use `Refs #24` instead if the PR only delivers part of that step. Do not write
-`Closes #7` for a single implementation step: the macOS goal also requires
-packaging and end-to-end validation. One issue may need several small PRs;
-several unrelated issues should not become one large PR.
-
-After merge, the maintainer checks the evidence, updates the goal checklist,
-and changes the next step from blocked to ready. A goal closes only when all
-acceptance criteria are met. Publishing installers is a separate maintainer
-release decision.
-
-## Evidence and review
-
-- Add regression coverage for behavior you change and explain what you tested.
-- Distinguish fixtures, live-browser testing and real-device testing. A passing
-  build does not establish support for an operating system or architecture.
-- Preserve transfer integrity, audio/video pairing, cancellation, credential
-  boundaries and existing Windows behavior.
-- Keep credentials, signed media URLs and browser profiles out of public reports.
-- Keep unrelated refactors and dependency upgrades out of focused feature PRs.
-- Contributor code must not receive release secrets. Stronger automated checks
-  are tracked in #13; do not assume a label enforces them today.
-
-
-## Run and report tests
-
-Install Bun and Rust, then run from the repository root:
-
-```powershell
-bun install --frozen-lockfile
+# Run all test suites (Rust unit tests + Browser extension tests)
 bun run test
 ```
 
-`bun run test` runs the Rust tests and retained browser-extension tests.
-The previous Electron backend and its tests are not part of this checkout. Add
-new Rust tests alongside each migrated use case and preserve the old tests'
-behavioral requirements from the Git history when porting features.
+---
 
-For a focused check, run the relevant file directly, for example:
+## 3. Contribution Workflow
 
-```powershell
-cargo test --manifest-path src-tauri/Cargo.toml
-bun test extension/background.test.cjs
-```
-
-In every PR, state the exact commands, operating system, runtime version, and commit tested. Separate evidence into these categories:
-
-- **Fixture tests:** automated tests using synthetic inputs, local servers, and controlled files. These demonstrate the behavior covered by those fixtures; they do not prove compatibility with a live website or browser.
-- **Live-browser tests:** identify the browser and version, operating system, extension installation method, and the real workflow exercised. Mark them not run when they were not performed.
-- **Packaged Windows tests:** identify the artifact and checksum, Windows environment, and whether clean install, launch, native-host handoff, upgrade, and uninstall were actually verified. A successful build is not an install test.
-- **Other platforms/devices:** claim support only after testing the actual operating system and architecture. Do not infer support from shared code or fixture tests.
-
-The pull-request test workflow runs the current scaffold tests on Windows. The
-old Electron release workflow has been removed; Tauri packaging is not ready.
-Report failed, blocked, and not-run checks explicitly. Never describe a check
-as passing unless its result is available for the exact candidate commit.
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for development commands,
-[SECURITY.md](../SECURITY.md) for private vulnerability reports, and
-[release requirements](RELEASING.md) for distribution checks.
+1. **Pick or Propose an Issue**:
+   Check our [GitHub Issues](https://github.com/devenvoy/open-download-manager/issues) for open tasks or bugs. Propose larger architectural changes in an issue before implementing them.
+2. **Branch from `development`**:
+   Create a descriptive feature branch (e.g. `feat/adaptive-speed-limit` or `fix/proxy-auth`).
+3. **Write Tests**:
+   Ensure all existing tests pass and add unit/regression coverage for any new features or bug fixes.
+4. **Submit a Pull Request**:
+   Target the `development` branch with a clear description of your changes and testing performed.

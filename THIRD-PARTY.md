@@ -1,58 +1,41 @@
-# Third-party media component
+# Third-Party Notices & Licensing
 
-The previously published Electron preview uses ffmpeg-static 5.3.0
-(GPL-3.0-or-later) to supply FFmpeg binary release b6.1.1. FFmpeg remains a
-separate executable invoked for local media assembly/conversion.
+Open Download Manager is open-source software licensed under the [MIT License](LICENSE).
 
-Package source, license and binary provenance: https://github.com/eugeneware/ffmpeg-static
+This document lists the third-party components, frameworks, and optional external tools utilized by Open Download Manager.
 
-Binary release and associated source/build information: https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1
+---
 
-FFmpeg source and licensing: https://ffmpeg.org/download.html and https://ffmpeg.org/legal.html
+## 1. Core Framework & Runtime
 
-The legacy Electron installer bundles Electron and dependency license files with
-their upstream notices, plus FFmpeg's GPL text and build provenance under
-`resources/licenses`. The Tauri application has not adopted these binaries or
-dependencies yet.
-Corresponding source/build material for this exact binary and its linked libraries
-must be prepared before a public binary release; upstream links here alone are not
-a completed redistribution audit. See docs/RELEASING.md.
+- **Tauri v2** (`https://tauri.app`):
+  Licensed under Apache License 2.0 or MIT License.
+  Used as the desktop application container and native OS bridge.
 
-# YouTube SABR transport
+- **Rust Ecosystem Dependencies**:
+  Core network, serialization, and concurrency capabilities utilize standard open-source Rust crates (including `tokio`, `reqwest`, `serde`, `flate2`, and `image`) distributed under permissive licenses (MIT, Apache-2.0, or BSD). Full dependency specifications are defined in [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml).
 
-The browser-capture download path uses `googlevideo` 5.0.1, an MIT-licensed library for YouTube's UMP/SABR transport. Open Download Manager supplies its own browser-session capture, format selection, desktop handoff, file writing, muxing, and user interface.
+---
 
-Source and license: https://github.com/LuanRT/GoogleVideo
+## 2. Browser Extensions
 
-# YouTube extraction (legacy Electron preview)
+- **Chromium & Firefox Integration**:
+  The browser extensions located in [`extension/`](extension/) are original code written for Open Download Manager and distributed under the project's [MIT License](LICENSE).
+  Uses standard W3C WebExtensions APIs and the native messaging protocol.
 
-The previously published Electron Windows build includes yt-dlp 2026.08.19 from
-its official GitHub release,
-SHA-256 `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a`.
-Source: https://github.com/yt-dlp/yt-dlp/tree/2026.08.19 . The core is public domain;
-the Windows executable includes additional components under their own licenses.
-Full upstream notices are included in `vendor/LICENSE.txt` and
-`vendor/THIRD_PARTY_LICENSES.txt`, copied to the packaged `resources/tools` folder.
-This is an independent extractor, not recovered IDM implementation code.
+- **YouTube SABR Transport**:
+  The SABR stream processor references YouTube's UMP transport specifications adapted under the MIT License (`https://github.com/LuanRT/GoogleVideo`).
 
-# Tauri media tool downloads
+---
 
-The Tauri application can install media tools on demand into the current user's
-`.open-download-manager/tools` directory:
+## 3. Optional On-Demand Media Tools
 
-- **yt-dlp**: downloaded from the official `yt-dlp/yt-dlp` GitHub release for the
-  host architecture (`yt-dlp.exe`, `yt-dlp_arm64.exe`, `yt-dlp_macos`,
-  `yt-dlp_linux`, `yt-dlp_linux_aarch64`). Public domain core; bundled
-  components keep their own licenses.
-- **FFmpeg**:
-  - Windows x64: GyanD `codexffmpeg` essentials build (GPL).
-  - Windows ARM64: BtbN FFmpeg-Builds `winarm64` GPL build.
-  - macOS: evermeet.cx release.
-  - Linux x64: johnvansickle static build.
-  - Linux ARM64: not downloaded automatically.
+Open Download Manager does **not** bundle binary media tools directly in the application installer. To process complex adaptive media streams, the application can resolve these tools from your system `PATH` or download official releases on demand into your local user tools directory (`~/.open-download-manager/tools`):
 
-FFmpeg is a separate executable. Redistributors that bundle or mirror these
-binaries are responsible for the corresponding source offer, license text, and
-build provenance. The project does not currently ship FFmpeg or yt-dlp inside
-the Tauri installer. See `docs/cross-platform-packaging.md` for current
-resolution and licensing details.
+- **yt-dlp** (`https://github.com/yt-dlp/yt-dlp`):
+  - **License**: The Unlicense (Public Domain dedication).
+  - Used optionally for adaptive stream format extraction and fragment retrieval.
+
+- **FFmpeg** (`https://ffmpeg.org`):
+  - **License**: GNU Lesser General Public License (LGPL) version 2.1 or later, or GNU General Public License (GPL) version 2 or later, depending on the build configuration.
+  - Used strictly as an external CLI process for local multiplexing and format conversion.

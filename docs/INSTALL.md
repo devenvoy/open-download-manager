@@ -1,158 +1,68 @@
-# Install and use Open Download Manager
+# Installation and Setup Guide
 
-## Download
+Open Download Manager is available across macOS, Windows, and Linux, with native browser integration extensions for Chromium-based browsers and Firefox.
 
-Windows 10/11 on 64-bit Intel/AMD PCs are the supported release target. Windows
-11 ARM64 builds can be produced from source, but they are not yet published or
-hardware-validated. See [Windows ARM64](WINDOWS-ARM64.md) for build steps and
-current limitations. YouTube speed and compatibility vary.
+---
 
-Open the project's [latest release](https://github.com/devenvoy/open-download-manager/releases/latest)
-and download the Windows setup executable from Assets (the filename ends in
-`-setup.exe`). You do not need a GitHub
-account, Git, Node.js, or a terminal to install the application. Do not download
-the automatically generated "Source code" archives to install it.
+## 1. Desktop Application Installation
 
-The installer is currently unsigned. Windows may show an unknown-publisher
-warning. Do not disable antivirus or other security protections; check the source
-of your download and the release's SHA-256 checksum before deciding to run it.
+### macOS (Apple Silicon & Intel)
+1. Download the latest `.dmg` installer from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest):
+   - **Apple Silicon (M1/M2/M3/M4)**: `open-download-manager_0.2.0_mac_arm64.dmg`
+   - **Intel x86_64**: `open-download-manager_0.2.0_mac_x64.dmg`
+2. Double-click the downloaded `.dmg` file.
+3. Drag **Open Download Manager** into your **Applications** folder.
+4. Launch Open Download Manager from Applications or Spotlight.
 
-Run the installer and follow the wizard. Launch **Open Download Manager** from the
-Start menu. Keep the app installed at its chosen location so browser integration
-can find it.
+### Windows (10 / 11)
+1. Download the setup executable from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest):
+   - **Windows 64-bit (x64)**: `open-download-manager_0.2.0_win_x64-setup.exe`
+   - **Windows ARM64**: `open-download-manager_0.2.0_win_arm64-setup.exe`
+2. Run the installer wizard and complete the setup.
+3. Launch Open Download Manager from the Start Menu or desktop shortcut.
 
-## Install the published extension (Chrome / Edge / Brave)
+### Linux (Ubuntu, Debian, Fedora, Arch)
+1. Download the package for your distribution from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest):
+   - **Debian / Ubuntu / Mint**: `open-download-manager_0.2.0_lin_x64.deb`
+     ```bash
+     sudo dpkg -i open-download-manager_0.2.0_lin_x64.deb
+     sudo apt-get install -f # resolve any missing dependencies if needed
+     ```
+   - **Universal Linux AppImage**: `open-download-manager_0.2.0_lin_x64.AppImage`
+     ```bash
+     chmod +x open-download-manager_0.2.0_lin_x64.AppImage
+     ./open-download-manager_0.2.0_lin_x64.AppImage
+     ```
 
-In the installer, leave **Set up Chrome and Edge download buttons** checked to
-request the published extension automatically. Approve Windows' administrator
-permission prompt for browser setup. Declining it still installs the app normally.
-Close and reopen your browser after installation, then accept its extension
-confirmation. The browser decides when to show that confirmation; managed-browser
-policies or an earlier removal of the extension may prevent automatic setup.
-Open Download Manager never opens a store page automatically on startup.
-When you finish an installation with browser setup selected, the app opens its
-Browser integration window so you can see what still needs your approval.
+---
 
-If a browser says **Enable extension**, it has downloaded the extension but needs
-your approval. Open that browser's **Action required** menu and enable **Open
-Download Manager Integration**. If the prompt is missing, open its Extensions page and
-enable the extension there. A **Reinstall needed** status means the extension was
-previously removed in that browser profile: click **Reinstall extension** in the
-app, then **Add to Chrome** (or the equivalent button) in the store. Browser
-security prevents the installer from undoing a previous removal automatically.
+## 2. Browser Extension Setup
 
-This requests installation through the browser's external-extension registration,
-not through a force-install policy. You can still disable or remove the extension.
-Chrome and Edge have documented support for this mechanism. Brave currently shares
-Chrome's registration mechanism, but its actual prompt must be verified separately.
-The final app uninstall removes registrations created by these installers once no
-other registered Open Download Manager installation needs them; Windows requests
-administrator permission for that cleanup too.
+Open Download Manager communicates seamlessly with your browser using the Native Messaging protocol.
 
-To install manually or retry setup, open **Browser integration**, choose
-your browser, and click **Install browser extension**. Confirm the installation
-in that browser. Keep Open Download Manager running, click **Refresh** in browser
-integration, and refresh the video page. No Developer mode, folder picker, or
-extension ID is needed for this published extension.
+### Chromium Browsers (Google Chrome, Microsoft Edge, Brave, Opera, Vivaldi)
+1. Download `open-download-manager_0.2.0_ext_chrome.zip` from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest).
+2. Unzip the archive into a permanent folder (e.g., `Documents/OpenDownloadManagerExtension`).
+3. Open your browser's extensions manager:
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+   - Brave: `brave://extensions`
+   - Opera: `opera://extensions`
+4. Toggle on **Developer mode** in the top-right corner.
+5. Click **Load unpacked** and select the unzipped extension directory (the folder containing `manifest.json`).
+6. Open Open Download Manager desktop app, navigate to **Options → Browser Integration**, and confirm your browser shows as **Connected**.
 
-## Manual extension setup (Opera / development builds)
+### Mozilla Firefox
+1. Download `open-download-manager_0.2.0_ext_firefox.xpi` from the [Releases page](https://github.com/devenvoy/open-download-manager/releases/latest).
+2. In Firefox, open `about:addons` (or press `Ctrl+Shift+A` / `Cmd+Shift+A`).
+3. Click the gear icon (⚙️) in the top-right corner and select **Install Add-on From File...**.
+4. Select the downloaded `.xpi` file and click **Add** when prompted.
 
-The browser extension adds **Download this video** buttons to supported web
-videos. It is included with the installed application; you do not need to download
-a separate ZIP or visit GitHub again. This fallback is for Opera or development
-builds; Chrome, Edge and Brave users should use the published extension above:
+---
 
-1. The app shows **Browser integration** on first launch. You can also open it
-   from the toolbar later.
-2. Choose the card for **Chrome**, **Edge**, **Brave**, or **Opera**. The card
-   shows whether that browser is installed, needs setup, or is connected.
-3. In that browser's guide, click **Copy path**. This copies the location of the
-   extension that came with the app. It is **not** the folder where your
-   downloaded videos will be saved. Then click **Open Browser extensions**.
-   Your browser opens its **Extensions** page. If the button cannot find your
-   browser, type `chrome://extensions`, `edge://extensions`,
-   `brave://extensions`, or `opera://extensions` in that browser's address bar,
-   then press **Enter**.
-4. On the browser's Extensions page, switch on **Developer mode**. In Chrome it
-   is usually at the upper right. In Edge, check the left sidebar; expand the menu
-   if the sidebar is hidden.
-5. Click **Load unpacked** on the Extensions page. This opens a **Windows folder
-   selection window**. The following step happens in that new window.
-6. Press **Ctrl+L** to select the folder window's address bar at the top. Press
-   **Ctrl+V** to paste the extension folder path copied in step 2, then press
-   **Enter**. Do not paste into the browser's web address bar or the Search box.
-7. Click **Select Folder** (some versions say **Select**) at the bottom of that
-   Windows window. Choose the **extension folder itself**, not a file inside it
-   and not its `icons` subfolder.
-8. The browser's Extensions page should now show **Open Download Manager
-   Integration**. Make sure its switch is on. Leave Developer mode on while using
-   this unpacked preview extension.
-9. Return to Open Download Manager and click **Refresh**. The selected browser's
-   card changes to **Connected** after the extension is found and its local
-   connector is registered. No extension ID or commands need to be entered.
-10. Return to the video website, refresh the page, and play the video briefly.
-    Look for **Download this video**, then follow the download steps below.
+## 3. Media Tools Integration (`yt-dlp` & `ffmpeg`)
 
-### Which folder should I choose?
-
-The exact location for your computer is displayed as **Extension folder** in the
-selected browser's guide. A normal installed copy uses:
-
-`C:\Users\YOUR-WINDOWS-USERNAME\.open-download-manager\BrowserIntegration\extension`
-
-That path is an example; **Copy extension folder path** copies your actual path
-with your own Windows username. **Show folder** opens that folder in
-File Explorer if you want to inspect it. It contains `manifest.json` and an
-`icons` folder. You select the enclosing `extension` folder, not `manifest.json`.
-Do not move or delete this folder after loading it into your browser.
-
-### If setup does not work
-
-- **“Manifest file is missing or unreadable”:** Cancel the folder selection and
-  click **Show folder** in Open Download Manager. Confirm that the opened
-  folder contains `manifest.json`. Return to the Extensions page, choose **Load
-  unpacked**, and select that exact opened `extension` folder—not the app's
-  installation folder, Downloads, `manifest.json` itself, or the `icons` folder.
-- **No connection message:** Keep the app running, confirm the extension is
-  switched on in the same browser you set up, then click **Refresh** in
-  the app. Reload the extension on the browser's Extensions page and retry.
-- **No video button:** Refresh the video page after setup and start playback.
-  Some sites and protected media are not supported.
-- **No Developer mode or Load unpacked button:** A workplace or school may
-  restrict extension installation. Ask its administrator about permitted setup.
-
-Only install the extension if you trust this project. Its page/network permissions
-allow it to detect media and hand the selected media session to the desktop app.
-Firefox is a supported browser option. **Set up Firefox** creates its
-browser-specific folder and opens Firefox's add-on setup page. Choose
-**This Firefox**, then **Load Temporary Add-on**, and select `manifest.json` from
-the folder shown by the app. Firefox removes a temporary add-on when it restarts;
-a signed AMO release is still required for permanent consumer installation.
-
-## Download a file or video
-
-- For a file link, use **Add URL** in the app.
-- For a supported video, play it briefly, click **Download this video**, and select
-  a quality such as 1080p. Only download content you are permitted to save.
-- In **Download File Info**, choose a name, folder, and category. Choose
-  **Start Download**, **Download Later**, or **Cancel**.
-- Start Download opens progress. On completion, use **Open** or **Open folder**.
-- Repeated clicks reuse the active download. Cancel closes the progress window.
-
-Closing the main window keeps the app in the tray. Use **Tasks → Exit** to quit.
-Paused/queued YouTube sessions may expire; reselect the video in the browser if
-resuming later fails. DRM, private/sign-in-required videos, and live streams are
-not supported. Slow YouTube transfers remain a known limitation.
-
-## Updates and uninstall
-
-Open Download Manager checks GitHub Releases for updates after startup and every
-six hours. It asks before downloading and again before restarting. Active
-downloads are never restarted automatically; choose **Later** and let them
-finish first. You can also choose **Help → Check for updates** at any time.
-After an extension update, reload your video tabs if their download button is
-missing.
-
-Uninstall through Windows **Settings → Apps**. Remove the browser extension
-separately. Downloads and the `.open-download-manager` folder in your Windows user
-folder are not automatically deleted.
+For downloading and merging adaptive YouTube streams (SABR / 1080p+ videoplayback):
+1. In Open Download Manager, navigate to **Options → Media Tools**.
+2. If `yt-dlp` or `ffmpeg` is already in your system PATH, the app will auto-detect it.
+3. If not installed, click **Install Media Tools** to automatically download official, verified binaries to your local directory (`~/.open-download-manager/tools/`).

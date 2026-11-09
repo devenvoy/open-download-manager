@@ -3,6 +3,7 @@ name = "open-download-manager"
 version = "0.2.0"
 description = "Open Download Manager desktop application"
 authors = ["Open Download Manager contributors"]
+license = "MIT"
 edition = "2021"
 default-run = "open-download-manager"
 
