@@ -31,7 +31,6 @@ graphify-out/
 # rustTorrent submodule which provides the optional `torrent` engine source
 # (see docs/TORRENT-PLAN.md Phase 0).
 /reference/
-!/reference/
 !reference/rustTorrent/
 target/
 src-tauri/target/

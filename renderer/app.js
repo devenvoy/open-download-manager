@@ -2151,6 +2151,9 @@ async function openIntegration() {
 	renderBrowserGrid(state.integration);
 	showDialog("#integration-dialog");
 }
+async function openTorrents() {
+	await call("openTorrent");
+}
 const commands = {
 	add: () => openAdd(),
 	paste: async () => {
@@ -2164,6 +2167,7 @@ const commands = {
 	settings: openSettings,
 	integration: openIntegration,
 	scheduler: openScheduler,
+	torrents: openTorrents,
 	pauseAll: () => bulkAction("pause"),
 	resumeAll: () => bulkAction("resume"),
 	removeCompleted,
@@ -2185,6 +2189,7 @@ $("#new-download").addEventListener("click", commands.add);
 $("#settings-button").addEventListener("click", openSettings);
 $("#integration-button").addEventListener("click", openIntegration);
 $("#scheduler-button").addEventListener("click", openScheduler);
+$("#torrents-button").addEventListener("click", openTorrents);
 $("#pause-all").addEventListener("click", commands.pauseAll);
 $("#stop-queue").addEventListener("click", commands.pauseAll);
 $("#resume-all").addEventListener("click", commands.resumeAll);
