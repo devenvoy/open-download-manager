@@ -98,6 +98,20 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    pub fn torrent(message: impl Into<String>) -> Self {
+        Self {
+            code: "torrent_error",
+            message: message.into(),
+        }
+    }
+
+    pub fn torrent_unavailable(message: impl Into<String>) -> Self {
+        Self {
+            code: "torrent_unavailable",
+            message: message.into(),
+        }
+    }
 }
 
 pub type AppResult<T> = Result<T, AppError>;

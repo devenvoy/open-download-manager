@@ -23,14 +23,28 @@ path = "src/bin/native_host.rs"
 name = "perf_benchmark"
 path = "src/bin/perf_benchmark.rs"
 
+[features]
+# BitTorrent support is opt-in and isolated from the download manager.
+# Build with `--features torrent`. Not supported on Windows ARM64.
+default = []
+torrent = ["dep:librtbit"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+anyhow = "1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 flate2 = "1.1.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# BitTorrent engine (rustTorrent / rqbit fork). Pinned to an exact revision of
+# the upstream repository so builds are reproducible. The same commit is tracked
+# locally as the git submodule at `reference/rustTorrent` (auditable source).
+# rust-tls keeps the app on rustls instead of pulling native-tls/OpenSSL.
+# Not supported on Windows ARM64 (upstream ships x64 only): the `torrent`
+# feature must not be enabled for `aarch64-pc-windows-msvc` targets.
+librtbit = { package = "swarmforge", git = "https://github.com/TheDancingDeveloper-org/rustTorrent.git", rev = "94aae0460fe031af59a532586ccefc10f9a637bd", default-features = false, features = ["rust-tls"], optional = true }
 libc = "0.2"
 mime_guess = "2.0"
 opener = { version = "0.9.0", features = ["reveal"] }

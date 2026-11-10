@@ -15,6 +15,7 @@
 use application::{
     download_history_service::DownloadHistoryService,
     download_transfer_service::DownloadTransferService, settings_service::SettingsService,
+    torrent_service::TorrentService,
 };
 use infrastructure::http_download_executor::HttpDownloadExecutor;
 use infrastructure::{
@@ -39,9 +40,14 @@ use presentation::{
     download_event_publisher::TauriDownloadEventPublisher,
     window_manager::{
         close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
-        open_progress_window, open_scheduler_window, resize_auxiliary_window,
+        open_progress_window, open_scheduler_window, open_torrent_window, resize_auxiliary_window,
         resize_progress_window,
     },
+};
+use presentation::commands::torrents::{
+    torrent_action, torrent_add_file, torrent_add_magnet, torrent_files, torrent_list,
+    torrent_restart_engine, torrent_set_files, torrent_set_watching, torrent_settings_get,
+    torrent_settings_set, torrent_status,
 };
 use tauri::Manager;
 
@@ -260,20 +266,34 @@ pub fn run() {
                 ),
             );
 
-            app.manage(
-                AppState::new(
-                    settings,
-                    download_history,
-                    download_transfer,
-                    credential_service,
-                    integration_service,
-                    file_icons,
-                    update_service,
-                )
-                .with_queue_service(queue_service)
-                .with_clipboard(clipboard_service)
-                .with_advanced_integration(advanced_service),
-            );
+            let app_state = AppState::new(
+                settings,
+                download_history,
+                download_transfer,
+                credential_service,
+                integration_service,
+                file_icons,
+                update_service,
+            )
+            .with_queue_service(queue_service)
+            .with_clipboard(clipboard_service)
+            .with_advanced_integration(advanced_service)
+            .with_torrents({
+                #[cfg(feature = "torrent")]
+                {
+                    TorrentService::start(
+                        app.handle().clone(),
+                        data_directory.clone(),
+                        default_download_directory.clone(),
+                    )
+                }
+                #[cfg(not(feature = "torrent"))]
+                {
+                    TorrentService::disabled()
+                }
+            });
+
+            app.manage(app_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -326,7 +346,19 @@ pub fn run() {
             get_advanced_integration_capability,
             enable_advanced_integration,
             disable_advanced_integration,
-            repair_advanced_integration
+            repair_advanced_integration,
+            open_torrent_window,
+            torrent_status,
+            torrent_list,
+            torrent_add_magnet,
+            torrent_add_file,
+            torrent_action,
+            torrent_files,
+            torrent_set_files,
+            torrent_settings_get,
+            torrent_settings_set,
+            torrent_set_watching,
+            torrent_restart_engine,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Open Download Manager");

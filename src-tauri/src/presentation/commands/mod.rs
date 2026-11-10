@@ -12,6 +12,7 @@ pub mod media;
 pub mod proxies;
 pub mod queues;
 pub mod settings;
+pub mod torrents;
 
 pub use browser::{
     browser_setup_action, disable_advanced_integration, enable_advanced_integration,

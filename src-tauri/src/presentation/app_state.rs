@@ -22,6 +22,7 @@ use crate::{
         integration_service::IntegrationService,
         proxy_discovery_service::ProxyDiscoveryService,
         settings_service::SettingsService,
+        torrent_service::TorrentService,
         updater_service::UpdateService,
     },
     domain::settings::{DetectedProxyConfig, Settings, SettingsPatch},
@@ -44,6 +45,7 @@ pub struct AppState {
     pub(super) advanced_integration: Arc<AdvancedIntegrationService>,
     pub(super) proxy_discovery: Arc<ProxyDiscoveryService>,
     pub(super) queue_service: Option<Arc<crate::application::queue_service::QueueService>>,
+    pub(super) torrents: Arc<TorrentService>,
 }
 
 impl AppState {
@@ -73,6 +75,7 @@ impl AppState {
             advanced_integration,
             proxy_discovery,
             queue_service: None,
+            torrents: TorrentService::disabled(),
         }
     }
 
@@ -116,6 +119,11 @@ impl AppState {
         proxy_discovery: Arc<ProxyDiscoveryService>,
     ) -> Self {
         self.proxy_discovery = proxy_discovery;
+        self
+    }
+
+    pub fn with_torrents(mut self, torrents: Arc<TorrentService>) -> Self {
+        self.torrents = torrents;
         self
     }
 

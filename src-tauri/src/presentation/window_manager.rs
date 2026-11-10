@@ -28,6 +28,7 @@ pub const OPTIONS_WINDOW_LABEL: &str = "options";
 pub const ADD_WINDOW_LABEL: &str = "add";
 pub const SCHEDULER_WINDOW_LABEL: &str = "scheduler";
 pub const INTEGRATION_WINDOW_LABEL: &str = "integration";
+pub const TORRENT_WINDOW_LABEL: &str = "torrents";
 
 // Sizing constants matching the legacy desktop shell exactly
 pub const PROGRESS_WINDOW_WIDTH: f64 = 565.0;
@@ -65,6 +66,11 @@ pub const INTEGRATION_WINDOW_HEIGHT: f64 = 620.0;
 pub const INTEGRATION_WINDOW_MIN_WIDTH: f64 = 620.0;
 pub const INTEGRATION_WINDOW_MIN_HEIGHT: f64 = 480.0;
 
+pub const TORRENT_WINDOW_WIDTH: f64 = 900.0;
+pub const TORRENT_WINDOW_HEIGHT: f64 = 700.0;
+pub const TORRENT_WINDOW_MIN_WIDTH: f64 = 700.0;
+pub const TORRENT_WINDOW_MIN_HEIGHT: f64 = 500.0;
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenAddOptions {
@@ -92,6 +98,10 @@ pub fn progress_route(id: &str) -> AppResult<String> {
 
 pub fn options_route() -> &'static str {
     "index.html?options=1"
+}
+
+pub fn torrent_route() -> &'static str {
+    "index.html?torrents=1"
 }
 
 pub fn scheduler_route() -> &'static str {
@@ -423,6 +433,28 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .title("Browser integration")
     .inner_size(INTEGRATION_WINDOW_WIDTH, INTEGRATION_WINDOW_HEIGHT)
     .min_inner_size(INTEGRATION_WINDOW_MIN_WIDTH, INTEGRATION_WINDOW_MIN_HEIGHT)
+    .build()
+    .map_err(|error| AppError::window(error.to_string()))?;
+
+    let _ = window.remove_menu();
+    let _ = activate_existing_window(&window);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window(TORRENT_WINDOW_LABEL) {
+        return activate_existing_window(&window);
+    }
+
+    let window = WebviewWindowBuilder::new(
+        &app,
+        TORRENT_WINDOW_LABEL,
+        WebviewUrl::App(PathBuf::from(torrent_route())),
+    )
+    .title("Torrents")
+    .inner_size(TORRENT_WINDOW_WIDTH, TORRENT_WINDOW_HEIGHT)
+    .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 

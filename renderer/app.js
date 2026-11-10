@@ -24,15 +24,18 @@ const optionsMode = new URLSearchParams(location.search).get("options") === "1";
 const addMode = new URLSearchParams(location.search).get("add") === "1";
 const schedulerMode =
 	new URLSearchParams(location.search).get("scheduler") === "1";
+const torrentsMode = new URLSearchParams(location.search).get("torrents") === "1";
 if (progressMode) document.body.classList.add("progress-window");
 if (integrationMode) document.body.classList.add("integration-window");
 if (optionsMode) document.body.classList.add("options-window");
 if (addMode) document.body.classList.add("add-window");
 if (schedulerMode) document.body.classList.add("scheduler-window");
+if (torrentsMode) document.body.classList.add("torrents-window");
 if (integrationMode) document.title = "Browser integration";
 if (optionsMode) document.title = "Options";
 if (addMode) document.title = "Download File Info";
 if (schedulerMode) document.title = "Scheduler";
+if (torrentsMode) document.title = "Torrents";
 
 initTheme();
 let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },

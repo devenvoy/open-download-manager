@@ -20,6 +20,7 @@ pub mod protocol;
 pub mod queue;
 pub mod settings;
 pub mod snapshot;
+pub mod torrent;
 pub mod updater;
 
 pub use file_type::FileType;
