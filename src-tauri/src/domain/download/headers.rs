@@ -71,3 +71,73 @@ impl std::fmt::Debug for BrowserRequestHeaders {
         f.write_str("BrowserRequestHeaders(<redacted>)")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitizer_keeps_only_safe_forwarded_headers() {
+        let raw = HashMap::from([
+            ("Cookie".to_owned(), "session=secret".to_owned()),
+            ("authorization".to_owned(), "Bearer token".to_owned()),
+            (
+                "user-agent".to_owned(),
+                "Mozilla/5.0 (compatible)".to_owned(),
+            ),
+            ("origin".to_owned(), "https://example.com".to_owned()),
+            ("referer".to_owned(), "https://example.com/page".to_owned()),
+            ("x-custom-tracking".to_owned(), "bad".to_owned()),
+        ]);
+        let sanitized = sanitize_forward_headers(raw);
+        assert_eq!(
+            sanitized.get("cookie").map(String::as_str),
+            Some("session=secret")
+        );
+        assert_eq!(
+            sanitized.get("authorization").map(String::as_str),
+            Some("Bearer token")
+        );
+        assert_eq!(
+            sanitized.get("user-agent").map(String::as_str),
+            Some("Mozilla/5.0 (compatible)")
+        );
+        assert_eq!(
+            sanitized.get("origin").map(String::as_str),
+            Some("https://example.com")
+        );
+        assert_eq!(
+            sanitized.get("referer").map(String::as_str),
+            Some("https://example.com/page")
+        );
+        assert!(!sanitized.contains_key("x-custom-tracking"));
+    }
+
+    #[test]
+    fn sanitizer_drops_empty_crlf_and_oversized_values() {
+        let oversized = "x".repeat(MAX_FORWARDED_HEADER_VALUE_BYTES + 1);
+        let raw = HashMap::from([
+            ("cookie".to_owned(), String::new()),
+            ("authorization".to_owned(), "token\r\nInjected: value".to_owned()),
+            ("user-agent".to_owned(), oversized),
+            ("origin".to_owned(), "https://example.com".to_owned()),
+        ]);
+        let sanitized = sanitize_forward_headers(raw);
+        assert_eq!(sanitized.len(), 1);
+        assert_eq!(
+            sanitized.get("origin").map(String::as_str),
+            Some("https://example.com")
+        );
+    }
+
+    #[test]
+    fn debug_output_never_exposes_header_values() {
+        let headers = BrowserRequestHeaders::sanitize(HashMap::from([(
+            "cookie".to_owned(),
+            "session=secret".to_owned(),
+        )]));
+        let rendered = format!("{headers:?}");
+        assert!(rendered.contains("redacted"));
+        assert!(!rendered.contains("session=secret"));
+    }
+}

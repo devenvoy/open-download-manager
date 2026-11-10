@@ -6,10 +6,12 @@
 // Description: Integration tests verifying download transfer functionality, edge cases, and error recovery.
 
 use std::{
+    collections::HashMap,
     fs,
     io::{Read, Write},
     net::TcpListener,
     path::PathBuf,
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
@@ -18,7 +20,7 @@ use open_download_manager_lib::{
     application::download_history_service::DownloadHistoryService,
     application::download_transfer_service::DownloadTransferService,
     domain::{
-        download::{DownloadAction, DownloadRequest, DownloadStatus},
+        download::{DownloadAction, BrowserRequestHeaders, DownloadRequest, DownloadStatus},
         settings::Settings,
     },
     infrastructure::download_history_store::DownloadHistoryStore,
@@ -37,6 +39,65 @@ fn settings(directory: PathBuf, connections: u8) -> Settings {
     let mut settings = Settings::new(directory);
     settings.connections = connections;
     settings
+}
+
+fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+    let mut request = Vec::new();
+    let mut chunk = [0; 1_024];
+    while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+        let count = stream.read(&mut chunk).expect("request should be readable");
+        if count == 0 {
+            break;
+        }
+        request.extend_from_slice(&chunk[..count]);
+    }
+    String::from_utf8_lossy(&request).into_owned()
+}
+
+fn request_has_cookie(request: &str, expected: &str) -> bool {
+    request.lines().any(|line| {
+        let Some((name, value)) = line.split_once(':') else {
+            return false;
+        };
+        name.eq_ignore_ascii_case("cookie")
+            && value.split(';').any(|cookie| cookie.trim() == expected)
+    })
+}
+
+fn serve_cookie_gated(
+    body: Vec<u8>,
+    required_cookie: &'static str,
+) -> (String, Arc<Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
+    let address = listener
+        .local_addr()
+        .expect("local fixture should expose its address");
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_for_server = seen.clone();
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("download request should connect");
+        let request = read_http_request(&mut stream);
+        let authorized = request_has_cookie(&request, required_cookie);
+        seen_for_server.lock().unwrap().push(request);
+        if authorized {
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .expect("fixture response headers should be written");
+            stream
+                .write_all(&body)
+                .expect("fixture response body should be written");
+        } else {
+            write!(
+                stream,
+                "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .expect("fixture denial should be written");
+        }
+    });
+    (format!("http://{address}/file.bin"), seen)
 }
 
 fn serve_once(status: &str, body: &'static [u8]) -> String {
@@ -96,6 +157,10 @@ fn serve_multiple(body: Vec<u8>, requests: usize) -> String {
 }
 
 fn serve_segmented(body: Vec<u8>, requests: usize) -> String {
+    serve_segmented_gated(body, requests, None)
+}
+
+fn serve_segmented_gated(body: Vec<u8>, requests: usize, required_cookie: Option<&'static str>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
     let address = listener
         .local_addr()
@@ -115,6 +180,22 @@ fn serve_segmented(body: Vec<u8>, requests: usize) -> String {
                 request.extend_from_slice(&chunk[..count]);
             }
             let request = String::from_utf8_lossy(&request);
+            let cookie_ok = required_cookie.is_none_or(|expected| {
+                request.lines().any(|line| {
+                    let Some((name, value)) = line.split_once(':') else {
+                        return false;
+                    };
+                    name.eq_ignore_ascii_case("cookie")
+                        && value.split(';').any(|cookie| cookie.trim() == expected)
+                })
+            });
+            if !cookie_ok {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                );
+                continue;
+            }
             let range = request
                 .lines()
                 .find_map(|line| {
@@ -355,6 +436,78 @@ async fn streams_http_response_to_disk_and_persists_redacted_history() {
         fs::read(directory.join("downloads.json")).unwrap(),
         legacy_history
     );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn browser_cookie_headers_are_replayed_for_session_gated_downloads() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body = b"cookie-gated payload".to_vec();
+    let (url, seen) = serve_cookie_gated(body.clone(), "session=secret");
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 3);
+
+    let mut request = download_request(url, "session.bin");
+    request.request_headers = Some(BrowserRequestHeaders::sanitize(HashMap::from([(
+        "cookie".to_owned(),
+        "session=secret".to_owned(),
+    )])));
+
+    let ids = service.add(request, &settings).expect("request should be accepted");
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(fs::read(directory.join("session.bin")).unwrap(), body);
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "the replay should hit the fixture once");
+    assert!(request_has_cookie(&seen[0], "session=secret"));
+
+    let record = history.download(&ids[0]).expect("record should exist");
+    assert!(
+        !record.request_headers.is_empty(),
+        "headers must remain available for the active session"
+    );
+    let persisted = fs::read_to_string(directory.join("downloads-tauri.json"))
+        .expect("Tauri history should be persisted");
+    assert!(
+        !persisted.contains("session=secret"),
+        "session cookies must never be written to history"
+    );
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn browser_cookie_headers_are_replayed_for_segmented_downloads() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body: Vec<u8> = (0..131_072_u32)
+        .map(|index| (index % 251) as u8)
+        .collect();
+    let url = serve_segmented_gated(body.clone(), 3, Some("session=segmented"));
+    let settings = settings(directory.clone(), 2);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 3);
+
+    let mut request = download_request(url, "segmented.bin");
+    request.request_headers = Some(BrowserRequestHeaders::sanitize(HashMap::from([(
+        "cookie".to_owned(),
+        "session=segmented".to_owned(),
+    )])));
+
+    let ids = service.add(request, &settings).expect("request should be accepted");
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(fs::read(directory.join("segmented.bin")).unwrap(), body);
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
@@ -1228,7 +1381,7 @@ async fn immediate_cancellation_during_retry_wait_stops_promptly() {
 
 #[test]
 fn typed_validator_survives_serialization_and_migrates_safely() {
-    use open_download_manager_lib::domain::download::{BrowserRequestHeaders, DownloadRecord, TransferValidator};
+    use open_download_manager_lib::domain::download::{DownloadRecord, TransferValidator};
 
     // 1. Typed ETag survives serialization/deserialization
     let etag_val = TransferValidator::ETag("\"v1-hash\"".to_string());

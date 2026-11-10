@@ -22,7 +22,8 @@ use open_download_manager_lib::{
         download_rate_limiter::DownloadRateLimiter,
     },
     domain::download::{
-        DestinationAllocator, DownloadRecord, DownloadStatus, TransferValidator,
+        BrowserRequestHeaders, DestinationAllocator, DownloadRecord, DownloadStatus,
+        TransferValidator,
     },
     infrastructure::ftp::{
         FtpDownloadExecutor, TEMPORARY_DOWNLOAD_PREFIX,
@@ -415,7 +416,6 @@ fn create_test_record(id: &str, url: &str, filename: &str, dir: &str) -> Downloa
         conflict_policy: None,
         sabr: None,
         credentials_override: None,
-        request_headers: BrowserRequestHeaders::default(),
         request_headers: BrowserRequestHeaders::default(),
         completion_actions: None,
         action_ledger: Vec::new(),

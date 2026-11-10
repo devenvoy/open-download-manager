@@ -234,8 +234,9 @@ impl HttpDownloadExecutor {
                 AppError::download(format!("Could not create temporary directory: {error}"))
             })?;
 
-        let initial_host = url.host_str().unwrap_or("");
-        let mut effective_connections = self.resolve_connections(initial_host, download.connections);
+        let initial_host = url.host_str().unwrap_or("").to_owned();
+        let mut effective_connections =
+            self.resolve_connections(&initial_host, download.connections);
 
         let temporary = temp_dir.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
         if effective_connections > 1
@@ -249,7 +250,17 @@ impl HttpDownloadExecutor {
             )
             .await?;
             let range_info =
-                segmented::discover_ranges(&self.client(), url.clone(), &mut control, override_creds, matcher.as_ref(), ref_str, &request_headers).await?;
+                segmented::discover_ranges(
+                    &self.client(),
+                    url.clone(),
+                    &mut control,
+                    override_creds,
+                    matcher.as_ref(),
+                    ref_str,
+                    &request_headers,
+                    &initial_host,
+                )
+                .await?;
             if let Some(discovery) = range_info {
                 let final_host = discovery.final_url.host_str().unwrap_or("");
                 effective_connections = self.resolve_connections(final_host, effective_connections);
@@ -367,7 +378,7 @@ impl HttpDownloadExecutor {
                         discovery.auth_header,
                         download.referer.clone(),
                         request_headers.clone(),
-                        initial_host.to_owned(),
+                        initial_host.clone(),
                     )
                     .await;
 
@@ -482,6 +493,7 @@ impl HttpDownloadExecutor {
             matcher.as_ref(),
             ref_str,
             &request_headers,
+            &initial_host,
         )
         .await?;
 

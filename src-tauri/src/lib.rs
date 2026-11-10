@@ -162,8 +162,11 @@ pub fn run() {
                 }
             });
 
+            // Never register autostart for debug builds. `current_exe` is the
+            // target/debug binary during development, and launchd would keep a
+            // stale instance running that steals `bun dev` via single-instance.
             let _ = crate::infrastructure::autostart::sync_autostart(
-                settings.settings().start_with_windows,
+                settings.settings().start_with_windows && !cfg!(debug_assertions),
             );
 
             let is_quitting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

@@ -53,7 +53,9 @@ pub(crate) async fn download_single_stream(
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
     referer: Option<&str>,
     request_headers: &crate::domain::download::BrowserRequestHeaders,
+    request_headers_host: &str,
 ) -> AppResult<(DownloadResult, Option<SegmentValidator>)> {
+    let request_headers_host = request_headers_host.to_owned();
     let mut downloaded = match fs::metadata(&temporary).await {
         Ok(metadata) => metadata.len(),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -77,6 +79,7 @@ pub(crate) async fn download_single_stream(
         matcher,
         referer,
         request_headers,
+        &request_headers_host,
     )
     .await?;
     active_url = resolved.final_url;
@@ -91,7 +94,7 @@ pub(crate) async fn download_single_stream(
             "The server could not satisfy the byte range; restarted download from the beginning."
                 .to_owned(),
         );
-        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers).await?;
+        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers, &request_headers_host).await?;
         active_url = resolved.final_url;
         response = resolved.response;
     }
@@ -129,7 +132,7 @@ pub(crate) async fn download_single_stream(
                             "The remote file changed on the server; restarted download from the beginning."
                                 .to_owned(),
                         );
-                        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers).await?;
+                        resolved = send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers, &request_headers_host).await?;
                         active_url = resolved.final_url;
                         response = resolved.response;
                     }
@@ -294,9 +297,9 @@ pub(crate) async fn download_single_stream(
                         wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                         let next_request = if supports_range && downloaded > 0 {
-                            send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer, request_headers).await
+                            send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer, request_headers, &request_headers_host).await
                         } else {
-                            send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers).await
+                            send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers, &request_headers_host).await
                         };
 
                         match next_request {
@@ -397,9 +400,9 @@ pub(crate) async fn download_single_stream(
                     wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
 
                     let next_request = if supports_range && downloaded > 0 {
-                        send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer, request_headers).await
+                        send_stream_request(&client, &active_url, downloaded, new_validator.as_ref(), control, override_creds, matcher, referer, request_headers, &request_headers_host).await
                     } else {
-                        send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers).await
+                        send_stream_request(&client, &active_url, 0, None, control, override_creds, matcher, referer, request_headers, &request_headers_host).await
                     };
 
                     match next_request {
@@ -592,6 +595,7 @@ pub(crate) async fn send_stream_request(
     matcher: Option<&crate::domain::credentials::CredentialMatcher>,
     referer: Option<&str>,
     request_headers: &crate::domain::download::BrowserRequestHeaders,
+    request_headers_host: &str,
 ) -> AppResult<super::auth::ResolvedResponse> {
     let resolved = super::auth::send_authenticated_request_with_redirects(
         client,
@@ -604,6 +608,7 @@ pub(crate) async fn send_stream_request(
         if offset > 0 { validator } else { None },
         referer,
         request_headers,
+        request_headers_host,
     )
     .await?;
 

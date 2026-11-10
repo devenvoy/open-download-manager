@@ -601,6 +601,7 @@ async fn human_scenario_in_memory_override_takes_precedence_and_is_not_persisted
             username: "session_user".to_owned(),
             password: Some("one_time_token".to_owned()),
         }),
+        request_headers: None,
         completion_actions: None,
     };
 

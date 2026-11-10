@@ -15,7 +15,7 @@ use std::{
 
 use open_download_manager_lib::{
     domain::{
-        download::{redact_download_url, DownloadRecord, DownloadStatus, SerializableDownloadRecordRef},
+        download::{redact_download_url, BrowserRequestHeaders, DownloadRecord, DownloadStatus, SerializableDownloadRecordRef},
         snapshot::DownloadSummary,
     },
     infrastructure::file_icons::is_safe_extension,

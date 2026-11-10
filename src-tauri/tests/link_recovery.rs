@@ -124,7 +124,7 @@ async fn human_scenario_expired_link_401_403_410_prompts_refresh_and_resumes_wit
     // Refresh the transfer with fresh session URL without re-capturing or wiping settings
     let fresh_url = format!("http://{addr}/video.mp4?auth_token=fresh456");
     service
-        .refresh_download(id, Some(fresh_url), None, None)
+        .refresh_download(id, Some(fresh_url), None, None, None)
         .expect("refresh succeeds");
 
     let completed_rec = wait_for_terminal_status(&history, id).await;

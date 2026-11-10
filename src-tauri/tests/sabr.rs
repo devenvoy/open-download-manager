@@ -22,7 +22,7 @@ use open_download_manager_lib::{
     },
     domain::{
         browser::{sanitize_browser_request, BrowserIncomingMessage},
-        download::{DownloadRecord, DownloadRequest, DownloadStatus},
+        download::{BrowserRequestHeaders, DownloadRecord, DownloadRequest, DownloadStatus},
         media::sabr::{
             build_sabr_request_body, encode_bytes_field, encode_ump_chunk, encode_varint,
             encode_varint_field, normalize_sabr_session, parse_media_header_itag,

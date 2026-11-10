@@ -77,6 +77,7 @@ pub async fn send_authenticated_request_with_redirects(
     validator: Option<&SegmentValidator>,
     referer: Option<&str>,
     request_headers: &BrowserRequestHeaders,
+    request_headers_host: &str,
 ) -> AppResult<ResolvedResponse> {
     let mut current_url = initial_url.clone();
     let initial_host = initial_url.host_str().unwrap_or("").to_ascii_lowercase();
@@ -109,7 +110,7 @@ pub async fn send_authenticated_request_with_redirects(
         let val_header = validator.and_then(|v| v.if_range_value().map(|_| v.header()));
         let val_value = validator.and_then(|v| v.if_range_value().map(|s| s.to_owned()));
         let req_referer = referer.map(|r| r.to_string());
-        let forwarded = forwarded_headers(request_headers, &initial_host, &current_host);
+        let forwarded = forwarded_headers(request_headers, request_headers_host, &current_host);
 
         let response = send_with_retry(control, move || {
             let mut headers = forwarded.clone();
@@ -159,4 +160,63 @@ pub async fn send_authenticated_request_with_redirects(
     }
 
     Err(AppError::network("Too many HTTP redirects."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn browser_headers() -> BrowserRequestHeaders {
+        BrowserRequestHeaders::sanitize(HashMap::from([
+            ("cookie".to_owned(), "session=secret".to_owned()),
+            ("authorization".to_owned(), "Bearer token".to_owned()),
+            ("user-agent".to_owned(), "Browser".to_owned()),
+            ("referer".to_owned(), "https://example.com/page".to_owned()),
+        ]))
+    }
+
+    #[test]
+    fn forwarded_headers_are_scoped_to_the_initial_host() {
+        let headers = browser_headers();
+        let same_host = forwarded_headers(&headers, "example.com", "example.com");
+        assert_eq!(
+            same_host
+                .get(reqwest::header::COOKIE)
+                .and_then(|value| value.to_str().ok()),
+            Some("session=secret")
+        );
+        assert_eq!(
+            same_host
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer token")
+        );
+        assert_eq!(
+            same_host
+                .get(reqwest::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("Browser")
+        );
+        assert!(
+            same_host.get(reqwest::header::REFERER).is_none(),
+            "referer is applied separately from the validated record"
+        );
+
+        let cross_host = forwarded_headers(&headers, "example.com", "cdn.example.com");
+        assert!(cross_host.is_empty());
+    }
+
+    #[test]
+    fn forwarded_headers_ignore_invalid_names_and_values() {
+        let headers = BrowserRequestHeaders::sanitize(HashMap::from([
+            ("cookie".to_owned(), "session=secret".to_owned()),
+            ("user-agent".to_owned(), "bad\nvalue".to_owned()),
+            ("x-custom-tracking".to_owned(), "tracker".to_owned()),
+        ]));
+        let forwarded = forwarded_headers(&headers, "example.com", "example.com");
+        assert!(forwarded.get(reqwest::header::COOKIE).is_some());
+        assert!(forwarded.get(reqwest::header::USER_AGENT).is_none());
+        assert!(!forwarded.contains_key("x-custom-tracking"));
+    }
 }
