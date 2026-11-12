@@ -66,24 +66,22 @@ textarea:focus-visible,
 	white-space: nowrap;
 	flex-shrink: 0;
 }
-/* Beta marker for features that are still settling. */
-.beta-tag {
-	position: absolute;
-	top: 4px;
-	right: 4px;
-	padding: 0 4px;
-	border-radius: 7px;
+/* Beta marker for features that are still settling. It sits next to the
+   button label so it never covers the icon. */
+.tool .beta-tag {
+	display: inline-block;
+	margin-left: 2px;
+	padding: 0 2px;
+	border-radius: 4px;
 	background: #d67b1f;
 	color: #fff;
 	font-size: 8px;
+	font-style: normal;
 	font-weight: 700;
-	line-height: 13px;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
-	pointer-events: none;
-}
-.tool {
-	position: relative;
+	line-height: 11px;
+	letter-spacing: 0;
+	text-transform: none;
+	vertical-align: 2px;
 }
 
 .tool:hover:not(:disabled) {

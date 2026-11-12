@@ -66,6 +66,18 @@
 	border-bottom-color: var(--torrent-border);
 }
 
+/* Beta marker for the torrent feature. */
+.torrent-beta-badge {
+	padding: 1px 6px;
+	border-radius: 8px;
+	background: #d67b1f;
+	color: #fff;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
 /* Status of the session, shown on the right of the toolbar. */
 .torrent-toolbar-status {
 	margin-left: auto;
