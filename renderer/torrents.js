@@ -2,6 +2,8 @@
 // Reason: feat(torrent): dedicated Torrents window UI
 // Last updated: 2026-11-12
 // Reason: fix(torrent): declare the file list hash map that the cache compares against
+// Last updated: 2026-11-12
+// Reason: fix(torrent): keep the ticks of the reviewed torrent and survive an empty engine answer
 // Description: Controller for the standalone Torrents window. Talks only to the
 // torrent IPC commands and never touches download history or queue state.
 
@@ -21,6 +23,10 @@ const state = {
 	selectedId: null,
 	tab: "general",
 	fileSelection: null,
+	// The ticks of the torrent the review asks about. They are kept apart
+	// from the ticks of the selected torrent, because the user can pick
+	// another torrent while the review is still on screen.
+	reviewSelection: null,
 	filesTorrentId: null,
 	// The info hash the file selection belongs to. The engine reuses
 	// torrent ids, so the id alone cannot identify a download.
@@ -138,8 +144,7 @@ function renderBanner() {
 	if (!status.available) {
 		banner.hidden = false;
 		banner.dataset.kind = "error";
-		text.textContent =
-			"This build does not include BitTorrent support. Rebuild with --features torrent.";
+		text.textContent = "This build does not include BitTorrent support.";
 		return;
 	}
 	if (!status.enabled) {
@@ -288,7 +293,7 @@ async function refreshStatus() {
 		const wasReady = state.status?.state === "ready";
 		state.status = status;
 		renderStatus();
-		if (status.state === "ready" && !wasReady) {
+		if (status?.state === "ready" && !wasReady) {
 			await refreshList({ silent: true });
 		}
 	} catch (error) {
@@ -738,7 +743,7 @@ function renderFilesPending(torrent, error) {
 function defaultFileSelection(files, torrent) {
 	const reported = view.includedIndices(files);
 	if (reported.length) return reported;
-	if (state.review?.id === torrent.id) {
+	if (torrent && state.review?.id === torrent.id) {
 		return files
 			.map(file => Number(file.index))
 			.filter(index => Number.isInteger(index) && index >= 0);
@@ -756,7 +761,12 @@ function renderFiles(torrent, files = torrentFiles(torrent)) {
 	const sameTorrent =
 		state.filesTorrentId === torrent.id &&
 		state.filesTorrentHash === torrent.infoHash;
-	const kept = sameTorrent ? state.fileSelection : null;
+	const reviewed = state.review?.id === torrent.id;
+	const kept = sameTorrent
+		? reviewed
+			? state.reviewSelection
+			: state.fileSelection
+		: null;
 	list.replaceChildren();
 	const selection = kept
 		? [...kept]
@@ -765,7 +775,12 @@ function renderFiles(torrent, files = torrentFiles(torrent)) {
 				)
 				.sort((left, right) => left - right)
 		: defaultFileSelection(files, torrent);
-	state.fileSelection = new Set(selection);
+	const chosen = new Set(selection);
+	if (reviewed) {
+		state.reviewSelection = chosen;
+	} else {
+		state.fileSelection = chosen;
+	}
 	state.filesTorrentId = torrent.id;
 	state.filesTorrentHash = torrent.infoHash;
 	if (!kept) {
@@ -1071,8 +1086,12 @@ async function submitAdd() {
 function applyFileSelection() {
 	const torrent = selectedTorrent();
 	const files = torrent ? torrentFiles(torrent) : [];
-	if (!torrent || !state.fileSelection || !files.length) return;
-	const included = [...state.fileSelection].sort((left, right) => left - right);
+	const selection =
+		state.filesTorrentId !== null && state.filesTorrentId === state.review?.id
+			? state.reviewSelection
+			: state.fileSelection;
+	if (!torrent || !selection || !files.length) return;
+	const included = [...selection].sort((left, right) => left - right);
 	api
 		.torrentSetFiles(torrent.id, included)
 		.then(async () => {
@@ -1095,11 +1114,17 @@ function applyFileSelection() {
 }
 
 function updateSelectionFromCheckboxes() {
-	state.fileSelection = new Set(
+	const ticked = new Set(
 		$$("#torrent-file-list input[type=checkbox]")
 			.filter(checkbox => checkbox.checked)
 			.map(checkbox => Number(checkbox.dataset.index)),
 	);
+	// The ticks belong to the torrent whose files are on screen.
+	if (state.filesTorrentId !== null && state.filesTorrentId === state.review?.id) {
+		state.reviewSelection = ticked;
+	} else {
+		state.fileSelection = ticked;
+	}
 	state.filesDirty = true;
 	updateFilesApply();
 	renderReview();
@@ -1175,6 +1200,7 @@ async function beginReview(review) {
 		return;
 	}
 	state.review = review;
+	state.reviewSelection = null;
 	state.selectedId = review.id;
 	state.tab = "files";
 	resetFileSelection();
@@ -1218,7 +1244,7 @@ async function confirmReview() {
 		// The ticks live in the file list, which may not have been drawn yet
 		// when the user is quick. Without a choice the review takes the files
 		// it would have shown as ticked anyway.
-		const selection = state.fileSelection ?? defaultFileSelection(files, torrent);
+		const selection = state.reviewSelection ?? defaultFileSelection(files, torrent);
 		const plan = view.reviewPlan(
 			files,
 			selection,
@@ -1246,6 +1272,7 @@ async function confirmReview() {
 			state.answered.add(view.torrentKey(review));
 			dropTorrentCache(review.id);
 			resetFileSelection();
+			state.reviewSelection = null;
 			state.review = null;
 			renderReview();
 		}
@@ -1267,6 +1294,7 @@ async function cancelReview() {
 	} finally {
 		state.answered.add(view.torrentKey(review));
 		state.review = null;
+		state.reviewSelection = null;
 		dropTorrentCache(review.id);
 		resetFileSelection();
 		renderReview();
@@ -1494,7 +1522,7 @@ function startLiveUpdates() {
 		api.onTorrentEngine(status => {
 			state.status = status;
 			renderStatus();
-			if (status.state === "ready") refreshList({ silent: true });
+			if (status?.state === "ready") refreshList({ silent: true });
 		});
 		api.onTorrentReview(async review => {
 			// The backend keeps the review as a fallback for a window that was
@@ -1519,10 +1547,12 @@ async function init() {
 			refreshSettings(),
 			refreshList({ silent: true }),
 		]);
-		// The browser may have handed off a review before this window loaded, so
-		// pick up the pending request even if the event was already emitted.
-		await takePendingReview();
 	}
+	// The browser may have handed off a review before this window loaded, so
+	// pick up the pending request even if the event was already emitted. The
+	// review is picked up even when the status command failed, because the
+	// handoff does not depend on the engine status.
+	await takePendingReview();
 	api.torrentSetWatching(true).catch(() => {});
 	// A magnet link resolves metadata before the review exists, so keep
 	// polling for a pending review while no review is active.

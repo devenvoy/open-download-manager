@@ -1,5 +1,7 @@
 // Created: 2026-11-11
 // Reason: feat(torrent): register ODM as default magnet/.torrent handler
+// Last updated: 2026-11-12
+// Reason: fix(torrent): wait for the engine when a file is opened
 // Description: OS-level registration so clicking a magnet link or .torrent file
 // launches Open Download Manager. Also processes launch arguments when the OS
 // opens ODM via protocol or file association.
@@ -380,7 +382,9 @@ async fn handle_torrent_file_internal(app: &AppHandle<tauri::Wry>, path: &str) -
 
     match tokio::fs::read(path).await {
         Ok(bytes) => {
-            match torrents.add_file_bytes(bytes, options).await {
+            // The engine boots asynchronously, so a cold start with a file
+            // arrives before it is ready. `add_file_bytes_when_ready` waits.
+            match torrents.add_file_bytes_when_ready(bytes, options).await {
                 Ok(added) => {
                     let review = TorrentReviewRequest {
                         id: added.id.unwrap_or(0),

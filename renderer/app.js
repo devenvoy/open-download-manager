@@ -13,6 +13,8 @@
 // Last updated: 2026-11-12
 // Reason: fix(app): declare the missing members the settings, error and clipboard paths used
 // Reason: feat(ui): provide solution flow dialog with steps to install yt-dlp and auto-resume YouTube downloads
+// Last updated: 2026-11-12
+// Reason: fix(app): repair the integration window, the media tool rows and the review command
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
 "use strict";
@@ -1805,6 +1807,12 @@ async function refreshCredentialRules() {
 		console.error("Could not refresh credentials list:", e);
 	}
 }
+// The document names the yt-dlp row "ytdlp", the engine names the tool
+// "yt-dlp". Both sides have to agree on one name for the element ids.
+function mediaToolSlug(tool) {
+	return tool === "yt-dlp" ? "ytdlp" : tool;
+}
+
 async function refreshMediaToolsStatus() {
 	if (!api.getMediaToolsStatus) return;
 	try {
@@ -1813,8 +1821,11 @@ async function refreshMediaToolsStatus() {
 			const type = st.toolType || st.tool_type;
 			const isAvail = st.isAvailable || st.is_available;
 			const src = st.source || "";
-			const label = $(`#${type}-status`);
-			const btn = $(`#install-${type}-btn`);
+			// The engine calls the tool "yt-dlp", the document calls the row
+			// "ytdlp".
+			const slug = mediaToolSlug(type);
+			const label = $(`#${slug}-status`);
+			const btn = $(`#install-${slug}-btn`);
 			if (label) {
 				if (isAvail) {
 					label.textContent = `Installed (${src || "ready"})`;
@@ -1834,8 +1845,9 @@ async function refreshMediaToolsStatus() {
 	}
 }
 async function installMediaToolAction(tool) {
-	const btn = $(`#install-${tool}-btn`);
-	const label = $(`#${tool}-status`);
+	const slug = mediaToolSlug(tool);
+	const btn = $(`#install-${slug}-btn`);
+	const label = $(`#${slug}-status`);
 	if (btn) { btn.disabled = true; btn.textContent = "Installing…"; }
 	if (label) { label.textContent = "Downloading & installing…"; label.style.color = "#0369a1"; }
 	try {
@@ -2824,7 +2836,7 @@ $("#video-formats-form")?.addEventListener("submit", (e) => {
 		let title = choice.title;
 		if (!title || title.trim().toLowerCase() === "video") {
 			try {
-				const currentUrl = $("#download-url")?.value || "";
+				const currentUrl = $("#download-urls")?.value || "";
 				const u = new URL(currentUrl);
 				const host = u.hostname.replace(/^www\./, "").replace(/\./g, "_");
 				title = host ? `download_${host}` : "download";
@@ -3452,7 +3464,15 @@ async function start() {
 				if (command === "reviewDownload") {
 					try {
 						await refresh();
-						if (!$$("dialog[open]").length) openReview(payload.id);
+						// The command is sent as a bare string, so it carries no
+						// id. The review that needs an answer is the one the
+						// engine is holding.
+						if (!$$("dialog[open]").length) {
+							const pending = state.downloads.find(
+								item => item.needsReview,
+							);
+							if (pending) openReview(pending.id);
+						}
 					} catch (error) {
 						notify(messageOf(error), true);
 					}
@@ -3615,7 +3635,7 @@ if (optionsMode) {
 		selectedBrowserName = null;
 		$("#browser-detail").hidden = true;
 		$("#browser-grid").hidden = false;
-		$("#integration-dialog").show();
+		showDialog("#integration-dialog");
 		await refreshIntegrationInfo(true);
 		return;
 	}

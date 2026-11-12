@@ -355,7 +355,7 @@ async fn a_torrent_added_without_the_review_downloads_the_payload() {
 /// Run it with:
 ///
 /// ```text
-/// cargo test --features torrent --lib -- --ignored a_confirmed_review_downloads_from_the_real_swarm
+/// cargo test --lib a_confirmed_review_downloads_from_the_real_swarm
 /// ```
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs the internet"]

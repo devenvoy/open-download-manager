@@ -1,5 +1,7 @@
 // Created: 2026-11-11
 // Reason: feat(torrent): add isolated BitTorrent subsystem
+// Last updated: 2026-11-12
+// Reason: fix(torrent): never block or panic on the engine path
 // Description: Application service owning the embedded torrent engine. Fully separate
 // from DownloadTransferService, the download history, queues, and concurrency limits.
 
@@ -220,7 +222,7 @@ impl TorrentService {
 
     pub fn status(&self) -> TorrentEngineStatus {
         let settings = self.settings();
-        let state = *self.state.read().unwrap();
+        let state = *self.state.read().unwrap_or_else(|error| error.into_inner());
         let listen_port = {
             {
                 self.engine
@@ -234,7 +236,7 @@ impl TorrentService {
             available: true,
             enabled: settings.enabled,
             state: state.as_str().to_owned(),
-            message: self.message.read().unwrap().clone(),
+            message: self.message.read().unwrap_or_else(|error| error.into_inner()).clone(),
             listen_port,
             dht_enabled: settings.enable_dht,
             restart_required: self.restart_required.load(Ordering::SeqCst),
@@ -242,7 +244,7 @@ impl TorrentService {
     }
 
     pub fn settings(&self) -> TorrentSettings {
-        self.settings.read().unwrap().clone()
+        self.settings.read().unwrap_or_else(|error| error.into_inner()).clone()
     }
 
     pub fn set_watching(&self, watching: bool) {
@@ -252,7 +254,7 @@ impl TorrentService {
     /// Remembers a torrent added by the browser so the window can show its
     /// file picker even if it finishes loading after the event was emitted.
     pub fn set_pending_review(&self, review: Option<TorrentReviewRequest>) {
-        *self.pending_review.write().unwrap() = review;
+        *self.pending_review.write().unwrap_or_else(|error| error.into_inner()) = review;
     }
 
     /// Takes the pending review, if there still is one.
@@ -263,7 +265,7 @@ impl TorrentService {
     /// to a deleted torrent is dropped instead of being shown for a
     /// different download.
     pub fn take_pending_review(&self) -> Option<TorrentReviewRequest> {
-        let review = self.pending_review.write().unwrap().take()?;
+        let review = self.pending_review.write().unwrap_or_else(|error| error.into_inner()).take()?;
         {
             let still_there = self
                 .engine
@@ -284,13 +286,17 @@ impl TorrentService {
         Some(review)
     }
 
-    pub fn shutdown(&self) {
+    /// Stops the engine.
+    ///
+    /// The stop is awaited instead of blocked on: a blocking wait inside the
+    /// async runtime panics, and a panic ends the whole process.
+    pub async fn shutdown(&self) {
         {
-            let engine = self.engine.write().unwrap().take();
+            let engine = self.engine.write().unwrap_or_else(|error| error.into_inner()).take();
             if let Some(engine) = engine {
-                tauri::async_runtime::block_on(engine.session.stop());
+                engine.session.stop().await;
             }
-            *self.state.write().unwrap() = EngineState::Stopped;
+            *self.state.write().unwrap_or_else(|error| error.into_inner()) = EngineState::Stopped;
         }
     }
 
@@ -308,7 +314,7 @@ impl TorrentService {
     }
 
     fn unavailable_error(&self) -> AppError {
-        let state = *self.state.read().unwrap();
+        let state = *self.state.read().unwrap_or_else(|error| error.into_inner());
         let message = self
             .message
             .read()
@@ -324,8 +330,8 @@ impl TorrentService {
     }
 
     fn set_state(&self, state: EngineState, message: Option<String>) {
-        *self.state.write().unwrap() = state;
-        *self.message.write().unwrap() = message;
+        *self.state.write().unwrap_or_else(|error| error.into_inner()) = state;
+        *self.message.write().unwrap_or_else(|error| error.into_inner()) = message;
         if let Some(app) = &self.app {
             use tauri::Emitter;
             let _ = app.emit("torrent://engine", self.status());
@@ -338,7 +344,7 @@ impl TorrentService {
             self.set_state(EngineState::Disabled, None);
             return Ok(());
         }
-        if self.engine.read().unwrap().is_some() {
+        if self.engine.read().unwrap_or_else(|error| error.into_inner()).is_some() {
             return Ok(());
         }
 
@@ -351,7 +357,7 @@ impl TorrentService {
         .await
         {
             Ok(engine) => {
-                *self.engine.write().unwrap() = Some(engine);
+                *self.engine.write().unwrap_or_else(|error| error.into_inner()) = Some(engine);
                 self.set_state(EngineState::Ready, None);
                 Ok(())
             }
@@ -364,7 +370,7 @@ impl TorrentService {
     }
 
     async fn stop_engine(&self) {
-        let engine = self.engine.write().unwrap().take();
+        let engine = self.engine.write().unwrap_or_else(|error| error.into_inner()).take();
         if let Some(engine) = engine {
             engine.session.stop().await;
         }
@@ -477,7 +483,8 @@ impl TorrentService {
         {
             return Err(AppError::torrent("Choose a .torrent file."));
         }
-        let metadata = std::fs::metadata(&path)
+        let metadata = tokio::fs::metadata(&path)
+            .await
             .map_err(|error| AppError::torrent(format!("Could not read the torrent file: {error}")))?;
         if !metadata.is_file() {
             return Err(AppError::torrent("The selected path is not a file."));
@@ -527,7 +534,7 @@ impl TorrentService {
                     "Choose an absolute torrent download folder.",
                 ));
             }
-            std::fs::create_dir_all(path).map_err(|error| {
+            tokio::fs::create_dir_all(path).await.map_err(|error| {
                 AppError::torrent(format!("Could not create the torrent folder: {error}"))
             })?;
         }
@@ -643,7 +650,7 @@ impl TorrentService {
             .iter()
             .map(|tracker| TorrentTrackerStatus {
                 url: tracker.url.clone(),
-                state: format!("{:?}", tracker.state).to_lowercase(),
+                state: tracker_state_name(&tracker.state),
                 seeders: tracker.seeders,
                 leechers: tracker.leechers,
                 peers_returned: tracker.peers_returned,
@@ -684,7 +691,7 @@ impl TorrentService {
             || previous.max_peers_per_torrent != next.max_peers_per_torrent
             || previous.download_directory != next.download_directory;
 
-        *self.settings.write().unwrap() = next.clone();
+        *self.settings.write().unwrap_or_else(|error| error.into_inner()) = next.clone();
         self.restart_required
             .store(requires_restart, Ordering::SeqCst);
 
@@ -745,29 +752,37 @@ impl TorrentService {
             return;
         };
         let now = std::time::Instant::now();
-        let mut states = self.peer_refresh.write().unwrap();
-        for item in list {
-            if item.state != "live" || item.finished {
-                states.remove(&item.id);
-                continue;
+        let mut reannounce = Vec::new();
+        {
+            let mut states = self.peer_refresh.write().unwrap_or_else(|error| error.into_inner());
+            for item in list {
+                if item.state != "live" || item.finished {
+                    states.remove(&item.id);
+                    continue;
+                }
+                let state = states.entry(item.id).or_insert(TorrentRefresh {
+                    last_progress_bytes: item.progress_bytes,
+                    last_progress_at: now,
+                    last_reannounce: now,
+                });
+                if item.progress_bytes > state.last_progress_bytes {
+                    state.last_progress_bytes = item.progress_bytes;
+                    state.last_progress_at = now;
+                    continue;
+                }
+                let stalled = now.duration_since(state.last_progress_at) >= STALE_TRANSFER;
+                let cooled = now.duration_since(state.last_reannounce) >= REANNOUNCE_COOLDOWN;
+                if needs_new_peers(item.peers, stalled, cooled) {
+                    state.last_reannounce = now;
+                    reannounce.push(item.id);
+                }
             }
-            let state = states.entry(item.id).or_insert(TorrentRefresh {
-                last_progress_bytes: item.progress_bytes,
-                last_progress_at: now,
-                last_reannounce: now,
-            });
-            if item.progress_bytes > state.last_progress_bytes {
-                state.last_progress_bytes = item.progress_bytes;
-                state.last_progress_at = now;
-                continue;
-            }
-            let stalled = now.duration_since(state.last_progress_at) >= STALE_TRANSFER;
-            let cooled = now.duration_since(state.last_reannounce) >= REANNOUNCE_COOLDOWN;
-            if needs_new_peers(item.peers, stalled, cooled) {
-                state.last_reannounce = now;
-                let target = librtbit::api::TorrentIdOrHash::Id(item.id);
-                let _ = api.api_torrent_action_reannounce(target);
-            }
+        }
+        // The engine is called with the map unlocked: a slow announce must not
+        // block every other command that needs the refresh state.
+        for id in reannounce {
+            let target = librtbit::api::TorrentIdOrHash::Id(id);
+            let _ = api.api_torrent_action_reannounce(target);
         }
     }
 
@@ -815,6 +830,22 @@ fn parse_initial_peers(
         Ok(None)
     } else {
         Ok(Some(parsed))
+    }
+}
+
+/// The name of the announce state, as the frontend knows it.
+///
+/// The debug name of the engine enum is not the documented name: the engine
+/// writes "notcontacted", the contract says "not_contacted".
+fn tracker_state_name(state: &impl std::fmt::Debug) -> String {
+    let name = format!("{state:?}");
+    match name.as_str() {
+        "NotContacted" => "not_contacted".to_owned(),
+        "Updating" => "updating".to_owned(),
+        "Working" => "working".to_owned(),
+        "Error" => "error".to_owned(),
+        "Disabled" => "disabled".to_owned(),
+        other => other.to_lowercase(),
     }
 }
 
