@@ -293,7 +293,7 @@ jobs:
           ls -la
 
       - name: Attach Assets to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name || github.event.inputs.tag }}
           files: dist/final_release/*
