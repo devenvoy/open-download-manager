@@ -37,3 +37,27 @@ By contributing, you agree to license your original contributions under the MIT
 license. Third-party materials must retain compatible upstream notices.
 
 Please be respectful. Do not post private media or session data in bug reports.
+
+## Release builds
+
+Release binaries are built by the release workflow. Two rules apply to every
+shipped build:
+
+- **Build paths are stripped.** The workflow exports
+  `RUSTFLAGS="--remap-path-prefix=$HOME=/build"`, so the binary contains no
+  developer home directory, cargo registry path or toolchain path. Use the same
+  flag when you build a release locally:
+
+  ```bash
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
+  bun tauri build --bundles app
+  ```
+
+- **The benchmark binary is not shipped.** `perf_benchmark` needs the `bench`
+  feature and is therefore not part of a normal build:
+
+  ```bash
+  cargo run --manifest-path src-tauri/Cargo.toml --features bench --bin perf_benchmark
+  ```
+
+Linux release builds additionally use full RELRO and a non-executable stack.

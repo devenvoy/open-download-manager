@@ -22,6 +22,12 @@ path = "src/bin/native_host.rs"
 [[bin]]
 name = "perf_benchmark"
 path = "src/bin/perf_benchmark.rs"
+# Development-only tool. The Tauri CLI skips binaries whose required features
+# are disabled, so the benchmark never ends up in a shipped installer.
+required-features = ["bench"]
+
+[features]
+bench = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -13,6 +13,9 @@ on:
 
 permissions:
   contents: write
+  # Needed for the Sigstore build provenance attestation.
+  id-token: write
+  attestations: write
 
 jobs:
   build-macos:
@@ -45,6 +48,9 @@ jobs:
 
       - name: Build Tauri macOS Release (${{ matrix.arch }})
         run: |
+          # Strip build-machine paths (usernames, cargo registry folders) from
+          # the binary and keep the compiler from leaking them into strings.
+          export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
           bun tauri build --target ${{ matrix.target }} --bundles dmg,app
 
       - name: Package macOS Assets
@@ -112,6 +118,8 @@ jobs:
 
       - name: Build Tauri Windows Release (${{ matrix.arch }})
         run: |
+          # Strip build-machine paths from the binary.
+          export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
           bun tauri build --target ${{ matrix.target }} --bundles nsis
 
       - name: Package Windows Assets
@@ -162,6 +170,10 @@ jobs:
       - name: Build Tauri Linux Release (deb & appimage)
         run: |
           export PATH="$HOME/.bun/bin:$PATH"
+          # Strip build-machine paths and harden the linker: full RELRO and a
+          # non-executable stack make the binary harder to exploit.
+          export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
+          export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-z,relro,-z,now -C link-arg=-Wl,-z,noexecstack"
           bun tauri build --bundles deb,appimage
 
       - name: Package Linux Assets
@@ -253,3 +265,12 @@ jobs:
           # A tag with a pre-release suffix (beta, rc) marks the release as a
           # pre-release so users on the stable channel are not pushed to it.
           prerelease: ${{ contains(github.ref_name || github.event.inputs.tag, '-') }}
+
+      # Signs the release assets with GitHub's Sigstore key so users can prove
+      # the binaries came from this repository and were not tampered with:
+      #   gh attestation verify open-download-manager_<version>_mac_arm64.dmg \
+      #     --repo devenvoy/open-download-manager
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/final_release/*"
