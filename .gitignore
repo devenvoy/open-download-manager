@@ -27,11 +27,13 @@ test-results/
 output/
 build/browser-setup-helper.exe
 graphify-out/
-# reference/ holds local reference material and is not tracked, except the
-# rustTorrent submodule which provides the optional `torrent` engine source
-# (see docs/TORRENT-PLAN.md Phase 0).
+# reference/ holds local reference material and is not tracked.
+# vendor/ holds the vendored rustTorrent submodule, which provides the
+# optional `torrent` engine source (see docs/TORRENT-PLAN.md Phase 0).
+# Nothing else in vendor/ is tracked.
 /reference/
-!reference/rustTorrent/
+/vendor/*
+!/vendor/rustTorrent/
 target/
 src-tauri/target/
 src-tauri/gen/
