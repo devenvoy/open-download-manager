@@ -250,4 +250,6 @@ jobs:
           tag_name: ${{ github.ref_name || github.event.inputs.tag }}
           files: dist/final_release/*
           draft: false
-          prerelease: false
+          # A tag with a pre-release suffix (beta, rc) marks the release as a
+          # pre-release so users on the stable channel are not pushed to it.
+          prerelease: ${{ contains(github.ref_name || github.event.inputs.tag, '-') }}
