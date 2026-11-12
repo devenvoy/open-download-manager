@@ -8,10 +8,22 @@ do not use the historical workflow as evidence of Tauri compatibility.
 The current preview automatically connects an extension after it is installed.
 It does not yet install the extension in a new browser.
 
-Browser Integration reports each browser separately. **Connected** means the app
-found this extension in that browser's profile and successfully registered the
-matching native messaging host. An installed browser without the extension is
-shown as **Setup needed**; a missing executable is shown as **Not installed**.
+Browser Integration reports each browser separately. The state comes from real
+native messaging traffic, not from reading browser profile folders (macOS
+denies access to the Chrome and Edge profile folders, so a profile probe would
+always report "not detected"):
+
+| State | Meaning |
+| :--- | :--- |
+| **Connected** | The extension answered recently. The toolbar badge is gone. |
+| **Setup needed** | The browser is installed, but the extension never answered. |
+| **Disconnected** | The extension answered before and the browser is running but silent — it was removed or disabled. |
+| **Not installed** | No executable for that browser on this computer. |
+
+The extension is delivered to `Downloads/Open Download Manager Extension/` by
+the **Download extension** button. A browser cannot load an extension from
+inside an application bundle, so the app copies it to a normal folder the user
+can pick in the browser's "Load unpacked" dialog.
 
 ![Browser Integration Dialog](../assets/screenshots/05-browser-integration.png)
 
