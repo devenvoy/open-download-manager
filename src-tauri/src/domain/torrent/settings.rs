@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub const TORRENT_SETTINGS_VERSION: u32 = 1;
+pub const TORRENT_SETTINGS_VERSION: u32 = 2;
 pub const MAX_TORRENT_PEERS: u32 = 2000;
 pub const MAX_SEED_RATIO: f64 = 1000.0;
 pub const MAX_SEED_TIME_MINUTES: u64 = 525_600;
@@ -45,7 +45,12 @@ impl Default for TorrentSettings {
             enable_utp: false,
             download_limit_kbps: 0,
             upload_limit_kbps: 0,
-            max_peers_per_torrent: 50,
+            // The engine's own default is 200, and so is qBittorrent's. A
+            // smaller number starves a healthy swarm: the trackers hand out
+            // hundreds of peers, but only the connected ones can send
+            // pieces, and a torrent that is connected to ten peers runs at
+            // the speed of ten peers.
+            max_peers_per_torrent: 200,
             seed_ratio_limit: 0.0,
             seed_time_limit_minutes: 0,
             start_paused: false,

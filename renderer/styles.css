@@ -107,6 +107,14 @@ textarea:focus-visible,
 	opacity: 0.36;
 	filter: grayscale(1);
 }
+.tool[data-icon="torrent"] svg {
+	width: 26px;
+	height: 26px;
+	stroke: #d97706;
+}
+[data-theme="dark"] .tool[data-icon="torrent"] svg {
+	stroke: #fbbf24;
+}
 .tool span {
 	font-size: 10px;
 	line-height: 14px;

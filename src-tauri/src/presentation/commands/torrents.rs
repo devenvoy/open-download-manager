@@ -9,10 +9,18 @@ use crate::{
     application::error::AppResult,
     domain::torrent::{
         TorrentAction, TorrentAddOptions, TorrentAddResult, TorrentEngineStatus, TorrentFileItem,
-        TorrentListItem, TorrentSettings,
+        TorrentListItem, TorrentReviewRequest, TorrentSettings, TorrentTrackerStatus,
     },
     presentation::app_state::AppState,
 };
+
+/// Reports a failed torrent operation on the console.
+///
+/// The window shows the message as a toast, but a toast disappears again and
+/// the console keeps the full context of what the engine rejected.
+fn report_failure(operation: &str, error: &crate::application::error::AppError) {
+    eprintln!("[odm] torrent {operation} failed: {}", error.message);
+}
 
 #[tauri::command]
 pub fn torrent_status(state: State<'_, AppState>) -> TorrentEngineStatus {
@@ -34,6 +42,10 @@ pub async fn torrent_add_magnet(
         .torrents
         .add_magnet(magnet, options.unwrap_or_default())
         .await
+        .map_err(|error| {
+            report_failure("add magnet", &error);
+            error
+        })
 }
 
 #[tauri::command]
@@ -46,6 +58,19 @@ pub async fn torrent_add_file(
         .torrents
         .add_file(path, options.unwrap_or_default())
         .await
+        .map_err(|error| {
+            report_failure("add file", &error);
+            error
+        })
+}
+
+#[tauri::command]
+pub fn torrent_take_review(state: State<'_, AppState>) -> Option<TorrentReviewRequest> {
+    let review = state.torrents.take_pending_review();
+    if review.is_some() {
+        eprintln!("[odm] Torrent review handed over to the Torrents window");
+    }
+    review
 }
 
 #[tauri::command]
@@ -54,7 +79,10 @@ pub async fn torrent_action(
     id: usize,
     action: TorrentAction,
 ) -> AppResult<()> {
-    state.torrents.action(id, action).await
+    state.torrents.action(id, action).await.map_err(|error| {
+        report_failure("action", &error);
+        error
+    })
 }
 
 #[tauri::command]
@@ -63,12 +91,27 @@ pub fn torrent_files(state: State<'_, AppState>, id: usize) -> AppResult<Vec<Tor
 }
 
 #[tauri::command]
+pub fn torrent_tracker_status(
+    state: State<'_, AppState>,
+    id: usize,
+) -> AppResult<Vec<TorrentTrackerStatus>> {
+    state.torrents.tracker_status(id)
+}
+
+#[tauri::command]
 pub async fn torrent_set_files(
     state: State<'_, AppState>,
     id: usize,
     included: Vec<usize>,
 ) -> AppResult<()> {
-    state.torrents.set_files(id, included).await
+    state
+        .torrents
+        .set_files(id, included)
+        .await
+        .map_err(|error| {
+            report_failure("set files", &error);
+            error
+        })
 }
 
 #[tauri::command]

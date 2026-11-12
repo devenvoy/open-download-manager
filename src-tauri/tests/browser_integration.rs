@@ -18,6 +18,7 @@ use open_download_manager_lib::{
         download_history_service::DownloadHistoryService,
         download_transfer_service::DownloadTransferService,
         integration_service::IntegrationService,
+        torrent_service::TorrentService,
         settings_service::SettingsRepository,
         shell_service::ShellService,
     },
@@ -222,7 +223,14 @@ async fn loopback_bridge_authenticates_and_handles_browser_downloads() {
         *captured_id_clone.lock().unwrap() = Some(id);
     });
 
-    let bridge = LoopbackBridge::start(directory.clone(), service, settings, Some(on_download))
+    let bridge = LoopbackBridge::start(
+        directory.clone(),
+        service,
+        TorrentService::disabled(),
+        settings,
+        Some(on_download),
+        None,
+    )
         .await
         .expect("bridge start");
 
@@ -784,7 +792,14 @@ async fn real_user_scenario_browser_link_expired_and_refreshed_through_bridge() 
     let mut settings = Settings::new(directory.clone());
     settings.connections = 1;
 
-    let bridge = LoopbackBridge::start(directory.clone(), service, settings, None)
+    let bridge = LoopbackBridge::start(
+        directory.clone(),
+        service,
+        TorrentService::disabled(),
+        settings,
+        None,
+        None,
+    )
         .await
         .expect("bridge start");
 
@@ -912,7 +927,14 @@ async fn loopback_bridge_capture_policy_and_exclusions() {
         enabled: true,
     };
 
-    let bridge = LoopbackBridge::start(directory.clone(), service, settings, None)
+    let bridge = LoopbackBridge::start(
+        directory.clone(),
+        service,
+        TorrentService::disabled(),
+        settings,
+        None,
+        None,
+    )
         .await
         .expect("bridge start");
 
@@ -1069,7 +1091,14 @@ async fn real_user_scenario_browser_capture_rules_workflow_with_intranet_and_rev
     let settings_store = SettingsStore::new(&directory);
     settings_store.save(&settings).expect("save initial settings");
 
-    let bridge = LoopbackBridge::start(directory.clone(), service.clone(), settings.clone(), None)
+    let bridge = LoopbackBridge::start(
+        directory.clone(),
+        service.clone(),
+        TorrentService::disabled(),
+        settings.clone(),
+        None,
+        None,
+    )
         .await
         .expect("bridge start");
 

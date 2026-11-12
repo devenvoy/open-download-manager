@@ -20,6 +20,7 @@ use open_download_manager_lib::{
         settings_store::SettingsStore,
     },
     presentation::tray::{show_main_window, TRAY_TOOLTIP},
+    presentation::window_manager::torrent_route,
 };
 
 fn temporary_directory() -> PathBuf {
@@ -70,6 +71,11 @@ fn settings_update_persists_start_with_windows() {
 #[test]
 fn tray_tooltip_matches_specification() {
     assert_eq!(TRAY_TOOLTIP, "Open Download Manager");
+}
+
+#[test]
+fn torrent_window_uses_a_dedicated_shell() {
+    assert_eq!(torrent_route(), "torrents.html");
 }
 
 #[test]

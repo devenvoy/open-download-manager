@@ -96,6 +96,8 @@ function harness(videos, listResponse) {
     sendMessage(message) {
       h.sent = h.sent || [];
       h.sent.push(message.action);
+      h.messages = h.messages || [];
+      h.messages.push(message);
       if (message.action === 'listForFrame') return Promise.resolve(listResponse);
       return Promise.resolve({ ok: true });
     },
@@ -277,4 +279,31 @@ test('signed URLs never reach row tooltips', async () => {
     assert.ok(!row.title.includes('sig=secret'), `tooltip leaked a signed URL: ${row.title}`);
     assert.ok(!/https?:\/\//.test(row.title), `tooltip contains a raw URL: ${row.title}`);
   }
+});
+
+test('magnet link clicks ask before opening the torrent window', async () => {
+  const h = harness([], ITEMS);
+  const magnet = 'magnet:?xt=urn:btih:cab507494d02ebb1178b38f2e9d7be299c86b862&dn=ubuntu.iso';
+  const anchor = { closest: () => anchor, getAttribute: () => magnet };
+  let confirmations = 0, prevented = 0;
+  h.context.confirm = () => { confirmations += 1; return true; };
+  const click = { target: anchor, button: 0, preventDefault() { prevented += 1; }, stopPropagation() {} };
+  for (const fn of h.documentListeners.click || []) fn(click);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(confirmations, 1, 'magnet clicks are confirmed once');
+  assert.equal(prevented, 1, 'the browser navigation is blocked after confirmation');
+  assert.equal(h.messages.at(-1).action, 'torrent');
+  assert.equal(h.messages.at(-1).magnet, magnet);
+});
+
+test('declining the magnet confirmation leaves the browser alone', async () => {
+  const h = harness([], ITEMS);
+  const anchor = { closest: () => anchor, getAttribute: () => 'magnet:?xt=urn:btih:cab507494d02ebb1178b38f2e9d7be299c86b862' };
+  let prevented = 0;
+  h.context.confirm = () => false;
+  const before = (h.sent || []).length;
+  for (const fn of h.documentListeners.click || []) fn({ target: anchor, button: 0, preventDefault() { prevented += 1; }, stopPropagation() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(prevented, 1, 'navigation is blocked while the user decides');
+  assert.equal((h.sent || []).length, before, 'nothing is sent without confirmation');
 });

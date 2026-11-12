@@ -82,6 +82,38 @@ pub struct TorrentAddOptions {
     pub output_folder: Option<String>,
     pub start_paused: bool,
     pub only_files: Option<Vec<usize>>,
+    /// Fetch metadata with no files selected. The window then shows the file
+    /// list and starts the transfer only after the user confirms.
+    pub review: bool,
+    /// Peer addresses (`host:port`) to try first. Useful when the caller
+    /// already knows where the payload is, and it is what makes the review
+    /// flow testable against a local seeder.
+    pub initial_peers: Option<Vec<String>>,
+}
+
+/// Pending torrent waiting for the user to pick files before downloading.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentReviewRequest {
+    pub id: usize,
+    pub name: String,
+    pub info_hash: String,
+}
+
+/// What one tracker says about the swarm of a torrent.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentTrackerStatus {
+    pub url: String,
+    /// not_contacted | updating | working | error | disabled
+    pub state: String,
+    /// Seeders the tracker knows about.
+    pub seeders: Option<u32>,
+    /// Leechers the tracker knows about.
+    pub leechers: Option<u32>,
+    /// Peer addresses the tracker handed out.
+    pub peers_returned: Option<u32>,
+    pub last_error: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]

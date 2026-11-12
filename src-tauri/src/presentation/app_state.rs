@@ -127,6 +127,10 @@ impl AppState {
         self
     }
 
+    pub fn torrents(&self) -> Arc<TorrentService> {
+        self.torrents.clone()
+    }
+
     pub fn apply_detected_proxy(&self, detected: DetectedProxyConfig) -> AppResult<Settings> {
         if !detected.can_import {
             return Err(AppError::invalid_settings(

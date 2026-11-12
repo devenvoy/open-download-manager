@@ -592,6 +592,38 @@
     if(!inside)closeChoosers();
   },{capture:true,signal:listeners.signal});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeChoosers();},{capture:true,signal:listeners.signal});
+  // Magnet links and .torrent links are handed to the desktop app only after the
+  // user confirms; declining leaves the browser to its normal behavior.
+  function torrentHandoff(event) {
+    const anchor = event.target?.closest?.('a[href]');
+    const href = anchor?.getAttribute?.('href')?.trim();
+    if (!href) return null;
+    if (/^magnet:\?/i.test(href)) return {kind: 'magnet', magnet: href};
+    const url = direct(href);
+    if (!url) return null;
+    try {
+      if (/\.torrent$/i.test(new URL(url).pathname)) return {kind: 'file', url};
+    } catch {}
+    return null;
+  }
+  document.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = torrentHandoff(event);
+    if (!target) return;
+    const label = target.kind === 'magnet' ? 'magnet link' : '.torrent download';
+    event.preventDefault();
+    event.stopPropagation();
+    let confirmed = false;
+    try { confirmed = globalThis.confirm?.(`Open this ${label} with Open Download Manager?`) === true; } catch {}
+    if (!confirmed) return;
+    send({action: 'torrent', ...target})
+      .then(response => {
+        if (!response?.ok) throw new Error(response?.error || 'The desktop app did not accept it.');
+      })
+      .catch(error => {
+        try { globalThis.alert?.(`Open Download Manager could not take this ${label}: ${error.message || error}`); } catch {}
+      });
+  }, {capture: true, signal: listeners.signal});
   function onScroll(event) {
     if(event?.composedPath?.().some(node=>[...records].some(record=>node===record.host || (record.menuHost && node===record.menuHost))))return;
     scrolling=true;closeChoosers();clearTimeout(scrollTimer);
@@ -608,7 +640,15 @@
     }
   }, { capture: true, passive: true, signal: listeners.signal });
   function onMessage(message, sender, respond) {
-    if (!connected() || sender.id !== api.runtime.id || message.action !== 'collectLinks') return;
+    if (!connected() || sender.id !== api.runtime.id) return;
+    if (message.action === 'confirmTorrent') {
+      const label = message.kind === 'magnet' ? 'magnet link' : '.torrent download';
+      let confirmed = false;
+      try { confirmed = globalThis.confirm?.(`Open this ${label} with Open Download Manager?`) === true; } catch {}
+      respond({confirmed});
+      return;
+    }
+    if (message.action !== 'collectLinks') return;
     const items = Array.from(document.querySelectorAll('a[href]')).slice(0, 1000).map(a => ({url:direct(a.href), title:a.textContent.trim()})).filter(item => item.url);
     send({action:'remember', items:items.slice(0, 100)}).then(respond,error=>{try{respond({ok:false,error:error.message});}catch{}}).catch(()=>{});
     return true;

@@ -624,3 +624,76 @@ test('advanced integration methods invoke corresponding Rust commands', async ()
   assert.equal(calls[2][0], 'disable_advanced_integration');
   assert.equal(calls[3][0], 'repair_advanced_integration');
 });
+
+test('torrent window and IPC wrappers serialize their commands', async () => {
+  const calls = [];
+  const api = loadApi({
+    core: {
+      invoke: async (...args) => {
+        calls.push(args);
+        return null;
+      }
+    }
+  });
+
+  await api.openTorrent();
+  await api.torrentStatus();
+  await api.torrentList();
+  await api.torrentAddMagnet('magnet:?xt=urn:btih:abc', { startPaused: true });
+  await api.torrentAddFile('/tmp/debian.torrent', null);
+  await api.torrentAction(7, 'pause');
+  await api.torrentFiles(7);
+  await api.torrentTrackerStatus(7);
+  await api.torrentSetFiles(7, [0, 2]);
+  await api.torrentSettingsGet();
+  await api.torrentSettingsSet({ enabled: true });
+  await api.torrentSetWatching(true);
+  await api.torrentRestartEngine();
+
+  assert.deepEqual(calls.map(call => call[0]), [
+    'open_torrent_window',
+    'torrent_status',
+    'torrent_list',
+    'torrent_add_magnet',
+    'torrent_add_file',
+    'torrent_action',
+    'torrent_files',
+    'torrent_tracker_status',
+    'torrent_set_files',
+    'torrent_settings_get',
+    'torrent_settings_set',
+    'torrent_set_watching',
+    'torrent_restart_engine'
+  ]);
+  assert.deepEqual(calls[3][1], {
+    magnet: 'magnet:?xt=urn:btih:abc',
+    options: { startPaused: true }
+  });
+  assert.deepEqual(calls[4][1], { path: '/tmp/debian.torrent', options: null });
+  assert.deepEqual(calls[5][1], { id: 7, action: 'pause' });
+  assert.deepEqual(calls[6][1], { id: 7 });
+  assert.deepEqual(calls[8][1], { id: 7, included: [0, 2] });
+  assert.deepEqual(calls[10][1], { settings: { enabled: true } });
+  assert.deepEqual(calls[11][1], { watching: true });
+});
+
+test('torrent event helpers subscribe to torrent events', async () => {
+  const subscriptions = [];
+  const api = loadApi({
+    event: {
+      listen: async (eventName, callback) => {
+        subscriptions.push([eventName, callback]);
+        return () => {};
+      }
+    }
+  });
+
+  api.onTorrentProgress(() => {});
+  api.onTorrentEngine(() => {});
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(subscriptions.map(([name]) => name), [
+    'torrent://progress',
+    'torrent://engine'
+  ]);
+});

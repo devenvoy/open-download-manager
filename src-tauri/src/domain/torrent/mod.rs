@@ -8,6 +8,6 @@ pub mod settings;
 
 pub use dto::{
     TorrentAction, TorrentAddOptions, TorrentAddResult, TorrentEngineStatus, TorrentFileItem,
-    TorrentListItem,
+    TorrentListItem, TorrentReviewRequest, TorrentTrackerStatus,
 };
-pub use settings::TorrentSettings;
+pub use settings::{TorrentSettings, TORRENT_SETTINGS_VERSION};

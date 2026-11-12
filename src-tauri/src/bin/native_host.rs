@@ -41,6 +41,7 @@ async fn run() -> Result<(), String> {
         "download" => "/downloads",
         "refresh" => "/downloads/refresh",
         "policy" | "capturePolicy" => "/policy",
+        "torrent" => "/torrents",
         _ => return Err("Unsupported native action.".to_owned()),
     };
 
@@ -131,6 +132,23 @@ fn find_desktop_executable() -> Option<PathBuf> {
 }
 
 fn try_launch_desktop() {
+    // Prevent multiple concurrent desktop launches when several native messages
+    // arrive at once (e.g., extension content scripts on many tabs). Only one
+    // launch is allowed per 10-second window; tauri-plugin-single-instance
+    // ensures subsequent instances focus the existing window instead of opening
+    // new ones.
+    let lock_path = std::env::temp_dir().join("odm_launch.lock");
+    if let Ok(metadata) = std::fs::metadata(&lock_path) {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = modified.elapsed() {
+                if elapsed.as_secs() < 10 {
+                    return;
+                }
+            }
+        }
+    }
+    let _ = std::fs::File::create(&lock_path);
+
     if let Some(exe) = find_desktop_executable() {
         let _ = std::process::Command::new(exe)
             .arg("--browser-download")

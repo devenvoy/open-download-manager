@@ -32,5 +32,7 @@ pub mod quota_service;
 pub mod settings_service;
 pub mod shell_service;
 pub mod throughput_meter;
+pub mod torrent_os_integration;
+pub mod torrent_review_flow_tests;
 pub mod torrent_service;
 pub mod updater_service;

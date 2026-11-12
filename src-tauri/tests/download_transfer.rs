@@ -100,6 +100,69 @@ fn serve_cookie_gated(
     (format!("http://{address}/file.bin"), seen)
 }
 
+fn serve_redirect_then_truncated(
+    body: Vec<u8>,
+) -> (String, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<String>>>) {
+    let target_listener = TcpListener::bind("127.0.0.1:0").expect("target fixture should bind");
+    let target_address = target_listener
+        .local_addr()
+        .expect("target fixture should expose its address");
+    let target_seen = Arc::new(Mutex::new(Vec::new()));
+    let target_seen_for_server = target_seen.clone();
+    let full_body = body.clone();
+    thread::spawn(move || {
+        for attempt in 0..2 {
+            let (mut stream, _) = target_listener
+                .accept()
+                .expect("target request should connect");
+            let request = read_http_request(&mut stream);
+            target_seen_for_server.lock().unwrap().push(request);
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                full_body.len()
+            )
+            .expect("target response headers should be written");
+            if attempt == 0 {
+                // Close early so the client retries after following the redirect.
+                stream
+                    .write_all(&full_body[..full_body.len() / 2])
+                    .expect("truncated target body should be written");
+            } else {
+                stream
+                    .write_all(&full_body)
+                    .expect("target response body should be written");
+            }
+        }
+    });
+
+    let redirect_listener = TcpListener::bind("127.0.0.1:0").expect("redirect fixture should bind");
+    let redirect_address = redirect_listener
+        .local_addr()
+        .expect("redirect fixture should expose its address");
+    let redirect_seen = Arc::new(Mutex::new(Vec::new()));
+    let redirect_seen_for_server = redirect_seen.clone();
+    thread::spawn(move || {
+        let (mut stream, _) = redirect_listener
+            .accept()
+            .expect("redirect request should connect");
+        let request = read_http_request(&mut stream);
+        redirect_seen_for_server.lock().unwrap().push(request);
+        write!(
+            stream,
+            "HTTP/1.1 302 Found\r\nLocation: http://localhost:{}/file.bin\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            target_address.port()
+        )
+        .expect("redirect response should be written");
+    });
+
+    (
+        format!("http://{redirect_address}/file.bin"),
+        redirect_seen,
+        target_seen,
+    )
+}
+
 fn serve_once(status: &str, body: &'static [u8]) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture should bind");
     let address = listener
@@ -508,6 +571,46 @@ async fn browser_cookie_headers_are_replayed_for_segmented_downloads() {
         DownloadStatus::Completed
     );
     assert_eq!(fs::read(directory.join("segmented.bin")).unwrap(), body);
+    fs::remove_dir_all(directory).expect("temporary directory should be removed");
+}
+
+#[tokio::test]
+async fn browser_cookie_headers_do_not_leak_to_redirect_target_on_retry() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("temporary directory should be created");
+    let body: Vec<u8> = (0..8_192_u32).map(|index| (index % 251) as u8).collect();
+    let (url, redirect_seen, target_seen) = serve_redirect_then_truncated(body.clone());
+    let settings = settings(directory.clone(), 1);
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service should initialize");
+    let executor = HttpDownloadExecutor::new().expect("HTTP executor should initialize");
+    let service = DownloadTransferService::new(history.clone(), executor, 3);
+
+    let mut request = download_request(url, "redirected.bin");
+    request.request_headers = Some(BrowserRequestHeaders::sanitize(HashMap::from([(
+        "cookie".to_owned(),
+        "session=secret".to_owned(),
+    )])));
+
+    let ids = service.add(request, &settings).expect("request should be accepted");
+    assert_eq!(
+        wait_for_terminal_status(&history, &ids[0]).await,
+        DownloadStatus::Completed
+    );
+    assert_eq!(fs::read(directory.join("redirected.bin")).unwrap(), body);
+
+    let redirect_seen = redirect_seen.lock().unwrap();
+    assert_eq!(redirect_seen.len(), 1);
+    assert!(request_has_cookie(&redirect_seen[0], "session=secret"));
+
+    let target_seen = target_seen.lock().unwrap();
+    assert_eq!(target_seen.len(), 2, "the truncated response should be retried");
+    assert!(
+        target_seen
+            .iter()
+            .all(|request| !request_has_cookie(request, "session=secret")),
+        "cookies must never be forwarded to a redirect target: {target_seen:?}"
+    );
     fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 

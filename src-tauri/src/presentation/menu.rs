@@ -126,6 +126,8 @@ pub fn build_application_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri
 
     // View submenu
     let all_item = MenuItem::with_id(app, "cmd_all", "All downloads", true, None::<&str>)?;
+    let torrents_item =
+        MenuItem::with_id(app, "cmd_torrents", "Torrents", true, Some("CmdOrCtrl+Shift+T"))?;
     let sep_v1 = PredefinedMenuItem::separator(app)?;
     let fullscreen_item = PredefinedMenuItem::fullscreen(app, None)?;
 
@@ -135,6 +137,7 @@ pub fn build_application_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri
         true,
         &[
             &all_item,
+            &torrents_item,
             &sep_v1,
             &fullscreen_item,
         ],
@@ -195,6 +198,9 @@ pub fn handle_menu_event(app: &AppHandle, menu_id: &str) {
     }
 
     match menu_id {
+        "cmd_torrents" => {
+            let _ = crate::presentation::window_manager::open_torrent_window(app.clone());
+        }
         "export_txt" => {
             export_downloads_flow(app);
         }

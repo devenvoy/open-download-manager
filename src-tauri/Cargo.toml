@@ -40,7 +40,12 @@ flate2 = "1.1.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
 # BitTorrent engine (rustTorrent / rqbit fork). Pinned to an exact revision of
 # the upstream repository so builds are reproducible. The same commit is tracked
-# locally as the git submodule at `reference/rustTorrent` (auditable source).
+# locally as the git submodule at `vendor/rustTorrent` (auditable source).
+#
+# The engine is compiled from the git dependency, not from the submodule
+# folder: a change in `vendor/rustTorrent` has no effect on the build until it
+# is pushed upstream and the revision below is moved to it.
+#
 # rust-tls keeps the app on rustls instead of pulling native-tls/OpenSSL.
 # Not supported on Windows ARM64 (upstream ships x64 only): the `torrent`
 # feature must not be enabled for `aarch64-pc-windows-msvc` targets.
@@ -56,6 +61,7 @@ serde_json = "1"
 tar = "0.4.46"
 tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2.5.5"
@@ -66,6 +72,15 @@ uuid = { version = "1", features = ["v4"] }
 which = "7.0"
 xz2 = "0.1.7"
 zip = { version = "9.4.1", default-features = false, features = ["deflate-flate2"] }
+
+# macOS needs the AppKit bindings to ask LaunchServices to make ODM the
+# default handler for magnet links and .torrent files. Other torrent clients
+# register `magnet:` as `LSHandlerRank = Owner`, so a bundle declaration
+# alone is not enough to win the routing.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWorkspace", "block2"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSURL", "NSString", "NSError"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

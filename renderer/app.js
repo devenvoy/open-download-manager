@@ -24,18 +24,15 @@ const optionsMode = new URLSearchParams(location.search).get("options") === "1";
 const addMode = new URLSearchParams(location.search).get("add") === "1";
 const schedulerMode =
 	new URLSearchParams(location.search).get("scheduler") === "1";
-const torrentsMode = new URLSearchParams(location.search).get("torrents") === "1";
 if (progressMode) document.body.classList.add("progress-window");
 if (integrationMode) document.body.classList.add("integration-window");
 if (optionsMode) document.body.classList.add("options-window");
 if (addMode) document.body.classList.add("add-window");
 if (schedulerMode) document.body.classList.add("scheduler-window");
-if (torrentsMode) document.body.classList.add("torrents-window");
 if (integrationMode) document.title = "Browser integration";
 if (optionsMode) document.title = "Options";
 if (addMode) document.title = "Download File Info";
 if (schedulerMode) document.title = "Scheduler";
-if (torrentsMode) document.title = "Torrents";
 
 initTheme();
 let state = { downloads: [], settings: {}, integration: {}, fileIcons: {} },
@@ -72,10 +69,16 @@ const iconPaths = {
 	],
 	delete: ["M5 7h22M12 7V3h8v4M7 10l2 20h14l2-20M13 12v14M19 12v14"],
 	clear: ["M5 6h22l-2 24H7zM12 6V3h8v3", "M10 17l5 5 8-11"],
-	options: [
-		"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
-		"M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6",
-	],
+	options: {
+		light: [
+			"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+			"M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6",
+		],
+		dark: [
+			"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+			"M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6",
+		],
+	},
 	clock: [
 		"M16 4a13 13 0 1 0 0 26a13 13 0 0 0 0-26",
 		"M6 5 3 2M26 5l3-3M16 9v8l6-6",
@@ -86,24 +89,61 @@ const iconPaths = {
 		"M16 3a13 13 0 1 0 0 26a13 13 0 0 0 0-26",
 		"M3 16h26M16 3c-8 8-8 18 0 26M16 3c8 8 8 18 0 26M6 8h20M6 24h20",
 	],
+	torrent: {
+		light: [
+			"M8 27V16a9 9 0 0 1 18 0v11",
+			"M14 27V16a3 3 0 0 1 6 0v11",
+			"M8 22h6M20 22h6",
+		],
+		dark: [
+			"M8 27V16a9 9 0 0 1 18 0v11",
+			"M14 27V16a3 3 0 0 1 6 0v11",
+			"M8 22h6M20 22h6",
+		],
+	},
 };
-for (const button of $$("[data-icon]")) {
-	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	svg.setAttribute(
-		"viewBox",
-		button.dataset.icon === "options" ? "0 0 24 24" : "0 0 34 34",
-	);
-	svg.setAttribute("aria-hidden", "true");
-	for (const data of iconPaths[button.dataset.icon] || []) {
-		const path = document.createElementNS(
-			"http://www.w3.org/2000/svg",
-			"path",
-		);
-		path.setAttribute("d", data);
-		svg.append(path);
-	}
-	button.prepend(svg);
+
+function iconPathSet(name) {
+	const entry = iconPaths[name];
+	if (!entry) return null;
+	if (Array.isArray(entry)) return entry;
+	const theme = document.documentElement?.getAttribute("data-theme") || "light";
+	return entry[theme] || entry.light || entry;
 }
+
+function renderIcons() {
+	for (const button of $$("[data-icon]")) {
+		const existing = button.querySelector("svg");
+		if (existing) existing.remove();
+		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		svg.setAttribute(
+			"viewBox",
+			button.dataset.icon === "options" ? "0 0 24 24" : "0 0 34 34",
+		);
+		svg.setAttribute("aria-hidden", "true");
+		const paths = iconPathSet(button.dataset.icon);
+		if (paths) {
+			for (const data of paths) {
+				const path = document.createElementNS(
+					"http://www.w3.org/2000/svg",
+					"path",
+				);
+				path.setAttribute("d", data);
+				svg.append(path);
+			}
+		}
+		button.prepend(svg);
+	}
+}
+
+renderIcons();
+
+// Re-render all toolbar icons whenever the theme changes so dark/light variants
+// are picked up immediately (system theme toggles too).
+new MutationObserver(() => renderIcons()).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+});
 function element(tag, className, text) {
 	const node = document.createElement(tag);
 	if (className) node.className = className;
@@ -564,6 +604,12 @@ function acceptSnapshot(snapshot) {
 	};
 	if (state.settings?.theme) {
 		applyTheme(state.settings.theme);
+	}
+	if (typeof api.traySetActiveDownloads === "function") {
+		const active = state.downloads.filter(
+			(d) => ["connecting", "downloading", "uploading", "seeding"].includes(statusOf(d)),
+		).length;
+		api.traySetActiveDownloads(active).catch(() => {});
 	}
 	const valid = new Set(state.downloads.map((d) => d.id));
 	for (const id of selectedIds) if (!valid.has(id)) selectedIds.delete(id);

@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width,initial-scale=1" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; base-uri 'none'; form-action 'none'" />
+		<title>Torrents</title>
+		<link
+			rel="stylesheet"
+			href="styles.css" />
+		<link
+			rel="stylesheet"
+			href="torrents.css" />
+		<script
+			src="theme.js"
+			defer></script>
+		<script
+			src="formatters.js"
+			defer></script>
+		<script
+			src="tauri-api.js"
+			defer></script>
+		<script
+			src="torrents-view.js"
+			defer></script>
+		<script
+			src="torrents.js"
+			defer></script>
+	</head>
+	<body class="torrents-window">
+		<div class="torrent-shell">
+			<div
+				class="torrent-toolbar"
+				role="toolbar"
+				aria-label="Torrent commands">
+				<button
+					id="torrent-add-magnet"
+					class="torrent-tool"
+					title="Add magnet link">
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M8 20v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+						<path d="M16 4v16M10 14l6 6 6-6" />
+					</svg>
+					<span>Add Magnet</span>
+				</button>
+				<button
+					id="torrent-add-file"
+					class="torrent-tool"
+					title="Add a .torrent file">
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M7 4h12l6 6v18H7z" />
+						<path d="M19 4v6h6M16 15v9M12 20l4 4 4-4" />
+					</svg>
+					<span>Add File</span>
+				</button>
+				<span class="torrent-tool-divider"></span>
+				<button
+					id="torrent-pause"
+					class="torrent-tool"
+					title="Pause selected torrent"
+					disabled>
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M11 7v18M21 7v18" />
+					</svg>
+					<span>Pause</span>
+				</button>
+				<button
+					id="torrent-resume"
+					class="torrent-tool"
+					title="Resume selected torrent"
+					disabled>
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M10 6l16 10-16 10z" />
+					</svg>
+					<span>Resume</span>
+				</button>
+				<button
+					id="torrent-recheck"
+					class="torrent-tool"
+					title="Verify selected torrent data"
+					disabled>
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M26 16a10 10 0 1 1-3-7" />
+						<path d="M26 5v6h-6" />
+					</svg>
+					<span>Recheck</span>
+				</button>
+				<button
+					id="torrent-remove"
+					class="torrent-tool"
+					title="Remove selected torrent"
+					disabled>
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<path d="M6 8h20M13 8V4h6v4M8 11l2 17h12l2-17M14 14v11M18 14v11" />
+					</svg>
+					<span>Remove</span>
+				</button>
+				<span class="torrent-tool-divider"></span>
+				<button
+					id="torrent-settings"
+					class="torrent-tool"
+					title="Torrent settings">
+					<svg
+						viewBox="0 0 32 32"
+						aria-hidden="true">
+						<circle
+							cx="16"
+							cy="16"
+							r="5" />
+						<path
+							d="M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.9 2.9M22.3 22.3l2.9 2.9M25.2 6.8l-2.9 2.9M9.7 22.3l-2.9 2.9" />
+					</svg>
+					<span>Settings</span>
+				</button>
+				<div class="torrent-toolbar-status">
+					<span id="torrent-summary">No torrents</span>
+					<span id="torrent-engine-info"></span>
+				</div>
+			</div>
+
+			<div
+				id="torrent-banner"
+				class="torrent-banner"
+				role="status"
+				hidden>
+				<span id="torrent-banner-text"></span>
+				<button
+					id="torrent-banner-action"
+					class="small-button"
+					hidden></button>
+			</div>
+
+			<div class="torrent-main">
+				<section
+					class="torrent-list-pane"
+					aria-label="Torrents">
+					<div class="torrent-list-header">
+						<span>Name</span>
+						<span>Size</span>
+						<span>Status</span>
+					</div>
+					<div
+						id="torrent-list"
+						class="torrent-list"
+						role="listbox"
+						aria-label="Torrent list"
+						tabindex="0"></div>
+					<div
+						id="torrent-empty"
+						class="torrent-empty">
+						<strong>No torrents yet</strong>
+						<span>Add a magnet link or open a .torrent file to start downloading.</span>
+					</div>
+				</section>
+
+				<section
+					class="torrent-detail-pane"
+					aria-label="Torrent details">
+					<div
+						id="torrent-detail-empty"
+						class="torrent-detail-empty">
+						<strong>Select a torrent</strong>
+						<span>Choose a torrent in the list to see its progress, files, and trackers.</span>
+					</div>
+					<div
+						id="torrent-detail"
+						hidden>
+						<header class="torrent-detail-header">
+							<h2 id="torrent-detail-name"></h2>
+							<span
+								id="torrent-detail-hash"
+								class="torrent-hash"></span>
+						</header>
+						<div
+							id="torrent-review-panel"
+							class="torrent-review-panel"
+							role="region"
+							aria-label="Torrent download review"
+							hidden>
+							<div class="torrent-review-text">
+								<strong id="torrent-review-name"></strong>
+								<span id="torrent-review-hint"></span>
+							</div>
+							<div class="torrent-review-actions">
+								<button
+									type="button"
+									id="torrent-review-start"
+									class="button primary">
+									Start download
+								</button>
+								<button
+									type="button"
+									id="torrent-review-cancel"
+									class="button">
+									Cancel
+								</button>
+							</div>
+						</div>
+						<div
+							class="torrent-tabs"
+							role="tablist"
+							aria-label="Torrent detail sections">
+							<button
+								type="button"
+								class="torrent-tab active-tab"
+								data-tab="general"
+								role="tab"
+								aria-selected="true">
+								General
+							</button>
+							<button
+								type="button"
+								class="torrent-tab"
+								data-tab="files"
+								role="tab"
+								aria-selected="false">
+								Files
+							</button>
+							<button
+								type="button"
+								class="torrent-tab"
+								data-tab="trackers"
+								role="tab"
+								aria-selected="false">
+								Trackers
+							</button>
+						</div>
+
+						<div
+							id="torrent-tab-general"
+							class="torrent-tab-panel"
+							role="tabpanel">
+							<div
+								id="torrent-detail-error"
+								class="torrent-error-card"
+								hidden></div>
+							<progress
+								id="torrent-detail-progress"
+								class="torrent-detail-progress"
+								max="100"
+								value="0"></progress>
+							<dl class="torrent-facts">
+								<div>
+									<dt>Status</dt>
+									<dd id="torrent-fact-status">—</dd>
+								</div>
+								<div>
+									<dt>Size</dt>
+									<dd id="torrent-fact-size">—</dd>
+								</div>
+								<div>
+									<dt>Downloaded</dt>
+									<dd id="torrent-fact-downloaded">—</dd>
+								</div>
+								<div>
+									<dt>Uploaded</dt>
+									<dd id="torrent-fact-uploaded">—</dd>
+								</div>
+								<div>
+									<dt>Ratio</dt>
+									<dd id="torrent-fact-ratio">—</dd>
+								</div>
+								<div>
+									<dt>Download speed</dt>
+									<dd id="torrent-fact-down-speed">—</dd>
+								</div>
+								<div>
+									<dt>Upload speed</dt>
+									<dd id="torrent-fact-up-speed">—</dd>
+								</div>
+								<div>
+									<dt>Peers</dt>
+									<dd id="torrent-fact-peers">—</dd>
+								</div>
+								<div>
+									<dt>Swarm</dt>
+									<dd id="torrent-fact-swarm">—</dd>
+								</div>
+								<div>
+									<dt>Time remaining</dt>
+									<dd id="torrent-fact-eta">—</dd>
+								</div>
+								<div>
+									<dt>Added</dt>
+									<dd id="torrent-fact-added">—</dd>
+								</div>
+								<div class="torrent-fact-wide">
+									<dt>Save to</dt>
+									<dd id="torrent-fact-folder">—</dd>
+								</div>
+							</dl>
+						</div>
+
+						<div
+							id="torrent-tab-files"
+							class="torrent-tab-panel"
+							role="tabpanel"
+							hidden>
+							<p
+								id="torrent-files-hint"
+								class="torrent-files-hint">
+								Tick the files you want. Only the ticked files are
+								downloaded and shared.
+							</p>
+							<div
+								id="torrent-files-toolbar"
+								class="torrent-files-toolbar"
+								hidden>
+								<div class="torrent-files-actions">
+									<button
+										type="button"
+										id="torrent-files-all"
+										class="small-button">
+										Tick all
+									</button>
+									<button
+										type="button"
+										id="torrent-files-none"
+										class="small-button">
+										Tick none
+									</button>
+								</div>
+								<button
+									type="button"
+									id="torrent-files-apply"
+									class="small-button primary"
+									disabled>
+									Save selection
+								</button>
+							</div>
+							<div
+								id="torrent-file-list"
+								class="torrent-file-list"></div>
+						</div>
+
+						<div
+							id="torrent-tab-trackers"
+							class="torrent-tab-panel"
+							role="tabpanel"
+							hidden>
+							<ul
+								id="torrent-tracker-list"
+								class="torrent-trackers"></ul>
+						</div>
+					</div>
+				</section>
+			</div>
+		</div>
+
+		<dialog
+			id="torrent-add-dialog"
+			class="torrent-dialog">
+			<div class="dialog-title">
+				<span>Add Torrent</span>
+				<button
+					type="button"
+					class="close-button"
+					data-close="torrent-add-dialog"
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body torrent-add-body">
+				<div class="torrent-source-switch">
+					<button
+						type="button"
+						id="torrent-source-magnet"
+						class="torrent-source-button active-tab"
+						aria-pressed="true">
+						Magnet link
+					</button>
+					<button
+						type="button"
+						id="torrent-source-file"
+						class="torrent-source-button"
+						aria-pressed="false">
+						.torrent file
+					</button>
+				</div>
+				<label
+					id="torrent-magnet-panel"
+					class="torrent-field">
+					<span>Magnet link</span>
+					<textarea
+						id="torrent-magnet-input"
+						rows="3"
+						spellcheck="false"
+						placeholder="magnet:?xt=urn:btih:…"></textarea>
+				</label>
+				<div
+					id="torrent-file-panel"
+					class="torrent-field"
+					hidden>
+					<span>Torrent file</span>
+					<div class="torrent-path-row">
+						<input
+							id="torrent-file-path"
+							type="text"
+							readonly
+							placeholder="Choose a .torrent file" />
+						<button
+							type="button"
+							id="torrent-file-browse"
+							class="small-button">
+							Browse…
+						</button>
+					</div>
+				</div>
+				<div class="torrent-field">
+					<span>Save to</span>
+					<div class="torrent-path-row">
+						<input
+							id="torrent-output-folder"
+							type="text"
+							placeholder="Default torrent folder" />
+						<button
+							type="button"
+							id="torrent-output-browse"
+							class="small-button">
+							Browse…
+						</button>
+					</div>
+					<small class="field-help">Leave empty to use the default folder from settings.</small>
+				</div>
+				<p
+					id="torrent-add-error"
+					class="form-error"
+					hidden></p>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					class="button"
+					data-close="torrent-add-dialog">
+					Cancel
+				</button>
+				<button
+					type="button"
+					id="torrent-add-confirm"
+					class="button primary">
+					Add
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="torrent-remove-dialog"
+			class="torrent-dialog torrent-remove-dialog">
+			<div class="dialog-title">
+				<span>Remove Torrent</span>
+				<button
+					type="button"
+					class="close-button"
+					data-close="torrent-remove-dialog"
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body">
+				<p>
+					<strong id="torrent-remove-name"></strong>
+				</p>
+				<p class="field-help">
+					Remove from list keeps the downloaded files on disk. Delete also
+					removes the downloaded data.
+				</p>
+			</div>
+			<div class="dialog-footer torrent-remove-footer">
+				<button
+					type="button"
+					class="button"
+					data-close="torrent-remove-dialog">
+					Cancel
+				</button>
+				<button
+					type="button"
+					id="torrent-remove-forget"
+					class="button">
+					Remove from list
+				</button>
+				<button
+					type="button"
+					id="torrent-remove-delete"
+					class="button danger">
+					Delete files
+				</button>
+			</div>
+		</dialog>
+
+		<dialog
+			id="torrent-settings-dialog"
+			class="torrent-dialog torrent-settings-dialog">
+			<div class="dialog-title">
+				<span>Torrent Settings</span>
+				<button
+					type="button"
+					class="close-button"
+					data-close="torrent-settings-dialog"
+					aria-label="Close">
+					×
+				</button>
+			</div>
+			<div class="dialog-body torrent-settings-body">
+				<p
+					id="torrent-settings-engine-info"
+					class="torrent-settings-engine-info"></p>
+				<label class="torrent-check">
+					<input
+						id="torrent-setting-enabled"
+						type="checkbox" />
+					<span>Enable BitTorrent support</span>
+				</label>
+				<div class="torrent-field">
+					<span>Default download folder</span>
+					<div class="torrent-path-row">
+						<input
+							id="torrent-setting-directory"
+							type="text"
+							placeholder="Default: Downloads/Torrents" />
+						<button
+							type="button"
+							id="torrent-setting-directory-browse"
+							class="small-button">
+							Browse…
+						</button>
+					</div>
+				</div>
+				<div class="torrent-settings-grid">
+					<label class="torrent-field">
+						<span>Listen port</span>
+						<input
+							id="torrent-setting-port"
+							type="number"
+							min="0"
+							max="65535"
+							step="1" />
+						<small class="field-help">0 chooses a free port.</small>
+					</label>
+					<label class="torrent-field">
+						<span>Max peers per torrent</span>
+						<input
+							id="torrent-setting-peers"
+							type="number"
+							min="1"
+							max="2000"
+							step="1" />
+						<small class="field-help">
+							Only connected peers can send data. A small number slows a
+							busy torrent down.
+						</small>
+					</label>
+					<label class="torrent-field">
+						<span>Download limit (KB/s)</span>
+						<input
+							id="torrent-setting-download-limit"
+							type="number"
+							min="0"
+							step="1" />
+						<small class="field-help">0 means unlimited.</small>
+					</label>
+					<label class="torrent-field">
+						<span>Upload limit (KB/s)</span>
+						<input
+							id="torrent-setting-upload-limit"
+							type="number"
+							min="0"
+							step="1" />
+						<small class="field-help">0 means unlimited.</small>
+					</label>
+					<label class="torrent-field">
+						<span>Seed ratio limit</span>
+						<input
+							id="torrent-setting-ratio"
+							type="number"
+							min="0"
+							step="0.1" />
+						<small class="field-help">0 means no ratio limit.</small>
+					</label>
+					<label class="torrent-field">
+						<span>Seed time limit (minutes)</span>
+						<input
+							id="torrent-setting-seed-time"
+							type="number"
+							min="0"
+							step="1" />
+						<small class="field-help">0 means no time limit.</small>
+					</label>
+				</div>
+				<div class="torrent-settings-toggles">
+					<label class="torrent-check">
+						<input
+							id="torrent-setting-dht"
+							type="checkbox" />
+						<span>Enable DHT</span>
+					</label>
+					<label class="torrent-check">
+						<input
+							id="torrent-setting-upnp"
+							type="checkbox" />
+						<span>Enable UPnP port forwarding</span>
+					</label>
+					<label class="torrent-check">
+						<input
+							id="torrent-setting-utp"
+							type="checkbox" />
+						<span>Enable uTP</span>
+					</label>
+					<label class="torrent-check">
+						<input
+							id="torrent-setting-start-paused"
+							type="checkbox" />
+						<span>Add new torrents paused</span>
+					</label>
+					<label class="torrent-check">
+						<input
+							id="torrent-setting-notify"
+							type="checkbox" />
+						<span>Notify when a torrent completes</span>
+					</label>
+				</div>
+				<p
+					id="torrent-settings-error"
+					class="form-error"
+					hidden></p>
+			</div>
+			<div class="dialog-footer">
+				<button
+					type="button"
+					id="torrent-settings-restart"
+					class="button">
+					Restart engine
+				</button>
+				<span class="torrent-footer-spacer"></span>
+				<button
+					type="button"
+					class="button"
+					data-close="torrent-settings-dialog">
+					Cancel
+				</button>
+				<button
+					type="button"
+					id="torrent-settings-save"
+					class="button primary">
+					Save
+				</button>
+			</div>
+		</dialog>
+
+		<div
+			id="torrent-toast"
+			class="torrent-toast"
+			role="status"
+			hidden></div>
+	</body>
+</html>

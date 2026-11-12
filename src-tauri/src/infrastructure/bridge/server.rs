@@ -9,6 +9,7 @@
 use std::{
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -22,11 +23,13 @@ use crate::{
         download_transfer_service::DownloadTransferService,
         error::{AppError, AppResult},
         settings_service::SettingsRepository,
+        torrent_service::TorrentService,
     },
     domain::{
         browser::{sanitize_browser_request, BrowserIncomingMessage},
         download::{BrowserRequestHeaders, DownloadRequest},
         settings::Settings,
+        torrent::{TorrentAddOptions, TorrentReviewRequest},
     },
     infrastructure::{media::ytdlp::YtDlpTools, settings_store::SettingsStore},
 };
@@ -38,6 +41,9 @@ pub struct BridgeConfig {
 }
 
 pub type OnDownloadCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
+pub type OnTorrentCallback = Arc<dyn Fn(TorrentReviewRequest) + Send + Sync + 'static>;
+
+const MAX_TORRENT_DOWNLOAD_BYTES: usize = 32 * 1024 * 1024;
 
 pub struct LoopbackBridge {
     pub config: BridgeConfig,
@@ -49,8 +55,10 @@ impl LoopbackBridge {
     pub async fn start(
         data_directory: PathBuf,
         transfer_service: DownloadTransferService,
+        torrent_service: Arc<TorrentService>,
         settings: Settings,
         on_download: Option<OnDownloadCallback>,
+        on_torrent: Option<OnTorrentCallback>,
     ) -> AppResult<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -96,9 +104,11 @@ impl LoopbackBridge {
             token,
             stop_receiver,
             transfer_service,
+            torrent_service,
             settings,
             ytdlp,
             on_download,
+            on_torrent,
         ));
 
         Ok(Self {
@@ -122,9 +132,11 @@ async fn run_bridge_server(
     expected_token: String,
     mut stop_receiver: watch::Receiver<bool>,
     transfer_service: Arc<DownloadTransferService>,
+    torrent_service: Arc<TorrentService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
     on_download: Option<OnDownloadCallback>,
+    on_torrent: Option<OnTorrentCallback>,
 ) {
     loop {
         let (mut socket, _) = tokio::select! {
@@ -140,9 +152,11 @@ async fn run_bridge_server(
         let data_directory = data_directory.clone();
         let expected_token = expected_token.clone();
         let transfer_service = transfer_service.clone();
+        let torrent_service = torrent_service.clone();
         let settings = settings.clone();
         let ytdlp = ytdlp.clone();
         let on_download = on_download.clone();
+        let on_torrent = on_torrent.clone();
 
         tokio::spawn(async move {
             handle_bridge_connection(
@@ -151,9 +165,11 @@ async fn run_bridge_server(
                 port,
                 &expected_token,
                 transfer_service,
+                torrent_service,
                 settings,
                 ytdlp,
                 on_download,
+                on_torrent,
             )
             .await;
         });
@@ -166,9 +182,11 @@ async fn handle_bridge_connection(
     port: u16,
     expected_token: &str,
     transfer_service: Arc<DownloadTransferService>,
+    torrent_service: Arc<TorrentService>,
     settings: Arc<Settings>,
     ytdlp: Option<Arc<YtDlpTools>>,
     on_download: Option<OnDownloadCallback>,
+    on_torrent: Option<OnTorrentCallback>,
 ) {
     let mut header_buf = [0u8; 8192];
     let mut total_read = 0;
@@ -266,7 +284,7 @@ async fn handle_bridge_connection(
         return;
     }
 
-    if method != "POST" || !matches!(path, "/downloads" | "/formats") {
+    if method != "POST" || !matches!(path, "/downloads" | "/formats" | "/torrents") {
         let _ = send_json_response(socket, 404, &serde_json::json!({"error": "Not found."})).await;
         return;
     }
@@ -301,6 +319,64 @@ async fn handle_bridge_connection(
 
     if body.len() != content_length {
         let _ = send_json_response(socket, 400, &serde_json::json!({"error": "Incomplete request body."})).await;
+        return;
+    }
+
+    if path == "/torrents" {
+        #[derive(Deserialize)]
+        struct TorrentReq {
+            magnet: Option<String>,
+            url: Option<String>,
+        }
+        let parsed: TorrentReq = match serde_json::from_slice(&body) {
+            Ok(p) => p,
+            Err(_) => {
+                let _ = send_json_response(socket, 400, &serde_json::json!({"error": "Invalid JSON body."})).await;
+                return;
+            }
+        };
+
+        let options = TorrentAddOptions {
+            review: true,
+            ..Default::default()
+        };
+
+        let result = match (parsed.magnet, parsed.url) {
+            (Some(magnet), _) => torrent_service.add_magnet_when_ready(magnet, options).await,
+            (None, Some(url)) => match fetch_torrent_bytes(&url).await {
+                Ok(bytes) => torrent_service.add_file_bytes_when_ready(bytes, options).await,
+                Err(error) => Err(error),
+            },
+            (None, None) => Err(AppError::torrent(
+                "The browser did not send a magnet link or .torrent URL.",
+            )),
+        };
+
+        match result {
+            Ok(added) => {
+                if let Some(callback) = &on_torrent {
+                    callback(TorrentReviewRequest {
+                        id: added.id.unwrap_or(0),
+                        name: added.name.clone(),
+                        info_hash: added.info_hash.clone(),
+                    });
+                }
+                let _ = send_json_response(
+                    socket,
+                    201,
+                    &serde_json::json!({"ok": true, "id": added.id, "name": added.name}),
+                )
+                .await;
+            }
+            Err(error) => {
+                let _ = send_json_response(
+                    socket,
+                    400,
+                    &serde_json::json!({"error": error.message}),
+                )
+                .await;
+            }
+        }
         return;
     }
 
@@ -446,6 +522,41 @@ async fn handle_bridge_connection(
             }
         }
     }
+}
+
+async fn fetch_torrent_bytes(raw_url: &str) -> AppResult<Vec<u8>> {
+    let url = url::Url::parse(raw_url)
+        .map_err(|_| AppError::torrent("The .torrent URL is invalid."))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(AppError::torrent("Only HTTP and HTTPS .torrent URLs are supported."));
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|error| AppError::torrent(format!("Could not build the torrent client: {error}")))?;
+    let response = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "OpenDownloadManager/0.2")
+        .send()
+        .await
+        .map_err(|error| AppError::torrent(format!("Could not download the .torrent file: {error}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::torrent(format!(
+            "The .torrent URL returned HTTP {}.",
+            response.status().as_u16()
+        )));
+    }
+    if response.content_length().is_some_and(|length| length > MAX_TORRENT_DOWNLOAD_BYTES as u64) {
+        return Err(AppError::torrent("The .torrent file is too large."));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| AppError::torrent(format!("Could not read the .torrent file: {error}")))?;
+    if bytes.len() > MAX_TORRENT_DOWNLOAD_BYTES {
+        return Err(AppError::torrent("The .torrent file is too large."));
+    }
+    Ok(bytes.to_vec())
 }
 
 async fn send_json_response(

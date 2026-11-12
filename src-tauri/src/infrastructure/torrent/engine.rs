@@ -42,6 +42,16 @@ pub async fn create_engine(
         persistence: Some(SessionPersistenceConfig::Json {
             folder: Some(data_directory.join("session")),
         }),
+        // The engine keeps its DHT routing table in its own configuration
+        // folder by default, which every copy of the engine shares. A second
+        // instance then reads the same file, tries the same UDP port and
+        // fails to start the whole engine ("Address already in use"). Giving
+        // the engine its own file inside the app folder keeps the port and
+        // the routing table with the rest of the torrent state.
+        dht_config: Some(librtbit::dht::PersistentDhtConfig {
+            config_filename: Some(data_directory.join("dht.json")),
+            ..Default::default()
+        }),
         listen: Some(listen),
         fastresume: true,
         ratelimits: LimitsConfig {

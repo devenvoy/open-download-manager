@@ -101,7 +101,7 @@ pub fn options_route() -> &'static str {
 }
 
 pub fn torrent_route() -> &'static str {
-    "index.html?torrents=1"
+    "torrents.html"
 }
 
 pub fn scheduler_route() -> &'static str {
@@ -457,6 +457,15 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
+
+    let watcher = window.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            if let Some(state) = watcher.app_handle().try_state::<AppState>() {
+                state.torrents.set_watching(false);
+            }
+        }
+    });
 
     let _ = window.remove_menu();
     let _ = activate_existing_window(&window);

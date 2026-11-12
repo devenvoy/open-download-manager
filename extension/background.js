@@ -103,6 +103,29 @@ function nonReplayableDownload(url, tabId) {
   } catch {}
   return false;
 }
+function isTorrentDownload(url, filename) {
+  if (/\.torrent$/i.test(String(filename || '').trim())) return true;
+  try { return /\.torrent$/i.test(new URL(url).pathname); } catch { return false; }
+}
+// Browsers cannot confirm from the service worker, so ask the content script
+// that owns the tab. Without one, leave the download with the browser.
+async function confirmTorrentHandoff(tabId) {
+  if (tabId === undefined || tabId < 0 || typeof api.tabs?.sendMessage !== 'function') return false;
+  try {
+    const response = await api.tabs.sendMessage(tabId, {action: 'confirmTorrent', kind: 'file'});
+    return response?.confirmed === true;
+  } catch {
+    return false;
+  }
+}
+async function eraseBrowserDownload(item) {
+  try {
+    await api.downloads.cancel(item.id);
+    if (typeof api.downloads.erase === 'function') {
+      await api.downloads.erase({ id: item.id });
+    }
+  } catch {}
+}
 function unsupported(url, mime = '') {
   const isDash = globalThis.mediaPolicy ? globalThis.mediaPolicy.isDashMime(mime) : /dash\+xml/i.test(mime);
   return /\.mpd(?:[?#]|$)/i.test(url) || isDash;
@@ -308,6 +331,16 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
       const referer = explicitReferer || sender.tab?.url;
       return enqueue({...message.item, referer},tabId);
     }
+    if (message.action === 'torrent') {
+      const magnet = typeof message.magnet === 'string' ? message.magnet.trim() : '';
+      const torrentUrl = typeof message.url === 'string' ? httpUrl(message.url) : null;
+      if (magnet && (!/^magnet:\?/i.test(magnet) || !/xt=urn:btih:/i.test(magnet))) {
+        throw new Error('The magnet link is invalid.');
+      }
+      if (!magnet && !torrentUrl) throw new Error('Only magnet links and HTTP(S) .torrent files are supported.');
+      await nativeSend({action: 'torrent', magnet: magnet || undefined, url: magnet ? undefined : torrentUrl});
+      return {ok: true};
+    }
     if (message.action === 'list' && !sender.tab) {
       await serial;
       const data = await api.storage.session.get(CACHE_KEY);
@@ -443,15 +476,25 @@ async function handleInterceptedDownload(item, fromDetermining = false) {
       startNow: true,
     };
 
+    // .torrent downloads are not regular file transfers: confirm with the user
+    // and let the desktop fetch metadata, show its file picker, and start the
+    // swarm only after that confirmation.
+    if (isTorrentDownload(url, rawFilename)) {
+      const confirmed = await confirmTorrentHandoff(tabId ?? item.tabId);
+      if (!confirmed) {
+        if (paused) await api.downloads.resume(item.id).catch(() => {});
+        return;
+      }
+      await nativeSend({action: 'torrent', url});
+      accepted = true;
+      await eraseBrowserDownload(item);
+      return;
+    }
+
     await sharedHandoff(url, payload, tabId ?? item.tabId);
     accepted = true;
 
-    try {
-      await api.downloads.cancel(item.id);
-      if (typeof api.downloads.erase === 'function') {
-        await api.downloads.erase({ id: item.id });
-      }
-    } catch {}
+    await eraseBrowserDownload(item);
   } catch (e) {
     if (paused && !accepted) {
       await api.downloads.resume(item.id).catch(() => {});

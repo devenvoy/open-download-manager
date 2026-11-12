@@ -166,6 +166,47 @@ test('browser download is intercepted even if pausing fails on non-resumable dow
  assert.equal(h.nativeRequests[0].url,'https://example.com/movie.mkv');
  assert.deepEqual(h.downloadCalls.filter(([name])=>name==='cancel').length,1);
 });
+test('magnet links and .torrent URLs are forwarded to the torrent bridge',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:4,url:'https://example.com/list'}};
+ const magnet='magnet:?xt=urn:btih:cab507494d02ebb1178b38f2e9d7be299c86b862&dn=ubuntu.iso';
+ const result=await h.request({action:'torrent',magnet},sender);
+ assert.equal(result.ok,true);
+ assert.equal(h.nativeRequests[0].action,'torrent');
+ assert.equal(h.nativeRequests[0].magnet,magnet);
+ assert.equal(h.nativeRequests[0].url,undefined);
+ const file=await h.request({action:'torrent',url:'https://example.com/releases/ubuntu.torrent'},sender);
+ assert.equal(file.ok,true);
+ assert.equal(h.nativeRequests[1].url,'https://example.com/releases/ubuntu.torrent');
+ assert.equal(h.nativeRequests[1].magnet,undefined);
+});
+test('magnet requests without a BitTorrent info hash are rejected',async()=>{
+ const h=harness(),sender={id:'extension-id',tab:{id:4}};
+ const result=await h.request({action:'torrent',magnet:'magnet:?dn=missing'},sender);
+ assert.equal(result.ok,false);
+ assert.equal(h.nativeRequests.length,0);
+});
+test('.torrent downloads are confirmed before the browser hands them over',async()=>{
+ const h=harness(),asked=[];
+ h.browser.tabs.sendMessage=async(tabId,message)=>{asked.push([tabId,message]);return {confirmed:true};};
+ const item=h.createDownload({id:21,tabId:5,url:'https://example.com/releases/ubuntu.torrent',filename:'ubuntu.torrent'});
+ await h.events.download(item);
+ assert.deepEqual(asked,[[5,{action:'confirmTorrent',kind:'file'}]]);
+ assert.equal(h.nativeRequests.length,1);
+ assert.equal(h.nativeRequests[0].action,'torrent');
+ assert.equal(h.nativeRequests[0].url,'https://example.com/releases/ubuntu.torrent');
+ assert.equal(h.download(21),undefined);
+ assert.deepEqual(h.downloadCalls.map(([name])=>name),['pause','cancel']);
+});
+test('declining a .torrent confirmation keeps the browser download',async()=>{
+ const h=harness();
+ h.browser.tabs.sendMessage=async()=>({confirmed:false});
+ const item=h.createDownload({id:22,tabId:5,url:'https://example.com/releases/ubuntu.torrent',filename:'ubuntu.torrent'});
+ await h.events.download(item);
+ assert.equal(h.nativeRequests.length,0);
+ assert.ok(h.download(22));
+ assert.deepEqual(h.downloadCalls.map(([name])=>name),['pause','resume']);
+});
+
 test('identical URLs from different tabs do not share a credential-bearing handoff',async()=>{
  const h=harness();
  const url='https://example.com/file.bin';

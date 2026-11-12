@@ -47,9 +47,10 @@ use presentation::{
 use presentation::commands::torrents::{
     torrent_action, torrent_add_file, torrent_add_magnet, torrent_files, torrent_list,
     torrent_restart_engine, torrent_set_files, torrent_set_watching, torrent_settings_get,
-    torrent_settings_set, torrent_status,
+    torrent_settings_set, torrent_status, torrent_take_review, torrent_tracker_status,
 };
 use tauri::Manager;
+use tauri_plugin_deep_link::DeepLinkExt;
 
 pub mod application;
 pub mod domain;
@@ -60,13 +61,38 @@ pub mod presentation;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Handle magnet links and .torrent files passed as argv (when app is
+            // already running and OS launches ODM via protocol/file association).
+            if let Some(magnet_arg) = argv.iter().find(|arg| arg.starts_with("magnet:")) {
+                let app_handle = app.app_handle().clone();
+                let magnet = magnet_arg.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::application::torrent_os_integration::handle_torrent_url(
+                        &app_handle, &magnet,
+                    );
+                });
+                return;
+            }
+            if let Some(torrent_arg) = argv.iter().find(|arg| {
+                arg.ends_with(".torrent") || arg.ends_with(".TORRENT")
+            }) {
+                let app_handle = app.app_handle().clone();
+                let path = torrent_arg.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::application::torrent_os_integration::handle_torrent_file(
+                        &app_handle, &path,
+                    );
+                });
+                return;
+            }
             if argv.iter().any(|arg| arg == "--browser-setup") {
-                let _ = presentation::window_manager::open_integration_window(app.clone());
+                let _ = presentation::window_manager::open_integration_window(app.app_handle().clone());
             } else if !argv.iter().any(|arg| arg == "--background" || arg == "--browser-download") {
-                presentation::tray::show_main_window(app);
+                presentation::tray::show_main_window(app.app_handle());
             }
         }))
         .setup(|app| {
@@ -147,12 +173,52 @@ pub fn run() {
                 });
             });
 
+            // Create torrent service once so bridge and IPC share the same engine.
+            let torrents = {
+                #[cfg(feature = "torrent")]
+                {
+                    TorrentService::start(
+                        app.handle().clone(),
+                        data_directory.clone(),
+                        default_download_directory.clone(),
+                    )
+                }
+                #[cfg(not(feature = "torrent"))]
+                {
+                    TorrentService::disabled()
+                }
+            };
+
+            // Bridge and IPC share one torrent service so browser review flow
+            // lands in the same engine the window observes.
+            let bridge_torrents = torrents.clone();
+            let bridge_app = app.handle().clone();
+            let review_torrents = torrents.clone();
+            let on_torrent = std::sync::Arc::new(
+                move |review: crate::domain::torrent::TorrentReviewRequest| {
+                    let app = bridge_app.clone();
+                    let app_for_thread = app.clone();
+                    let _ = app.run_on_main_thread(move || {
+                        let _ = presentation::window_manager::open_torrent_window(app_for_thread);
+                    });
+                    // The review is delivered exactly once: while no window
+                    // listens it stays pending, afterwards it is gone.
+                    crate::application::torrent_os_integration::deliver_review(
+                        &app,
+                        &review_torrents,
+                        review,
+                    );
+                },
+            );
+
             tauri::async_runtime::spawn(async move {
                 match crate::infrastructure::bridge::LoopbackBridge::start(
                     bridge_data_dir,
                     bridge_transfer,
+                    bridge_torrents,
                     bridge_settings,
                     Some(on_download),
+                    Some(on_torrent),
                 )
                 .await
                 {
@@ -278,22 +344,60 @@ pub fn run() {
             .with_queue_service(queue_service)
             .with_clipboard(clipboard_service)
             .with_advanced_integration(advanced_service)
-            .with_torrents({
-                #[cfg(feature = "torrent")]
-                {
-                    TorrentService::start(
-                        app.handle().clone(),
-                        data_directory.clone(),
-                        default_download_directory.clone(),
-                    )
-                }
-                #[cfg(not(feature = "torrent"))]
-                {
-                    TorrentService::disabled()
+            .with_torrents(torrents);
+
+            // Handle deep-link URLs. The deep-link plugin emits this event for
+            // every RunEvent::Opened, which is how macOS delivers magnet links
+            // and .torrent file opens (both cold start and warm start).
+            let deep_link_app = app.handle().clone();
+            app.handle().deep_link().on_open_url(move |event| {
+                let urls = event.urls();
+                for url in urls {
+                    let raw = url.to_string();
+                    if raw.starts_with("magnet:") {
+                        eprintln!("[odm] deep link: magnet link received");
+                        let app = deep_link_app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = crate::application::torrent_os_integration::handle_torrent_url(
+                                &app,
+                                &raw,
+                            );
+                        });
+                    } else if raw.starts_with("file:") {
+                        // macOS reports opened documents as file:// URLs.
+                        eprintln!("[odm] deep link: torrent file received");
+                        let app = deep_link_app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = crate::application::torrent_os_integration::handle_torrent_file(
+                                &app,
+                                &raw,
+                            );
+                        });
+                    }
                 }
             });
 
             app.manage(app_state);
+
+            // Make ODM the default handler for magnet links and .torrent
+            // files. Other torrent clients claim `magnet:` with
+            // `LSHandlerRank = Owner`, so the OS would keep routing magnet
+            // links away from ODM without this explicit request.
+            if let Err(error) =
+                crate::application::torrent_os_integration::register_torrent_associations()
+            {
+                eprintln!("[odm] Could not register torrent associations: {error}");
+            }
+
+            // Cold start with a magnet link or .torrent file in argv (Windows
+            // passes the protocol/file as an argument). macOS delivers the same
+            // information as RunEvent::Opened, handled by the deep-link plugin.
+            let launch_args: Vec<String> = std::env::args().collect();
+            let _ = crate::application::torrent_os_integration::handle_torrent_launch_args(
+                app.handle(),
+                &launch_args,
+            );
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -359,7 +463,14 @@ pub fn run() {
             torrent_settings_set,
             torrent_set_watching,
             torrent_restart_engine,
+            torrent_take_review,
+            torrent_tracker_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run Open Download Manager");
+        .build(tauri::generate_context!())
+        .expect("failed to build Open Download Manager")
+        .run(|_app, _event| {
+            // Magnet links and .torrent file opens arrive as RunEvent::Opened on
+            // macOS. The deep-link plugin converts that into the
+            // `deep-link://new-url` event handled in setup().
+        });
 }

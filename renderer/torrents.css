@@ -1,0 +1,831 @@
+/* Created: 2026-11-11
+   Reason: feat(torrent): dedicated Torrents window UI
+   Description: Torrent-only layout and theme rules. Loaded after styles.css and
+   scoped to the torrent window so the download UI is unaffected. */
+
+.torrents-window {
+	--torrent-bg: #f0f0f0;
+	--torrent-panel: #ffffff;
+	--torrent-panel-alt: #f7f7f7;
+	--torrent-border: #c8c8c8;
+	--torrent-border-soft: #e6e6e6;
+	--torrent-text: #111111;
+	--torrent-muted: #666666;
+	--torrent-accent: #0055ea;
+	--torrent-accent-soft: #dbe9ff;
+	--torrent-row-hover: #eef5fd;
+	--torrent-row-selected: #cfe3fa;
+	--torrent-error-bg: #fff5f5;
+	--torrent-error-border: #fecaca;
+	--torrent-error-text: #991b1b;
+	height: 100vh;
+	background: var(--torrent-bg);
+	color: var(--torrent-text);
+}
+
+[data-theme="dark"] .torrents-window {
+	--torrent-bg: #1e1e1e;
+	--torrent-panel: #252525;
+	--torrent-panel-alt: #202020;
+	--torrent-border: #3a3a3a;
+	--torrent-border-soft: #303030;
+	--torrent-text: #e0e0e0;
+	--torrent-muted: #9a9a9a;
+	--torrent-accent: #6ba8ff;
+	--torrent-accent-soft: #24364f;
+	--torrent-row-hover: #2d3742;
+	--torrent-row-selected: #334b6b;
+	--torrent-error-bg: #3a2020;
+	--torrent-error-border: #6b2b2b;
+	--torrent-error-text: #ff9d9d;
+}
+
+.torrent-shell {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	min-width: 640px;
+}
+
+/* Toolbar */
+
+.torrent-toolbar {
+	height: 62px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 6px;
+	background: var(--torrent-bg);
+	border-top: 1px solid #ffffff;
+	border-bottom: 1px solid #aaaaaa;
+	overflow: hidden;
+}
+[data-theme="dark"] .torrent-toolbar {
+	border-top-color: #2b2b2b;
+	border-bottom-color: var(--torrent-border);
+}
+
+/* Status of the session, shown on the right of the toolbar. */
+.torrent-toolbar-status {
+	margin-left: auto;
+	padding: 0 10px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 2px;
+	font-size: 10px;
+	line-height: 1.3;
+	color: var(--torrent-muted);
+	text-align: right;
+	white-space: nowrap;
+}
+.torrent-toolbar-status #torrent-summary {
+	color: var(--torrent-text);
+	font-weight: 600;
+}
+
+.torrent-tool {
+	height: 54px;
+	min-width: 62px;
+	padding: 4px 7px;
+	border: 1px solid transparent;
+	background: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 4px;
+	white-space: nowrap;
+	flex-shrink: 0;
+	font-size: 10px;
+}
+.torrent-tool svg {
+	width: 22px;
+	height: 22px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.torrent-tool:hover:not(:disabled) {
+	border-color: #99b4d1;
+	background: #e5eff9;
+}
+.torrent-tool:active:not(:disabled) {
+	border-color: #6f95bd;
+	background: #cfdfef;
+}
+.torrent-tool:disabled {
+	color: #929292;
+}
+[data-theme="dark"] .torrent-tool {
+	color: #d0d0d0;
+}
+[data-theme="dark"] .torrent-tool:hover:not(:disabled) {
+	border-color: #4a6a8a;
+	background: #2d3b4a;
+}
+[data-theme="dark"] .torrent-tool:active:not(:disabled) {
+	border-color: #5d87b0;
+	background: #364a5e;
+}
+[data-theme="dark"] .torrent-tool:disabled {
+	color: #6a6a6a;
+}
+
+.torrent-tool-divider {
+	width: 1px;
+	height: 40px;
+	margin: 0 5px;
+	background: var(--torrent-border);
+	box-shadow: 1px 0 #ffffff;
+	flex-shrink: 0;
+}
+[data-theme="dark"] .torrent-tool-divider {
+	box-shadow: 1px 0 #2b2b2b;
+}
+
+/* Engine banner */
+
+.torrent-banner {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 12px;
+	font-size: 11px;
+	line-height: 1.4;
+	border-bottom: 1px solid var(--torrent-border);
+	background: #eef5ff;
+	color: #16427a;
+}
+.torrent-banner[data-kind="warning"] {
+	background: #fff8e1;
+	color: #7a5200;
+}
+.torrent-banner[data-kind="error"] {
+	background: var(--torrent-error-bg);
+	color: var(--torrent-error-text);
+}
+[data-theme="dark"] .torrent-banner {
+	background: var(--torrent-accent-soft);
+	color: #cfe2ff;
+}
+[data-theme="dark"] .torrent-banner[data-kind="warning"] {
+	background: #3d3318;
+	color: #f0d48a;
+}
+[data-theme="dark"] .torrent-banner[data-kind="error"] {
+	background: var(--torrent-error-bg);
+	color: var(--torrent-error-text);
+}
+#torrent-banner-text {
+	flex: 1;
+	min-width: 0;
+}
+#torrent-banner-action {
+	flex-shrink: 0;
+}
+
+/* Browser handoff review */
+
+.torrent-review-panel {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 10px 0 12px;
+	padding: 10px 12px;
+	border: 1px solid #b8d4f5;
+	border-radius: 4px;
+	background: #eaf3ff;
+	color: #143a68;
+}
+.torrent-review-panel[hidden] {
+	display: none;
+}
+.torrent-review-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.torrent-review-text strong {
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.torrent-review-text span {
+	font-size: 11px;
+	line-height: 1.4;
+}
+.torrent-review-actions {
+	display: flex;
+	gap: 6px;
+	flex-shrink: 0;
+}
+[data-theme="dark"] .torrent-review-panel {
+	background: var(--torrent-accent-soft);
+	border-color: #2c4a6e;
+	color: #d7e6fb;
+}
+
+/* Main split */
+
+.torrent-main {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+}
+
+.torrent-list-pane {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--torrent-panel);
+	border-right: 1px solid var(--torrent-border);
+}
+
+.torrent-list-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 74px 96px;
+	gap: 8px;
+	align-items: center;
+	padding: 5px 10px;
+	font-size: 10px;
+	color: var(--torrent-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	background: var(--torrent-panel-alt);
+	border-bottom: 1px solid var(--torrent-border);
+}
+.torrent-list-header span:nth-child(2),
+.torrent-list-header span:nth-child(3) {
+	text-align: right;
+}
+
+.torrent-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	outline: none;
+}
+.torrent-list:empty {
+	display: none;
+}
+
+.torrent-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 74px 96px;
+	gap: 8px;
+	align-items: center;
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--torrent-border-soft);
+	cursor: default;
+}
+.torrent-row:hover:not(.selected) {
+	background: var(--torrent-row-hover);
+}
+.torrent-row.selected {
+	background: var(--torrent-row-selected);
+}
+.torrent-row:focus-visible {
+	outline: 1px dotted var(--torrent-text);
+	outline-offset: -3px;
+}
+
+.torrent-row-main {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.torrent-name {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.torrent-row-sub {
+	font-size: 9.5px;
+	color: var(--torrent-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.torrent-size {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.torrent-row-state {
+	justify-self: end;
+	font-size: 10px;
+	padding: 1px 7px;
+	border-radius: 8px;
+	background: #e8e8e8;
+	color: #444444;
+	white-space: nowrap;
+}
+[data-theme="dark"] .torrent-row-state {
+	background: #383838;
+	color: #c8c8c8;
+}
+.torrent-row[data-state="downloading"] .torrent-row-state {
+	background: #dbeafe;
+	color: #1d4ed8;
+}
+.torrent-row[data-state="seeding"] .torrent-row-state {
+	background: #dcfce7;
+	color: #166534;
+}
+.torrent-row[data-state="paused"] .torrent-row-state {
+	background: #eeeeee;
+	color: #555555;
+}
+.torrent-row[data-state="metadata"] .torrent-row-state {
+	background: #fef3c7;
+	color: #92400e;
+}
+.torrent-row[data-state="error"] .torrent-row-state {
+	background: #fee2e2;
+	color: #991b1b;
+}
+[data-theme="dark"] .torrent-row[data-state="downloading"] .torrent-row-state {
+	background: #1e3a5f;
+	color: #9cc4ff;
+}
+[data-theme="dark"] .torrent-row[data-state="seeding"] .torrent-row-state {
+	background: #1f3d2a;
+	color: #9be3b0;
+}
+[data-theme="dark"] .torrent-row[data-state="paused"] .torrent-row-state {
+	background: #383838;
+	color: #c8c8c8;
+}
+[data-theme="dark"] .torrent-row[data-state="metadata"] .torrent-row-state {
+	background: #4a3a18;
+	color: #f0d48a;
+}
+[data-theme="dark"] .torrent-row[data-state="error"] .torrent-row-state {
+	background: #4a2222;
+	color: #ff9d9d;
+}
+
+progress.torrent-row-progress,
+progress.torrent-file-progress,
+progress.torrent-detail-progress {
+	appearance: none;
+	-webkit-appearance: none;
+	border: 0;
+	padding: 0;
+	background: #dcdcdc;
+	overflow: hidden;
+}
+progress.torrent-row-progress {
+	width: 100%;
+	height: 5px;
+}
+progress.torrent-file-progress {
+	width: 100%;
+	height: 4px;
+}
+progress.torrent-detail-progress {
+	width: 100%;
+	height: 12px;
+	margin: 2px 0 14px;
+}
+progress.torrent-row-progress::-webkit-progress-bar,
+progress.torrent-file-progress::-webkit-progress-bar,
+progress.torrent-detail-progress::-webkit-progress-bar {
+	background: #e3e3e3;
+}
+progress.torrent-row-progress::-webkit-progress-value,
+progress.torrent-file-progress::-webkit-progress-value,
+progress.torrent-detail-progress::-webkit-progress-value {
+	background: #2f80ed;
+}
+[data-theme="dark"] progress.torrent-row-progress,
+[data-theme="dark"] progress.torrent-file-progress,
+[data-theme="dark"] progress.torrent-detail-progress {
+	background: #3a3a3a;
+}
+[data-theme="dark"] progress.torrent-row-progress::-webkit-progress-bar,
+[data-theme="dark"] progress.torrent-file-progress::-webkit-progress-bar,
+[data-theme="dark"] progress.torrent-detail-progress::-webkit-progress-bar {
+	background: #3a3a3a;
+}
+
+.torrent-empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 24px;
+	text-align: center;
+	color: var(--torrent-muted);
+}
+.torrent-empty strong {
+	font-size: 12px;
+	color: var(--torrent-text);
+}
+.torrent-empty span {
+	max-width: 260px;
+	line-height: 1.5;
+}
+
+#torrent-summary,
+#torrent-engine-info {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+/* Detail pane */
+
+.torrent-detail-pane {
+	min-width: 0;
+	overflow-y: auto;
+	background: var(--torrent-panel);
+}
+.torrent-detail-empty {
+	min-height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 24px;
+	text-align: center;
+	color: var(--torrent-muted);
+}
+.torrent-detail-empty strong {
+	font-size: 12px;
+	color: var(--torrent-text);
+}
+.torrent-detail-empty span {
+	max-width: 320px;
+	line-height: 1.5;
+}
+
+#torrent-detail {
+	padding: 14px 16px 24px;
+}
+
+.torrent-detail-header h2 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.torrent-hash {
+	display: block;
+	margin-top: 3px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 9px;
+	color: var(--torrent-muted);
+	overflow-wrap: anywhere;
+}
+
+.torrent-tabs {
+	display: flex;
+	gap: 2px;
+	margin: 12px 0 14px;
+	border-bottom: 1px solid var(--torrent-border);
+}
+.torrent-tab {
+	padding: 5px 13px;
+	border: 1px solid transparent;
+	border-bottom: 0;
+	border-radius: 2px 2px 0 0;
+	background: transparent;
+	color: var(--torrent-muted);
+	font-size: 11px;
+}
+.torrent-tab:hover {
+	color: var(--torrent-text);
+	background: var(--torrent-row-hover);
+}
+.torrent-tab.active-tab {
+	margin-bottom: -1px;
+	background: var(--torrent-panel);
+	border-color: var(--torrent-border);
+	color: var(--torrent-text);
+}
+
+.torrent-error-card {
+	margin-bottom: 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--torrent-error-border);
+	border-left: 3px solid #ef4444;
+	border-radius: 3px;
+	background: var(--torrent-error-bg);
+	color: var(--torrent-error-text);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.torrent-facts {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0 24px;
+	margin: 0;
+}
+.torrent-facts > div {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	min-width: 0;
+	padding: 5px 0;
+	border-bottom: 1px solid var(--torrent-border-soft);
+}
+.torrent-facts dt {
+	flex-shrink: 0;
+	color: var(--torrent-muted);
+}
+.torrent-facts dd {
+	margin: 0;
+	min-width: 0;
+	text-align: right;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+.torrent-fact-wide {
+	grid-column: 1 / -1;
+}
+
+/* Files tab */
+
+.torrent-files-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.torrent-files-hint {
+	margin: 0 0 8px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--torrent-muted);
+}
+.torrent-files-actions {
+	display: flex;
+	gap: 6px;
+}
+.torrent-settings-engine-info {
+	margin: 0 0 10px;
+	font-size: 10px;
+	color: var(--torrent-muted);
+}
+.small-button.primary {
+	border-color: #5687b2;
+	background: linear-gradient(#eaf3ff, #d3e6f8);
+	box-shadow: inset 0 0 0 1px #cee3f4;
+	font-weight: 600;
+	color: #14395f;
+}
+.small-button.primary:hover:not(:disabled) {
+	background: linear-gradient(#dcecff, #c2ddf7);
+	border-color: #4a7ba6;
+}
+.small-button.primary:disabled {
+	background: #efefef;
+	border-color: #ccc;
+	box-shadow: none;
+	font-weight: 400;
+	color: #8a8a8a;
+}
+[data-theme="dark"] .small-button.primary {
+	background: linear-gradient(#0078d4, #005a9e);
+	border-color: #0078d4;
+	box-shadow: none;
+	color: #ffffff;
+}
+[data-theme="dark"] .small-button.primary:hover:not(:disabled) {
+	background: #106ebe;
+	border-color: #2886de;
+}
+[data-theme="dark"] .small-button.primary:disabled {
+	background: #1e1e1e;
+	border-color: #383838;
+	color: #666666;
+}
+
+.torrent-file-list {
+	border: 1px solid var(--torrent-border);
+	background: var(--torrent-panel);
+	max-height: calc(100vh - 330px);
+	overflow-y: auto;
+}
+.torrent-file-row {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr) 132px;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--torrent-border-soft);
+	cursor: default;
+}
+.torrent-file-row:last-child {
+	border-bottom: 0;
+}
+.torrent-file-row:hover {
+	background: var(--torrent-row-hover);
+}
+.torrent-file-row input[type="checkbox"] {
+	margin: 0;
+	min-height: 0;
+}
+.torrent-file-main {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.torrent-file-name {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.torrent-file-meta {
+	font-size: 9.5px;
+	text-align: right;
+	color: var(--torrent-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Trackers tab */
+
+.torrent-trackers {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 10px;
+	overflow-wrap: anywhere;
+}
+.torrent-trackers li {
+	padding: 4px 0;
+	border-bottom: 1px solid var(--torrent-border-soft);
+}
+.torrent-trackers li:last-child {
+	border-bottom: 0;
+}
+
+/* Dialogs */
+
+.torrent-dialog {
+	width: min(520px, calc(100vw - 30px));
+}
+.torrent-settings-dialog {
+	width: min(600px, calc(100vw - 30px));
+}
+.torrent-add-body,
+.torrent-settings-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-top: 12px;
+}
+
+.torrent-source-switch {
+	display: flex;
+	gap: 3px;
+	border-bottom: 1px solid var(--torrent-border);
+}
+.torrent-source-button {
+	padding: 5px 12px;
+	border: 1px solid transparent;
+	border-bottom: 0;
+	border-radius: 2px 2px 0 0;
+	background: transparent;
+	color: var(--torrent-muted);
+}
+.torrent-source-button:hover {
+	color: var(--torrent-text);
+}
+.torrent-source-button.active-tab {
+	margin-bottom: -1px;
+	background: var(--torrent-panel);
+	border-color: var(--torrent-border);
+	color: var(--torrent-text);
+}
+
+.torrent-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.torrent-field > span {
+	font-weight: 600;
+}
+.torrent-field > input,
+.torrent-field > textarea {
+	width: 100%;
+}
+.torrent-field .field-help {
+	margin: 0;
+}
+.torrent-path-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.torrent-path-row input {
+	flex: 1;
+	min-width: 0;
+}
+.torrent-path-row .small-button {
+	flex-shrink: 0;
+}
+
+.torrent-check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.torrent-check input[type="checkbox"] {
+	min-height: 0;
+	margin: 0;
+}
+
+.torrent-settings-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 10px 16px;
+}
+.torrent-settings-toggles {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 2px;
+	border-top: 1px solid var(--torrent-border-soft);
+}
+
+.torrent-footer-spacer {
+	flex: 1;
+}
+.torrent-remove-footer {
+	flex-wrap: wrap;
+}
+.button.danger {
+	border-color: #b91c1c;
+	color: #b91c1c;
+}
+.button.danger:hover:not(:disabled) {
+	background: #fdecec;
+	border-color: #b91c1c;
+}
+[data-theme="dark"] .button.danger {
+	border-color: #a33a3a;
+	color: #ff9d9d;
+}
+[data-theme="dark"] .button.danger:hover:not(:disabled) {
+	background: #3a2020;
+	border-color: #a33a3a;
+}
+
+/* Toast */
+
+.torrent-toast {
+	position: fixed;
+	right: 14px;
+	bottom: 14px;
+	z-index: 60;
+	max-width: 380px;
+	padding: 8px 12px;
+	border-radius: 3px;
+	background: #1f2937;
+	color: #ffffff;
+	font-size: 11px;
+	line-height: 1.4;
+	box-shadow: 0 4px 14px #00000040;
+	overflow-wrap: anywhere;
+}
+.torrent-toast[data-error="true"] {
+	background: #b91c1c;
+}
+[data-theme="dark"] .torrent-toast {
+	background: #374151;
+}
+
+@media (max-width: 820px) {
+	.torrent-main {
+		grid-template-columns: minmax(250px, 42%) minmax(0, 1fr);
+	}
+	.torrent-facts {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.torrent-fact-wide {
+		grid-column: auto;
+	}
+}

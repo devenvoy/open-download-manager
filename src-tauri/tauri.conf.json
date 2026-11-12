@@ -3,6 +3,13 @@
   "productName": "Open Download Manager",
   "version": "0.2.0",
   "identifier": "com.opendownloadmanager.desktop",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["magnet"]
+      }
+    }
+  },
   "build": {
     "beforeDevCommand": "cargo build --bin open-download-manager-native-host",
     "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host",
@@ -29,6 +36,14 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
+    "fileAssociations": [
+      {
+        "ext": ["torrent"],
+        "mimeType": "application/x-bittorrent",
+        "name": "BitTorrent File",
+        "role": "Viewer"
+      }
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
