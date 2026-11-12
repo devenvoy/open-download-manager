@@ -12,6 +12,13 @@ Open Download Manager is built modern, modular, and fast:
 - **Browser Extensions**: WebExtensions (Manifest V3 for Chromium, Manifest V2 for Firefox) in `extension/`.
 - **Native Messaging Host**: Rust binary (`src-tauri/src/bin/native_host.rs`) providing high-speed IPC between browsers and the desktop manager.
 
+The frontend is moving to React, TypeScript, Vite, Tailwind CSS and shadcn/ui.
+The plan, the target folder structure, the state management rules and the
+stage gates are in [REACT-UI-MIGRATION-PLAN.md](./REACT-UI-MIGRATION-PLAN.md).
+Read it before touching the renderer: every rule in it exists because the
+audit in [RUNTIME-CRASH-AUDIT.md](./RUNTIME-CRASH-AUDIT.md) found the same
+defect class in eight places.
+
 ---
 
 ## 2. Development Setup
