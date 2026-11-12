@@ -2,6 +2,8 @@
 // Reason: Initial public release
 // Last updated: 2026-11-07
 // Reason: fix(extension,media): card identity isolation, hover linger prefetch, resilient yt-dlp fallback, and un-silenced errors
+// Last updated: 2026-11-12
+// Reason: fix(extension,media): keep the file name cleaner regex lint clean
 // Description: YouTube page media extractor detecting player streaming formats and adaptive audio/video tracks.
 
 (function(root) {
@@ -43,7 +45,7 @@
     if(!value||!/^[\w-]{11}$/.test(value.videoId||'')||!Array.isArray(value.formats)||value.formats.length>MAX_FORMATS)return null;
     const formats=value.formats.map(cleanFormat).filter(f=>f&&f.itag&&f.mimeType);
     const url=sabrUrl(value.sabrUrl);
-    const config=/^[A-Za-z0-9_+\/=.-]{1,131072}$/.test(String(value.ustreamerConfig||''))?String(value.ustreamerConfig):'';
+    const config=/^[A-Za-z0-9_+/=.-]{1,131072}$/.test(String(value.ustreamerConfig||''))?String(value.ustreamerConfig):'';
     const clientName=integer(value.clientName)||1;
     const clientVersion=/^[\w.-]{1,80}$/.test(String(value.clientVersion||''))?String(value.clientVersion):'';
     return {videoId:value.videoId,title:text(value.title||'Video',180),sabr:!!value.sabr||!!url,sabrUrl:url,ustreamerConfig:config,clientName,clientVersion,formats};
@@ -71,6 +73,9 @@
       return {...f,url:match || (data.sabrUrl&&data.ustreamerConfig?null:f.url)};
     }).filter(f=>f.url && (!new URL(f.url).searchParams.has('expire') || Number(new URL(f.url).searchParams.get('expire'))*1000>Date.now()+30000));
     const result=[], seen=new Set();
+    // Control characters are stripped from the file name on purpose: they
+    // are not allowed in a file name and would break the download.
+    // eslint-disable-next-line no-control-regex
     const title=data.title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,170);
     const audio=formats.filter(f=>/^audio\/mp4/i.test(f.mimeType) && (!f.audioTrack || f.audioTrack.audioIsDefault)).sort((a,b)=>b.bitrate-a.bitrate)[0];
     for(const f of formats.filter(f=>/^video\/mp4/i.test(f.mimeType)&&f.height).sort((a,b)=>b.height-a.height||b.fps-a.fps||b.bitrate-a.bitrate)){

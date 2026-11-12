@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      # The lint step catches undefined identifiers before they reach a
+      # release. A missing state member or a function that was never declared
+      # only shows up at runtime as "undefined is not an object".
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun run test:extension

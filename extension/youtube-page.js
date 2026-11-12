@@ -2,6 +2,8 @@
 // Reason: Initial public release
 // Last updated: 2026-11-07
 // Reason: feat(extension): improve video format picker UI, desktop handoff focus, and media tools handling (fixes #5)
+// Last updated: 2026-11-12
+// Reason: fix(extension,youtube): drop unused catch bindings
 // Description: YouTube page script intercepting player response objects and SABR streaming configurations.
 
 // Observes only player responses consumed by this YouTube page. Never initiates downloads.
@@ -13,7 +15,7 @@
       window.postMessage({type:'odm-player-response',data},location.origin);
     }
   };
-  const playerEndpoint=value=>{try{const u=new URL(value,location.href);return u.origin===location.origin && /^\/youtubei\/v1\/player$/.test(u.pathname);}catch(e){return false;}};
+  const playerEndpoint=value=>{try{const u=new URL(value,location.href);return u.origin===location.origin && /^\/youtubei\/v1\/player$/.test(u.pathname);}catch{return false;}};
   const originalFetch=window.fetch;
   window.fetch=function(...args){
     const result=Reflect.apply(originalFetch,this,args);
@@ -21,13 +23,13 @@
       if(!response.ok || Number(response.headers.get('content-length'))>2097152)return;
       const reader=response.clone().body?.getReader();if(!reader)return;
       const chunks=[];let size=0;
-      try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2097152){void reader.cancel();return;}chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}publish(JSON.parse(new TextDecoder().decode(bytes)));}catch(e){}
+      try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2097152){void reader.cancel();return;}chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}publish(JSON.parse(new TextDecoder().decode(bytes)));}catch{}
     }).catch(()=>{});
     return result;
   };
   const open=XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open=function(method,url,...rest){
-    if(playerEndpoint(url))this.addEventListener('load',()=>{try{if(this.responseType==='json')publish(this.response);else if((this.responseType===''||this.responseType==='text') && this.responseText.length<=2097152)publish(JSON.parse(this.responseText));}catch(e){}},{once:true});
+    if(playerEndpoint(url))this.addEventListener('load',()=>{try{if(this.responseType==='json')publish(this.response);else if((this.responseType===''||this.responseType==='text') && this.responseText.length<=2097152)publish(JSON.parse(this.responseText));}catch{}},{once:true});
     return Reflect.apply(open,this,[method,url,...rest]);
   };
   function current(){
@@ -35,7 +37,7 @@
       publish(window.ytInitialPlayerResponse);
       const player=document.getElementById('movie_player') || document.getElementById('inline-preview-player');
       if(player?.getPlayerResponse)publish(player.getPlayerResponse());
-    }catch(e){}
+    }catch{}
   }
   addEventListener('odm-request-player',current);
   addEventListener('yt-navigate-finish',current);

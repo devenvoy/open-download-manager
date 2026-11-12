@@ -8,6 +8,8 @@
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Last updated: 2026-11-12
+// Reason: fix(api): drop the unused migration stub
 // Description: Frontend API bridge exposing typed JavaScript wrappers for Tauri IPC commands and event subscriptions.
 
 'use strict';
@@ -30,12 +32,6 @@ function invoke(command, args) {
   return tauri.core.invoke(command, args).catch(error => {
     throw commandError(error);
   });
-}
-
-function unavailable(feature) {
-  const error = new Error(`${feature} is not available in the Tauri migration yet.`);
-  error.code = 'feature_not_migrated';
-  return Promise.reject(error);
 }
 
 function subscribe(eventName, callback) {
