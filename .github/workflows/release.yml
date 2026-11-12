@@ -104,7 +104,7 @@ jobs:
             echo "Packaged App tar: $app_path"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}-assets
           path: dist/artifacts/*
@@ -176,7 +176,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.arch }}-assets
           path: dist/artifacts/*
@@ -239,7 +239,7 @@ jobs:
             echo "Packaged AppImage: ${appimage_files[0]}"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-x64-assets
           path: dist/artifacts/*
