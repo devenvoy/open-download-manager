@@ -79,9 +79,11 @@
 
 ---
 
-> **🚧 Beta channel** — this release ships the built-in BitTorrent engine and a
-> reworked browser integration. The torrent tab is marked **Beta** in the app.
-> Download links below point to `v0.3.0-beta.1`.
+> **🚧 Beta channel** — the BitTorrent engine and the reworked browser
+> integration are still in beta. The `v0.3.0-beta.1` build was **withdrawn**
+> because the Torrents window crashed on startup. A fixed beta follows as
+> `v0.3.0-beta.2`. Download links below point to the current stable release,
+> `v0.2.0`.
 
 ## ⚡ Key Features
 
@@ -108,8 +110,8 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 <br>
 
 1. Download the `.dmg` package matching your Mac:
-   - **Apple Silicon (M1 / M2 / M3 / M4)**: [`open-download-manager_0.3.0-beta.1_mac_arm64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_mac_arm64.dmg)
-   - **Intel 64-bit**: [`open-download-manager_0.3.0-beta.1_mac_x64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_mac_x64.dmg)
+   - **Apple Silicon (M1 / M2 / M3 / M4)**: [`open-download-manager_0.2.0_mac_arm64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_mac_arm64.dmg)
+   - **Intel 64-bit**: [`open-download-manager_0.2.0_mac_x64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_mac_x64.dmg)
 2. Open the `.dmg` file and drag **Open Download Manager** into your **Applications** folder.
 3. Launch the app from Applications or Spotlight search.
 
@@ -121,8 +123,8 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 <br>
 
 1. Download the setup executable matching your CPU:
-   - **Windows 64-bit (x64)**: [`open-download-manager_0.3.0-beta.1_win_x64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_win_x64-setup.exe)
-   - **Windows 11 ARM64**: [`open-download-manager_0.3.0-beta.1_win_arm64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_win_arm64-setup.exe)
+   - **Windows 64-bit (x64)**: [`open-download-manager_0.2.0_win_x64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_win_x64-setup.exe)
+   - **Windows 11 ARM64**: [`open-download-manager_0.2.0_win_arm64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_win_arm64-setup.exe)
 2. Run the installer wizard and choose your options.
 3. Launch **Open Download Manager** from the Start Menu or desktop shortcut.
 
@@ -135,13 +137,13 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 
 - **Debian / Ubuntu / Linux Mint (`.deb`)**:
   ```bash
-  sudo dpkg -i open-download-manager_0.3.0-beta.1_lin_x64.deb
+  sudo dpkg -i open-download-manager_0.2.0_lin_x64.deb
   sudo apt-get install -f
   ```
 - **Universal Linux (`.AppImage`)**:
   ```bash
-  chmod +x open-download-manager_0.3.0-beta.1_lin_x64.AppImage
-  ./open-download-manager_0.3.0-beta.1_lin_x64.AppImage
+  chmod +x open-download-manager_0.2.0_lin_x64.AppImage
+  ./open-download-manager_0.2.0_lin_x64.AppImage
   ```
 
 </details>
@@ -174,9 +176,9 @@ and the toolbar badge disappears.
 3. Click **Load Temporary Add-on** and select `manifest.json` in that folder.
 
 ### Packaged extension (alternative)
-[`open-download-manager_0.3.0-beta.1_ext_chrome.zip`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_ext_chrome.zip)
+[`open-download-manager_0.2.0_ext_chrome.zip`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_ext_chrome.zip)
 and
-[`open-download-manager_0.3.0-beta.1_ext_firefox.xpi`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0-beta.1/open-download-manager_0.3.0-beta.1_ext_firefox.xpi)
+[`open-download-manager_0.2.0_ext_firefox.xpi`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_ext_firefox.xpi)
 contain the same extension for users who prefer to install the files
 themselves.
 

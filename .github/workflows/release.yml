@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release Tag (e.g. v0.3.0-beta.1)'
+        description: 'Release Tag (e.g. v0.3.0-beta.2)'
         required: true
-        default: 'v0.3.0-beta.1'
+        default: 'v0.3.0-beta.2'
 
 permissions:
   contents: write
@@ -82,7 +82,7 @@ jobs:
             VERSION="${{ github.event.inputs.tag }}"
           fi
           if [ -z "$VERSION" ]; then
-            VERSION="0.3.0-beta.1"
+            VERSION="0.3.0-beta.2"
           fi
           VERSION="${VERSION#v}"
 
@@ -163,7 +163,7 @@ jobs:
         run: |
           $ver = "${{ github.ref_name }}".TrimStart("v")
           if (-not $ver) { $ver = "${{ github.event.inputs.tag }}".TrimStart("v") }
-          if (-not $ver) { $ver = "0.3.0-beta.1" }
+          if (-not $ver) { $ver = "0.3.0-beta.2" }
 
           New-Item -ItemType Directory -Force -Path "dist/artifacts"
           $exe = Get-ChildItem -Path @("target/${{ matrix.target }}/release/bundle/nsis", "src-tauri/target/${{ matrix.target }}/release/bundle/nsis", "target/release/bundle/nsis") -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -220,7 +220,7 @@ jobs:
             VERSION="${{ github.event.inputs.tag }}"
           fi
           if [ -z "$VERSION" ]; then
-            VERSION="0.3.0-beta.1"
+            VERSION="0.3.0-beta.2"
           fi
           VERSION="${VERSION#v}"
 
@@ -273,7 +273,7 @@ jobs:
             VERSION="${{ github.event.inputs.tag }}"
           fi
           if [ -z "$VERSION" ]; then
-            VERSION="0.3.0-beta.1"
+            VERSION="0.3.0-beta.2"
           fi
           VERSION="${VERSION#v}"
 
