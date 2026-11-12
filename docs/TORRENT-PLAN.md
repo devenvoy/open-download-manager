@@ -1,5 +1,10 @@
 # Torrent Support — Plan
 
+> **Review flow status (2026-11-12).** The review flow — magnet or .torrent
+> in, file list, user confirms, payload arrives — works and is covered by
+> tests. The problems that were found around it, their root causes and the
+> fixes are written down in [TORRENT-REVIEW-FLOW.md](./TORRENT-REVIEW-FLOW.md).
+
 **Status:** Draft / not started
 **Created:** 2026-11-11
 **Scope:** Add BitTorrent (magnet, `.torrent`, download, seed, leech) as an
@@ -352,8 +357,8 @@ Rules:
 
 | Platform | Work |
 |---|---|
-| macOS | `CFBundleURLTypes` for `magnet` via `tauri-plugin-deep-link`; `.torrent` document type; existing hardened-runtime entitlement `com.apple.security.network.server` already covers the listener. |
-| Windows | NSIS registers `magnet:` handler and `.torrent` association; firewall prompt appears on first listen. |
+| macOS | `CFBundleURLTypes` for `magnet` via `tauri-plugin-deep-link` and `bundle.fileAssociations` for `.torrent`; the bundle declaration only makes ODM a candidate, so the app also asks LaunchServices to become the default handler at startup (`NSWorkspace.setDefaultApplication`) — other torrent clients claim `magnet:` with `LSHandlerRank = Owner` and macOS keeps a per-user default in `LSHandlers`. Existing hardened-runtime entitlement `com.apple.security.network.server` already covers the listener. |
+| Windows | The app writes `HKCU\Software\Classes\magnet` and `HKCU\Software\Classes\.torrent` at startup (no admin rights required); NSIS still needs to register the handler for installed builds. Firewall prompt appears on first listen. |
 | Linux | `.desktop` `MimeType=x-scheme-handler/magnet;application/x-bittorrent;` in the deb/AppImage bundle. |
 
 Argument handling:
@@ -362,6 +367,10 @@ Argument handling:
 - Extend its callback: forward `magnet:` and `.torrent` argv entries to
   `torrent_add_magnet` / `torrent_add_file`, then focus the Torrents window.
 - Do not route these into `DownloadTransferService`.
+- The same request can arrive through the launch arguments, the single-instance
+  callback and the deep-link event at the same time, so
+  `torrent_os_integration.rs` keeps a short-lived guard that only handles a
+  given magnet link or `.torrent` path once.
 
 Startup order matters: the second-instance callback can fire before the engine
 is ready. Queue pending targets in `TorrentService` and drain when ready.
@@ -395,8 +404,13 @@ default = []
 torrent = ["dep:librtbit"]
 
 [dependencies]
-librtbit = { package = "swarmforge", version = "0.1", default-features = false, features = ["rust-tls"], optional = true }
+librtbit = { package = "swarmforge", git = "https://github.com/TheDancingDeveloper-org/rustTorrent.git", rev = "94aae0460fe031af59a532586ccefc10f9a637bd", default-features = false, features = ["rust-tls"], optional = true }
 ```
+
+The engine is built from the git dependency, not from the vendored folder. The
+same commit is tracked locally as the git submodule at `vendor/rustTorrent`
+so the source can be audited, but **a change in that folder has no effect on
+the build** until it is pushed upstream and the pinned revision moves.
 
 Critical details:
 
@@ -441,7 +455,7 @@ before its predecessor's acceptance criteria pass.
 **Tasks**
 
 1. Branch `spike/torrent-engine`.
-2. Add `librtbit` as a path dependency on `reference/rustTorrent/crates/librtbit`.
+2. Add `librtbit` as a path dependency on `vendor/rustTorrent/crates/librtbit`.
 3. Build macOS arm64, Windows x64, **Windows arm64**, Linux x64.
 4. Start a session in a scratch binary, add a legal test torrent.
 5. Measure binary delta, clean build time, idle memory, listener behavior.
@@ -668,4 +682,4 @@ Relevant option types:
   `peer_limit`, `ratelimits`, `magnet_resolution_timeout_secs`.
 
 Reference implementation in the cloned repo:
-`reference/rustTorrent/desktop/src-tauri/src/main.rs` and `launch.rs`.
+`vendor/rustTorrent/desktop/src-tauri/src/main.rs` and `launch.rs`.
