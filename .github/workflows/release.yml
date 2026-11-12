@@ -307,6 +307,6 @@ jobs:
       #   gh attestation verify open-download-manager_<version>_mac_arm64.dmg \
       #     --repo devenvoy/open-download-manager
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "dist/final_release/*"
