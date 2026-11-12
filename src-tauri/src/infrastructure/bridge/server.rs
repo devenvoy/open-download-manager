@@ -31,7 +31,9 @@ use crate::{
         settings::Settings,
         torrent::{TorrentAddOptions, TorrentReviewRequest},
     },
-    infrastructure::{media::ytdlp::YtDlpTools, settings_store::SettingsStore},
+    infrastructure::{
+        browser::contact as browser_contact, media::ytdlp::YtDlpTools, settings_store::SettingsStore,
+    },
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -268,6 +270,51 @@ async fn handle_bridge_connection(
         return;
     }
 
+    // Browser requests are JSON POSTs. The body is read before routing so the
+    // sender can be recorded: that live signal is the only reliable proof that
+    // an extension is installed and enabled.
+    let mut body = Vec::new();
+    if method == "POST" {
+        if !content_type.as_deref().unwrap_or("").starts_with("application/json") {
+            let _ = send_json_response(socket, 415, &serde_json::json!({"error": "JSON required."})).await;
+            return;
+        }
+
+        if content_length > 1024 * 1024 {
+            let _ = send_json_response(socket, 413, &serde_json::json!({"error": "Request too large."})).await;
+            return;
+        }
+
+        // Read remaining body bytes
+        let body_start = header_end;
+        let initial_body_bytes = total_read - body_start;
+        body.reserve(content_length);
+        if initial_body_bytes > 0 {
+            body.extend_from_slice(&header_buf[body_start..total_read]);
+        }
+
+        while body.len() < content_length {
+            let mut buf = [0u8; 4096];
+            let needed = (content_length - body.len()).min(buf.len());
+            let n = match socket.read(&mut buf[..needed]).await {
+                Ok(n) if n > 0 => n,
+                _ => break,
+            };
+            body.extend_from_slice(&buf[..n]);
+        }
+
+        if body.len() != content_length {
+            let _ = send_json_response(socket, 400, &serde_json::json!({"error": "Incomplete request body."})).await;
+            return;
+        }
+
+        if let Ok(payload) = serde_json::from_slice::<serde_json::Value>(&body) {
+            if let Some((browser, version)) = browser_contact::sender_from_payload(&payload) {
+                browser_contact::record_contact(&data_directory, &browser, version.as_deref());
+            }
+        }
+    }
+
     let active_settings = if data_directory.join("settings.json").exists() {
         SettingsStore::new(&*data_directory)
             .load(settings.default_directory.clone())
@@ -284,41 +331,13 @@ async fn handle_bridge_connection(
         return;
     }
 
+    if method == "POST" && path == "/heartbeat" {
+        let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true})).await;
+        return;
+    }
+
     if method != "POST" || !matches!(path, "/downloads" | "/formats" | "/torrents") {
         let _ = send_json_response(socket, 404, &serde_json::json!({"error": "Not found."})).await;
-        return;
-    }
-
-    if !content_type.as_deref().unwrap_or("").starts_with("application/json") {
-        let _ = send_json_response(socket, 415, &serde_json::json!({"error": "JSON required."})).await;
-        return;
-    }
-
-    if content_length > 1024 * 1024 {
-        let _ = send_json_response(socket, 413, &serde_json::json!({"error": "Request too large."})).await;
-        return;
-    }
-
-    // Read remaining body bytes
-    let body_start = header_end;
-    let initial_body_bytes = total_read - body_start;
-    let mut body = Vec::with_capacity(content_length);
-    if initial_body_bytes > 0 {
-        body.extend_from_slice(&header_buf[body_start..total_read]);
-    }
-
-    while body.len() < content_length {
-        let mut buf = [0u8; 4096];
-        let needed = (content_length - body.len()).min(buf.len());
-        let n = match socket.read(&mut buf[..needed]).await {
-            Ok(n) if n > 0 => n,
-            _ => break,
-        };
-        body.extend_from_slice(&buf[..n]);
-    }
-
-    if body.len() != content_length {
-        let _ = send_json_response(socket, 400, &serde_json::json!({"error": "Incomplete request body."})).await;
         return;
     }
 

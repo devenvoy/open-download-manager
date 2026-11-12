@@ -10,8 +10,47 @@ const api = globalThis.browser || chrome;
 const HOST = 'com.open.downloadmanager';
 const CACHE_KEY = 'mediaByTab';
 const SABR_KEY = 'sabrByTab';
+const HEARTBEAT_ALARM = 'odm-heartbeat';
+// The heartbeat tells the desktop app that this browser is connected. It runs
+// every two minutes while the desktop app is up and backs off to fifteen
+// minutes while it is closed, so a closed app costs almost nothing.
+const HEARTBEAT_PERIOD_MINUTES = 2;
+const HEARTBEAT_BACKOFF_MINUTES = 15;
 let serial = Promise.resolve();
 let cachedCapturePolicy = null;
+// The desktop app uses this to know the extension is really installed and
+// enabled. Browser profile folders are unreadable for other apps on macOS,
+// so the live signal is the only reliable proof.
+function detectBrowser() {
+  const ua = (globalThis.navigator && navigator.userAgent) || '';
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/OPR\/|Opera/.test(ua)) return 'Opera';
+  if (/Brave\//.test(ua)) return 'Brave';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Chrome\//.test(ua)) return 'Chrome';
+  return 'Unknown';
+}
+async function sendHeartbeat() {
+  try {
+    await nativeSend({action: 'heartbeat'});
+    setHeartbeatPeriod(HEARTBEAT_PERIOD_MINUTES);
+  } catch (error) {
+    // The desktop app is closed: back off instead of retrying every minute.
+    if (error && error.appRunning === false) setHeartbeatPeriod(HEARTBEAT_BACKOFF_MINUTES);
+  }
+}
+function setHeartbeatPeriod(minutes) {
+  try {
+    if (!api.alarms) return;
+    api.alarms.create(HEARTBEAT_ALARM, {periodInMinutes: minutes});
+  } catch {}
+}
+function scheduleHeartbeat() {
+  setHeartbeatPeriod(HEARTBEAT_PERIOD_MINUTES);
+}
+try {
+  if (api.alarms && api.alarms.onAlarm) api.alarms.onAlarm.addListener(alarm => { if (alarm.name === HEARTBEAT_ALARM) sendHeartbeat(); });
+} catch {}
 async function getCapturePolicy() {
   if (cachedCapturePolicy) return cachedCapturePolicy;
   try {
@@ -152,13 +191,23 @@ async function discoverHls(tabId,url) {
 }
 function nativeSend(payload) {
   return new Promise((resolve, reject) => {
+    const message = Object.assign({}, payload, {browser: detectBrowser()});
+    try {
+      const manifest = api.runtime.getManifest && api.runtime.getManifest();
+      if (manifest && manifest.version) message.extensionVersion = manifest.version;
+    } catch {}
+    const failure = (text, result) => {
+      const error = new Error(text);
+      if (result && typeof result.appRunning === 'boolean') error.appRunning = result.appRunning;
+      reject(error);
+    };
     // Chrome callbacks retain useful runtime.lastError diagnostics.
-    if (!globalThis.browser) chrome.runtime.sendNativeMessage(HOST, payload, result => {
+    if (!globalThis.browser) chrome.runtime.sendNativeMessage(HOST, message, result => {
       if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else if (!result?.ok) reject(new Error(result?.error || 'The desktop app did not accept this download.'));
+      else if (!result?.ok) failure(result?.error || 'The desktop app did not accept this download.', result);
       else resolve(result);
     });
-    else browser.runtime.sendNativeMessage(HOST, payload).then(result => result?.ok ? resolve(result) : reject(new Error(result?.error || 'Desktop rejected download.')), reject);
+    else browser.runtime.sendNativeMessage(HOST, message).then(result => result?.ok ? resolve(result) : failure(result?.error || 'Desktop rejected download.', result), reject);
   });
 }
 async function enqueue(item, tabId) {
@@ -282,6 +331,8 @@ api.runtime.onInstalled.addListener(async () => {
     api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
   } catch (error) { await api.storage.local.set({lastError: error.message}); }
   refreshCapturePolicy().catch(() => {});
+  scheduleHeartbeat();
+  sendHeartbeat();
 });
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
@@ -512,3 +563,7 @@ api.downloads.onCreated.addListener(item => handleInterceptedDownload(item, fals
 if (api.downloads.onDeterminingFilename) {
   api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item, true));
 }
+
+// Service worker start: tell the desktop app that this browser is connected.
+scheduleHeartbeat();
+sendHeartbeat();

@@ -23,8 +23,8 @@ use crate::{
     domain::snapshot::IntegrationStatus,
     infrastructure::{
         browser::{
-            is_store_browser, launch_browser, prepare_chrome_extension, prepare_firefox_extension,
-            register_browser_manifest, resolve_host_exe, resolve_integration_root, scan_browsers,
+            delivery, extension_dir_for, is_store_browser, launch_browser, register_browser_manifest,
+            resolve_host_exe, scan_browsers, user_downloads_dir, user_extension_dir,
             sync_browser_manifests, BrowserType, EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
         },
         system_shell::SystemShellService,
@@ -42,7 +42,8 @@ pub struct BrowserSetupResult {
 
 pub struct IntegrationService {
     data_directory: PathBuf,
-    integration_root: PathBuf,
+    resource_dir: PathBuf,
+    downloads_dir: Option<PathBuf>,
     shell_service: Arc<dyn ShellService>,
     bridge_port: Arc<AtomicU16>,
 }
@@ -51,7 +52,8 @@ impl Clone for IntegrationService {
     fn clone(&self) -> Self {
         Self {
             data_directory: self.data_directory.clone(),
-            integration_root: self.integration_root.clone(),
+            resource_dir: self.resource_dir.clone(),
+            downloads_dir: self.downloads_dir.clone(),
             shell_service: self.shell_service.clone(),
             bridge_port: self.bridge_port.clone(),
         }
@@ -59,14 +61,13 @@ impl Clone for IntegrationService {
 }
 
 impl IntegrationService {
-    pub fn new(data_directory: PathBuf) -> Self {
-        let integration_root = resolve_integration_root();
-        let host_exe = resolve_host_exe(&integration_root);
+    pub fn new(data_directory: PathBuf, resource_dir: PathBuf) -> Self {
+        let host_exe = resolve_host_exe();
         sync_browser_manifests(&data_directory, &host_exe);
-        let _ = prepare_chrome_extension(&data_directory, &integration_root);
         Self {
             data_directory,
-            integration_root,
+            resource_dir,
+            downloads_dir: user_downloads_dir(),
             shell_service: Arc::new(SystemShellService),
             bridge_port: Arc::new(AtomicU16::new(0)),
         }
@@ -74,46 +75,49 @@ impl IntegrationService {
 
     pub fn with_shell(
         data_directory: PathBuf,
-        integration_root: PathBuf,
+        resource_dir: PathBuf,
+        downloads_dir: Option<PathBuf>,
         shell_service: impl ShellService + 'static,
     ) -> Self {
-        let _ = prepare_chrome_extension(&data_directory, &integration_root);
         Self {
             data_directory,
-            integration_root,
+            resource_dir,
+            downloads_dir,
             shell_service: Arc::new(shell_service),
             bridge_port: Arc::new(AtomicU16::new(0)),
         }
     }
 
+    /// The folder the user loads as an unpacked extension: a visible folder in
+    /// the Downloads directory. A browser cannot pick a folder inside an
+    /// application bundle, so the app delivers the extension there.
     pub fn resolve_extension_path(&self, browser: BrowserType) -> PathBuf {
-        if browser.is_firefox() {
-            self.data_directory
-                .join("NativeMessaging")
-                .join("firefox-extension")
-        } else {
-            let direct = self.integration_root.join("extension");
-            let data_chrome = self
-                .data_directory
-                .join("NativeMessaging")
-                .join("chrome-extension");
-            if direct.join("manifest.json").exists() {
-                direct
-            } else if data_chrome.join("manifest.json").exists() {
-                data_chrome
-            } else {
-                let _ = prepare_chrome_extension(&self.data_directory, &self.integration_root);
-                if data_chrome.exists() {
-                    data_chrome
-                } else {
-                    direct
-                }
-            }
+        match &self.downloads_dir {
+            Some(downloads) => user_extension_dir(downloads, browser),
+            None => extension_dir_for(&self.resource_dir, browser),
         }
     }
 
+    /// The bundled extension that is copied into the Downloads folder.
+    fn bundled_extension_dir(&self, browser: BrowserType) -> PathBuf {
+        extension_dir_for(&self.resource_dir, browser)
+    }
+
+    /// Copies the bundled extension into the Downloads folder and reveals it.
+    pub fn deliver_extension(&self, browser: BrowserType) -> AppResult<PathBuf> {
+        let target = self.resolve_extension_path(browser);
+        let bundled = self.bundled_extension_dir(browser);
+        delivery::deliver_extension(&bundled, &target).map_err(|error| {
+            AppError::browser(format!(
+                "Could not save the extension to {}: {error}",
+                target.to_string_lossy()
+            ))
+        })?;
+        Ok(target)
+    }
+
     pub fn sync_manifests(&self) -> Vec<BrowserType> {
-        let host_exe = resolve_host_exe(&self.integration_root);
+        let host_exe = resolve_host_exe();
         sync_browser_manifests(&self.data_directory, &host_exe)
     }
 
@@ -144,7 +148,8 @@ impl IntegrationService {
         let port = self.bridge_port();
         Ok(scan_browsers(
             &self.data_directory,
-            &self.integration_root,
+            &self.resource_dir,
+            self.downloads_dir.as_deref(),
             port,
         ))
     }
@@ -153,13 +158,9 @@ impl IntegrationService {
         let browser = BrowserType::parse(browser_name)
             .ok_or_else(|| AppError::browser("Choose Chrome, Edge, Brave, Opera, or Firefox."))?;
 
-        let host_exe = resolve_host_exe(&self.integration_root);
+        let host_exe = resolve_host_exe();
         let _ = register_browser_manifest(browser, extension_id, &self.data_directory, &host_exe)
             .await?;
-
-        if browser.is_firefox() {
-            let _ = prepare_firefox_extension(&self.data_directory, &self.integration_root);
-        }
 
         Ok(())
     }
@@ -179,7 +180,7 @@ impl IntegrationService {
                 if !is_store_browser(browser) {
                     return Err(AppError::browser("Store setup is unavailable for this browser."));
                 }
-                let host_exe = resolve_host_exe(&self.integration_root);
+                let host_exe = resolve_host_exe();
                 if let Some(ext_id) = EXTENSION_ID {
                     let _ = register_browser_manifest(
                         browser,
@@ -197,7 +198,7 @@ impl IntegrationService {
             }
             "open" => {
                 if let Some(ext_id) = EXTENSION_ID {
-                    let host_exe = resolve_host_exe(&self.integration_root);
+                    let host_exe = resolve_host_exe();
                     let _ = register_browser_manifest(
                         browser,
                         ext_id,
@@ -214,7 +215,7 @@ impl IntegrationService {
             }
             "prepare" => {
                 if browser.is_firefox() {
-                    let host_exe = resolve_host_exe(&self.integration_root);
+                    let host_exe = resolve_host_exe();
                     let _ = register_browser_manifest(
                         browser,
                         FIREFOX_EXTENSION_ID,
@@ -222,55 +223,35 @@ impl IntegrationService {
                         &host_exe,
                     )
                     .await?;
-                    let path = prepare_firefox_extension(
-                        &self.data_directory,
-                        &self.integration_root,
-                    )
-                    .map_err(|e| AppError::browser(format!("Failed to prepare Firefox extension: {e}")))?;
-                    Ok(BrowserSetupResult {
-                        browser: Some(browser_name.to_owned()),
-                        extension_path: Some(path.to_string_lossy().into_owned()),
-                    })
-                } else {
-                    let path = prepare_chrome_extension(
-                        &self.data_directory,
-                        &self.integration_root,
-                    )
-                    .map_err(|e| AppError::browser(format!("Failed to prepare Chrome extension: {e}")))?;
-                    Ok(BrowserSetupResult {
-                        browser: Some(browser_name.to_owned()),
-                        extension_path: Some(path.to_string_lossy().into_owned()),
-                    })
                 }
+                Ok(BrowserSetupResult {
+                    browser: Some(browser_name.to_owned()),
+                    extension_path: Some(extension_path_str),
+                })
+            }
+            "download" => {
+                // Save the extension in the Downloads folder so the user can
+                // pick it in the browser, and open the folder right away.
+                let delivered = self.deliver_extension(browser)?;
+                let _ = self.shell_service.reveal_path(&delivered);
+                Ok(BrowserSetupResult {
+                    browser: Some(browser_name.to_owned()),
+                    extension_path: Some(delivered.to_string_lossy().into_owned()),
+                })
             }
             "copy" => Ok(BrowserSetupResult {
                 browser: Some(browser_name.to_owned()),
                 extension_path: Some(extension_path_str),
             }),
             "folder" => {
-                if browser.is_firefox() && !extension_path.exists() {
-                    let host_exe = resolve_host_exe(&self.integration_root);
-                    let _ = register_browser_manifest(
-                        browser,
-                        FIREFOX_EXTENSION_ID,
-                        &self.data_directory,
-                        &host_exe,
-                    )
-                    .await?;
-                    let _ = prepare_firefox_extension(
-                        &self.data_directory,
-                        &self.integration_root,
-                    );
-                } else if !browser.is_firefox() && !extension_path.exists() {
-                    let _ = prepare_chrome_extension(
-                        &self.data_directory,
-                        &self.integration_root,
-                    );
+                // Save the extension first so the folder the user is sent to
+                // always exists.
+                if !extension_path.join("manifest.json").exists() {
+                    let _ = self.deliver_extension(browser);
                 }
-                if !extension_path.exists() {
-                    let _ = std::fs::create_dir_all(&extension_path);
-                }
-                self.shell_service.open_path(&extension_path)?;
+                // Reveal the extension folder in the file manager so the user
+                // can pick it in the browser without hunting for the path.
+                self.shell_service.reveal_path(&extension_path)?;
                 Ok(BrowserSetupResult {
                     browser: Some(browser_name.to_owned()),
                     extension_path: Some(extension_path_str),

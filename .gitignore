@@ -37,6 +37,9 @@ graphify-out/
 target/
 src-tauri/target/
 src-tauri/gen/
+# src-tauri/extension{,-firefox}/ are build copies of extension/ created by src-tauri/build.rs
+src-tauri/extension/
+src-tauri/extension-firefox/
 .DS_Store
 issues/
 pr/

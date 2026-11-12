@@ -231,8 +231,15 @@ pub fn show_error_dialog(app: &AppHandle, title: &str, message: &str) {
 
 pub fn show_about_dialog(app: &AppHandle) {
     let version = app.package_info().version.to_string();
+    let channel = if version.contains("beta") {
+        " (Beta channel)"
+    } else {
+        ""
+    };
     app.dialog()
-        .message(format!("Open Download Manager {version}\n\nDownload manager with browser integration. Original implementation inspired by IDM. Full IDM feature parity is in development."))
+        .message(format!(
+            "Open Download Manager {version}{channel}\n\nDownload manager with browser integration and built-in BitTorrent support. Original implementation inspired by IDM. Full IDM feature parity is in development."
+        ))
         .title("About Open Download Manager")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::Ok)

@@ -9,21 +9,43 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
-function harness({initialData={},webRequest={}}={}) {
-  const events={},specs={},nativeRequests=[],downloadCalls=[],badges=[];
+function harness({initialData={},webRequest={},sendNativeMessage}={}) {
+  const events={},specs={},nativeRequests=[],heartbeats=[],alarms=[],downloadCalls=[],badges=[];
   const event=name=>({addListener(fn,filter,spec){events[name]=fn;specs[name]=spec;}});
   const data=structuredClone(initialData),downloads=new Map();
   const storage={async get(key){return structuredClone({[key]:data[key]});},async set(value){Object.assign(data,structuredClone(value));},async remove(key){delete data[key];}};
-  const browser={runtime:{id:'extension-id',onMessage:event('message'),onInstalled:event('installed'),async sendNativeMessage(host,payload){nativeRequests.push(structuredClone(payload));return {ok:true};}},storage:{session:storage,local:storage},webRequest:{...webRequest,onHeadersReceived:event('response'),onBeforeRequest:event('beforeRequest'),onBeforeSendHeaders:event('requestHeaders')},tabs:{onRemoved:event('removed'),onUpdated:event('updated')},contextMenus:{onClicked:event('context'),async removeAll(){},create(){}},downloads:{onCreated:event('download')},action:{async setBadgeText(info){badges.push(info);}}};
+  const browser={runtime:{id:'extension-id',onMessage:event('message'),onInstalled:event('installed'),getManifest:()=>({version:'0.2.0'}),async sendNativeMessage(host,payload){if(payload&&payload.action==='heartbeat'){heartbeats.push(structuredClone(payload));return sendNativeMessage?sendNativeMessage(payload):{ok:true};}nativeRequests.push(structuredClone(payload));return {ok:true};}},storage:{session:storage,local:storage},webRequest:{...webRequest,onHeadersReceived:event('response'),onBeforeRequest:event('beforeRequest'),onBeforeSendHeaders:event('requestHeaders')},tabs:{onRemoved:event('removed'),onUpdated:event('updated')},contextMenus:{onClicked:event('context'),async removeAll(){},create(){}},downloads:{onCreated:event('download')},action:{async setBadgeText(info){badges.push(info);}},alarms:{create(name,options){alarms.push({name,options});},onAlarm:{addListener(fn){events.alarm=fn;}}}};
   Object.assign(browser.downloads,{
     async pause(id){downloadCalls.push(['pause',id]);downloads.get(id).state='paused';},
     async resume(id){downloadCalls.push(['resume',id]);downloads.get(id).state='in_progress';},
     async cancel(id){downloadCalls.push(['cancel',id]);downloads.delete(id);}
   });
   browser.tabs.sendMessage=async()=>({ok:true});
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'background.js'),'utf8'),{browser,URL,URLSearchParams,Uint8Array,btoa:value=>Buffer.from(value,'binary').toString('base64'),youtubeMedia:require('./youtube-media.js'),captureEvaluator:require('./capture-evaluator.js')});
-  return {browser,events,specs,data,nativeRequests,downloadCalls,badges,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'background.js'),'utf8'),{browser,URL,URLSearchParams,Uint8Array,btoa:value=>Buffer.from(value,'binary').toString('base64'),navigator:{userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'},youtubeMedia:require('./youtube-media.js'),captureEvaluator:require('./capture-evaluator.js')});
+  return {browser,events,specs,data,nativeRequests,heartbeats,alarms,downloadCalls,badges,createDownload(item){const value={state:'in_progress',tabId:-1,filename:'',referrer:'',...item};downloads.set(value.id,value);return structuredClone(value);},download:id=>downloads.get(id),request(message,sender){return new Promise(resolve=>{const accepted=events.message(message,sender,resolve);if(accepted!==true)resolve(undefined);});}};
 }
+test('service worker reports the browser to the desktop app with a heartbeat', async()=>{
+  const h=harness();
+  assert.equal(h.heartbeats.length,1);
+  assert.equal(h.heartbeats[0].action,'heartbeat');
+  assert.equal(h.heartbeats[0].browser,'Chrome');
+  assert.equal(h.heartbeats[0].extensionVersion,'0.2.0');
+  assert.equal(h.nativeRequests.length,0);
+});
+test('heartbeat runs every two minutes while the desktop app answers', async()=>{
+  const h=harness();
+  const created=h.alarms.map(alarm=>alarm.options.periodInMinutes);
+  assert.ok(created.includes(2),'heartbeat alarm uses a two minute period');
+});
+test('heartbeat backs off to fifteen minutes while the desktop app is closed', async()=>{
+  const h=harness({sendNativeMessage:async payload=>{
+    if(payload&&payload.action==='heartbeat')return {ok:false,error:'Open Download Manager is not running.',appRunning:false};
+    return {ok:true};
+  }});
+  await new Promise(resolve=>setImmediate(resolve));
+  const periods=h.alarms.map(alarm=>alarm.options.periodInMinutes);
+  assert.ok(periods.includes(15),'heartbeat backs off when the desktop app is closed');
+});
 test('video selection forwards explicit one-click download intent',async()=>{
   const h=harness(),sender={id:'extension-id',tab:{id:3}};
   await h.request({action:'download',item:{url:'https://example.com/video.mp4',startNow:true}},sender);
@@ -35,7 +57,7 @@ test('generic format discovery forwards the current HTTP page to the native extr
  const h=harness(),sender={id:'extension-id',tab:{id:31,url:'https://vkvideo.ru/video-211472768_456240796'}};
  const result=await h.request({action:'extractFormats'},sender);
  assert.equal(result.ok,true);
- assert.deepEqual(h.nativeRequests,[{action:'formats',url:'https://vkvideo.ru/video-211472768_456240796'}]);
+ assert.deepEqual(h.nativeRequests,[{action:'formats',url:'https://vkvideo.ru/video-211472768_456240796',browser:'Chrome',extensionVersion:'0.2.0'}]);
 });
 test('later page-source reports do not erase captured media metadata',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:32,url:'https://player.example/watch'}};

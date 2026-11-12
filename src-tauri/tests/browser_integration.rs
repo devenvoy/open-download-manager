@@ -31,12 +31,10 @@ use open_download_manager_lib::{
     infrastructure::{
         bridge::LoopbackBridge,
         browser::{
-            browser_native_messaging_dir, create_manifest, sync_browser_manifests,
-            scanner::{
-                inspect_firefox_profile, inspect_firefox_profile_status, inspect_profile,
-                FIREFOX_EXTENSION_ID,
-            },
-            BrowserType, NativeHostManifest, NATIVE_HOST_NAME,
+            browser_native_messaging_dir,
+            connection::{connection_state, BrowserConnectionState},
+            contact as browser_contact, create_manifest, scanner::scan_browsers,
+            sync_browser_manifests, BrowserType, NativeHostManifest, NATIVE_HOST_NAME,
         },
         download_history_store::DownloadHistoryStore,
         http_download_executor::HttpDownloadExecutor,
@@ -551,155 +549,151 @@ async fn browser_review_cancellation_and_download_later() {
 }
 
 #[test]
-fn profile_scanner_accurately_classifies_extension_states() {
+fn browser_is_connected_only_after_the_extension_talks_to_the_app() {
     let temp_root = temporary_directory();
     fs::create_dir_all(&temp_root).expect("create directory");
-    let test_id = "abcdefghijklmnopabcdefghijklmnop";
 
-    // 1. Profile with active connected extension
-    let connected_profile = temp_root.join("ConnectedProfile");
-    fs::create_dir_all(&connected_profile).unwrap();
-    let connected_prefs = serde_json::json!({
-        "extensions": {
-            "settings": {
-                test_id: {
-                    "state": 1,
-                    "manifest": {
-                        "name": "Open Download Manager Integration",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-        }
-    });
-    fs::write(connected_profile.join("Preferences"), connected_prefs.to_string()).unwrap();
-    let (conn, state) = inspect_profile(&connected_profile);
-    assert!(conn);
-    assert_eq!(state, "connected");
+    let data_dir = temp_root.join("UserData");
+    fs::create_dir_all(&data_dir).expect("create data directory");
+    let resource_dir = temp_root.join("Resources");
+    fs::create_dir_all(&resource_dir).expect("create resource directory");
+    let downloads_dir = temp_root.join("Downloads");
+    fs::create_dir_all(&downloads_dir).expect("create downloads directory");
 
-    // 2. Profile with extension awaiting approval (reason 8192)
-    let approval_profile = temp_root.join("ApprovalProfile");
-    fs::create_dir_all(&approval_profile).unwrap();
-    let approval_prefs = serde_json::json!({
-        "extensions": {
-            "settings": {
-                test_id: {
-                    "disable_reasons": [8192],
-                    "manifest": {
-                        "name": "Open Download Manager Integration",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-        }
-    });
-    fs::write(approval_profile.join("Preferences"), approval_prefs.to_string()).unwrap();
-    let (conn, state) = inspect_profile(&approval_profile);
-    assert!(!conn);
-    assert_eq!(state, "approval");
+    // 1. Without the delivered extension folder the browser cannot be set up.
+    let status = scan_browsers(&data_dir, &resource_dir, Some(&downloads_dir), None);
+    assert!(!status.extension_available);
+    assert!(status.connected_browsers.is_empty());
+    assert!(status.browsers.iter().all(|browser| !browser.connected));
 
-    // 3. Profile with disabled extension
-    let disabled_profile = temp_root.join("DisabledProfile");
-    fs::create_dir_all(&disabled_profile).unwrap();
-    let disabled_prefs = serde_json::json!({
-        "extensions": {
-            "settings": {
-                test_id: {
-                    "state": 0,
-                    "disable_reasons": [1],
-                    "manifest": {
-                        "name": "Open Download Manager Integration",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-        }
-    });
-    fs::write(disabled_profile.join("Preferences"), disabled_prefs.to_string()).unwrap();
-    let (conn, state) = inspect_profile(&disabled_profile);
-    assert!(!conn);
-    assert_eq!(state, "disabled");
+    // 2. The delivered extension folder is the one the user loads.
+    let extension_dir = downloads_dir
+        .join("Open Download Manager Extension")
+        .join("extension");
+    fs::create_dir_all(&extension_dir).expect("create extension directory");
+    fs::write(extension_dir.join("manifest.json"), r#"{"name":"test"}"#).unwrap();
+    let status = scan_browsers(&data_dir, &resource_dir, Some(&downloads_dir), None);
+    assert!(status.extension_available);
+    assert!(status.extension_path.ends_with("extension"));
 
-    // 4. Empty profile (missing)
-    let empty_profile = temp_root.join("EmptyProfile");
-    fs::create_dir_all(&empty_profile).unwrap();
-    let (conn, state) = inspect_profile(&empty_profile);
-    assert!(!conn);
-    assert_eq!(state, "missing");
-
-    // 5. Firefox profile with extensions.json (connected)
-    let firefox_profile = temp_root.join("FirefoxProfile");
-    fs::create_dir_all(&firefox_profile).unwrap();
-    let firefox_addons = serde_json::json!({
-        "addons": [
-            {
-                "id": FIREFOX_EXTENSION_ID,
-                "active": true,
-                "appDisabled": false
-            }
-        ]
-    });
-    fs::write(firefox_profile.join("extensions.json"), firefox_addons.to_string()).unwrap();
-    assert!(inspect_firefox_profile(&firefox_profile));
-    let (conn, state) = inspect_firefox_profile_status(&firefox_profile);
-    assert!(conn);
-    assert_eq!(state, "connected");
-
-    // 6. Firefox profile with disabled extension
-    let firefox_disabled = temp_root.join("FirefoxDisabledProfile");
-    fs::create_dir_all(&firefox_disabled).unwrap();
-    let firefox_disabled_addons = serde_json::json!({
-        "addons": [
-            {
-                "id": FIREFOX_EXTENSION_ID,
-                "active": false,
-                "appDisabled": false
-            }
-        ]
-    });
-    fs::write(firefox_disabled.join("extensions.json"), firefox_disabled_addons.to_string()).unwrap();
-    let (conn_dis, state_dis) = inspect_firefox_profile_status(&firefox_disabled);
-    assert!(!conn_dis);
-    assert_eq!(state_dis, "disabled");
+    // 3. One native message from Chrome connects Chrome.
+    browser_contact::record_contact(&data_dir, "Chrome", Some("0.2.0"));
+    let status = scan_browsers(&data_dir, &resource_dir, Some(&downloads_dir), None);
+    assert_eq!(status.connected_browsers.len(), 1);
+    assert_eq!(status.connected_browsers[0].browser, "Chrome");
+    let chrome = status
+        .browsers
+        .iter()
+        .find(|browser| browser.name == "Chrome")
+        .expect("chrome status");
+    assert!(chrome.connected);
+    assert_eq!(chrome.setup_state, "connected");
+    assert!(chrome.last_seen_ms.is_some());
+    let edge = status
+        .browsers
+        .iter()
+        .find(|browser| browser.name == "Edge")
+        .expect("edge status");
+    assert!(!edge.connected);
 
     fs::remove_dir_all(temp_root).expect("cleanup directory");
+}
+
+#[test]
+fn connection_state_covers_every_browser_condition() {
+    let now = 1_000_000u64;
+
+    // The browser is not installed.
+    assert_eq!(
+        connection_state(false, None, now, || true),
+        BrowserConnectionState::NotInstalled
+    );
+
+    // The browser is installed but the extension never talked to the app.
+    assert_eq!(
+        connection_state(true, None, now, || true),
+        BrowserConnectionState::SetupNeeded
+    );
+
+    // The extension talked a moment ago.
+    assert_eq!(
+        connection_state(true, Some(now - 60_000), now, || true),
+        BrowserConnectionState::Connected
+    );
+
+    // The extension was silent for a while and the browser is running: the
+    // extension was removed or disabled.
+    assert_eq!(
+        connection_state(true, Some(now - 10 * 60_000), now, || true),
+        BrowserConnectionState::Disconnected
+    );
+
+    // The extension was silent and the browser is closed: keep the last state.
+    assert_eq!(
+        connection_state(true, Some(now - 10 * 60_000), now, || false),
+        BrowserConnectionState::Connected
+    );
 }
 
 #[tokio::test]
 async fn browser_setup_actions_and_firefox_manifest_preparation() {
     let temp_root = temporary_directory();
     let data_dir = temp_root.join("UserData");
-    let integration_root = temp_root.join("Integration");
-    let ext_dir = integration_root.join("extension");
-    fs::create_dir_all(&ext_dir).unwrap();
-    fs::write(ext_dir.join("manifest.json"), r#"{"name":"test"}"#).unwrap();
-    fs::write(ext_dir.join("manifest.firefox.json"), r#"{"name":"test-firefox"}"#).unwrap();
+    let resource_dir = temp_root.join("Resources");
+    let chrome_dir = resource_dir.join("extension");
+    let firefox_dir = resource_dir.join("extension-firefox");
+    fs::create_dir_all(&chrome_dir).unwrap();
+    fs::create_dir_all(&firefox_dir).unwrap();
+    fs::write(chrome_dir.join("manifest.json"), r#"{"name":"test"}"#).unwrap();
+    fs::write(firefox_dir.join("manifest.json"), r#"{"name":"test-firefox"}"#).unwrap();
+
+    let downloads_dir = temp_root.join("Downloads");
+    fs::create_dir_all(&downloads_dir).unwrap();
 
     let shell = DummyShellService;
-    let service = IntegrationService::with_shell(data_dir.clone(), integration_root.clone(), shell);
+    let service = IntegrationService::with_shell(
+        data_dir.clone(),
+        resource_dir.clone(),
+        Some(downloads_dir.clone()),
+        shell,
+    );
 
-    // 1. Prepare Firefox extension
+    // 1. Firefox points at the folder in the Downloads directory
     let prep_res = service.browser_setup("prepare", "Firefox").await.unwrap();
     assert_eq!(prep_res.browser.as_deref(), Some("Firefox"));
     let prepared_path = PathBuf::from(prep_res.extension_path.unwrap());
-    assert!(prepared_path.exists());
-    let prepared_manifest = fs::read_to_string(prepared_path.join("manifest.json")).unwrap();
-    assert!(prepared_manifest.contains("test-firefox"));
+    assert_eq!(
+        prepared_path,
+        downloads_dir.join("Open Download Manager Extension").join("extension-firefox")
+    );
 
-    // 2. Copy action returns path
+    // 2. The download action saves the extension in the Downloads folder
+    let download_res = service.browser_setup("download", "Chrome").await.unwrap();
+    let downloaded_path = PathBuf::from(download_res.extension_path.unwrap());
+    assert_eq!(
+        downloaded_path,
+        downloads_dir.join("Open Download Manager Extension").join("extension")
+    );
+    assert!(downloaded_path.join("manifest.json").exists());
+    assert_eq!(
+        fs::read_to_string(downloaded_path.join("manifest.json")).unwrap(),
+        fs::read_to_string(chrome_dir.join("manifest.json")).unwrap()
+    );
+
+    // 3. Copy action returns the folder the user loads
     let copy_res = service.browser_setup("copy", "Chrome").await.unwrap();
     assert_eq!(copy_res.browser.as_deref(), Some("Chrome"));
-    assert!(copy_res.extension_path.unwrap().contains("extension"));
+    assert_eq!(PathBuf::from(copy_res.extension_path.unwrap()), downloaded_path);
 
-    // 3. Store action rejected on Firefox
+    // 4. Store action rejected on Firefox
     let store_err = service.browser_setup("store", "Firefox").await.unwrap_err();
     assert!(store_err.message.contains("Store setup is unavailable for this browser."));
 
-    // 4. Invalid browser rejected
+    // 5. Invalid browser rejected
     let bad_browser = service.browser_setup("copy", "Safari").await.unwrap_err();
     assert!(bad_browser.message.contains("Choose Chrome, Edge, Brave, Opera, or Firefox."));
 
-    // 5. Invalid action rejected
+    // 6. Invalid action rejected
     let bad_action = service.browser_setup("invalidAction", "Chrome").await.unwrap_err();
     assert!(bad_action.message.contains("Unknown browser setup action."));
 
@@ -903,6 +897,67 @@ async fn real_user_scenario_browser_link_expired_and_refreshed_through_bridge() 
     // 6. Verify explanation notice was attached
     let record = history.download(&download_id).unwrap();
     assert!(record.notice.as_deref().unwrap_or("").contains("refreshed"));
+
+    bridge.stop().await;
+    fs::remove_dir_all(directory).expect("cleanup directory");
+}
+
+#[tokio::test]
+async fn bridge_heartbeat_records_the_browser_that_is_connected() {
+    let directory = temporary_directory();
+    fs::create_dir_all(&directory).expect("create directory");
+
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&directory))
+        .expect("history service");
+    let executor = HttpDownloadExecutor::new().expect("http executor");
+    let service = DownloadTransferService::new(history.clone(), executor, 2);
+    let settings = Settings::new(directory.clone());
+
+    let bridge = LoopbackBridge::start(
+        directory.clone(),
+        service,
+        TorrentService::disabled(),
+        settings,
+        None,
+        None,
+    )
+    .await
+    .expect("bridge start");
+
+    let port = bridge.config.port;
+    let token = bridge.config.token.clone();
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(format!("http://127.0.0.1:{port}/heartbeat"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(
+            serde_json::to_vec(&serde_json::json!({
+                "action": "heartbeat",
+                "browser": "Chrome",
+                "extensionVersion": "0.2.0"
+            }))
+            .unwrap(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+
+    let contacts = browser_contact::load_contacts(&directory);
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts[0].browser, "Chrome");
+    assert_eq!(contacts[0].version.as_deref(), Some("0.2.0"));
+
+    let status = scan_browsers(
+        &directory,
+        &directory.join("extension"),
+        Some(&directory.join("Downloads")),
+        None,
+    );
+    assert_eq!(status.connected_browsers.len(), 1);
+    assert_eq!(status.connected_browsers[0].browser, "Chrome");
 
     bridge.stop().await;
     fs::remove_dir_all(directory).expect("cleanup directory");

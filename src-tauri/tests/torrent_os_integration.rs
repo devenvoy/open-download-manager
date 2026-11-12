@@ -52,7 +52,6 @@ fn launch_arguments_without_a_torrent_request_are_ignored() {
     assert!(extract_torrent_launch_args(&[]).is_empty());
 }
 
-#[cfg(feature = "torrent")]
 #[test]
 fn the_same_request_is_only_handled_once() {
     use open_download_manager_lib::application::torrent_os_integration::claim_handle;

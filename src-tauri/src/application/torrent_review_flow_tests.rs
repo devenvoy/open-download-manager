@@ -12,7 +12,7 @@
 // calls the Torrents window makes. It fails if the confirmed torrent does not
 // actually receive the payload.
 
-#![cfg(all(test, feature = "torrent"))]
+#![cfg(test)]
 
 use std::{
     net::SocketAddr,
@@ -131,6 +131,17 @@ async fn start_seeder(
     panic!("the seeder must finish checking the payload");
 }
 
+/// The swarm tests start real engines and seeders on the machine. Running
+/// them at the same time makes them compete for CPU and sockets, which shows
+/// up as a flaky timeout. The lock keeps them one after the other.
+static SWARM_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn swarm_lock() -> std::sync::MutexGuard<'static, ()> {
+    SWARM_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+}
+
 /// Builds the service the Torrents window talks to, without the network.
 async fn service(directory: &Path, downloads: &Path) -> Arc<TorrentService> {
     let settings = TorrentSettings {
@@ -176,6 +187,7 @@ fn temp_directory(name: &str) -> PathBuf {
 /// must arrive.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_confirmed_review_downloads_the_payload() {
+    let _guard = swarm_lock();
     let directory = temp_directory("confirm");
     let payload = directory.join("payload");
     let downloads = directory.join("downloads");
@@ -285,6 +297,7 @@ fn find_file(root: &Path, name: &str) -> Option<Vec<u8>> {
 /// at fault; this test pins both paths to the same result.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_torrent_added_without_the_review_downloads_the_payload() {
+    let _guard = swarm_lock();
     let directory = temp_directory("live");
     let payload = directory.join("payload");
     let downloads = directory.join("downloads");
@@ -432,6 +445,7 @@ async fn a_confirmed_review_downloads_from_the_real_swarm() {
 /// service has to wait for the engine instead of failing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_file_selection_waits_for_the_engine_to_finish_the_setup() {
+    let _guard = swarm_lock();
     let directory = temp_directory("race");
     let payload = directory.join("payload");
     let downloads = directory.join("downloads");
@@ -495,6 +509,7 @@ async fn a_file_selection_waits_for_the_engine_to_finish_the_setup() {
 /// on a different download.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pending_review_for_a_deleted_torrent_is_dropped() {
+    let _guard = swarm_lock();
     let directory = temp_directory("stale");
     let payload = directory.join("payload");
     let downloads = directory.join("downloads");
@@ -558,6 +573,7 @@ async fn a_pending_review_for_a_deleted_torrent_is_dropped() {
 /// A review torrent must not move a single byte before the user confirms.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_review_torrent_does_not_download_before_the_confirmation() {
+    let _guard = swarm_lock();
     let directory = temp_directory("wait");
     let payload = directory.join("payload");
     let downloads = directory.join("downloads");

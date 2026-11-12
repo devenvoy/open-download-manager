@@ -73,8 +73,8 @@ impl ShellService for RecordingShellService {
 }
 
 impl RecordingShellService {
-    fn opened_paths(&self) -> Vec<PathBuf> {
-        self.open_paths.lock().unwrap().clone()
+    fn revealed_paths(&self) -> Vec<PathBuf> {
+        self.reveal_paths.lock().unwrap().clone()
     }
 }
 
@@ -99,6 +99,7 @@ fn create_test_app(data_dir: &Path, shell: RecordingShellService) -> tauri::App<
     let integration = IntegrationService::with_shell(
         data_dir.to_path_buf(),
         data_dir.to_path_buf(),
+        Some(data_dir.join("Downloads")),
         shell,
     );
 
@@ -446,9 +447,10 @@ async fn commands_integration_info_and_browser_setup_through_tauri_state() {
     assert_eq!(copy_result.browser.as_deref(), Some("Chrome"));
     assert!(copy_result.extension_path.is_some());
 
-    // 3. folder action invokes shell
+    // 3. folder action reveals the bundled extension folder
     let _ = browser_setup_action(state.clone(), "folder".to_owned(), "Chrome".to_owned()).await.unwrap();
-    assert_eq!(shell.opened_paths().len(), 1);
+    assert_eq!(shell.revealed_paths().len(), 1);
+    assert!(shell.revealed_paths()[0].ends_with("extension"));
 
     // 4. register_browser command
     let reg_result = register_browser(

@@ -93,6 +93,7 @@ fn create_test_app_with_clock(
     let integration = IntegrationService::with_shell(
         data_dir.to_path_buf(),
         data_dir.to_path_buf(),
+        Some(data_dir.join("Downloads")),
         DummyShell,
     );
 

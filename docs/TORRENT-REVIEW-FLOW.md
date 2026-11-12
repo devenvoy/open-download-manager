@@ -289,10 +289,10 @@ and there is nothing to confirm about a download that is under way.
 
 ```bash
 # The flow works, without a network and without a window.
-cd src-tauri && cargo test --features torrent --lib torrent_review_flow_tests
+cd src-tauri && cargo test --lib torrent_review_flow_tests
 
 # The same flow against the public swarm (needs internet, ~20 s).
-cd src-tauri && cargo test --features torrent --lib -- \
+cd src-tauri && cargo test --lib -- \
   --ignored a_confirmed_review_downloads_from_the_real_swarm
 ```
 

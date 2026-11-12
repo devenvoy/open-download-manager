@@ -159,8 +159,15 @@ pub fn run() {
             download_transfer.start_scheduler();
 
             let bridge_data_dir = data_directory.clone();
-            let integration_service =
-                application::integration_service::IntegrationService::new(bridge_data_dir.clone());
+            let resource_directory = app.path().resource_dir().map_err(|error| {
+                std::io::Error::other(format!(
+                    "Could not resolve the application resource directory: {error}"
+                ))
+            })?;
+            let integration_service = application::integration_service::IntegrationService::new(
+                bridge_data_dir.clone(),
+                resource_directory,
+            );
             let bridge_transfer = download_transfer.clone();
             let bridge_settings = settings.settings().clone();
             let integration_for_bridge = integration_service.clone();
@@ -175,17 +182,12 @@ pub fn run() {
 
             // Create torrent service once so bridge and IPC share the same engine.
             let torrents = {
-                #[cfg(feature = "torrent")]
                 {
                     TorrentService::start(
                         app.handle().clone(),
                         data_directory.clone(),
                         default_download_directory.clone(),
                     )
-                }
-                #[cfg(not(feature = "torrent"))]
-                {
-                    TorrentService::disabled()
                 }
             };
 

@@ -14,7 +14,6 @@ pub struct ConnectedBrowser {
     pub browser: String,
     pub name: String,
     pub connected: bool,
-    pub profiles: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,6 +24,8 @@ pub struct IntegrationStatus {
     pub browsers: Vec<BrowserStatus>,
     pub connection_error: Option<String>,
     pub extension_path: String,
+    #[serde(default)]
+    pub extension_available: bool,
     pub integration_path: String,
     pub packaged: bool,
     pub executable: String,
@@ -38,6 +39,7 @@ impl IntegrationStatus {
             browsers: Vec::new(),
             connection_error: Some(message),
             extension_path: String::new(),
+            extension_available: false,
             integration_path: String::new(),
             packaged: false,
             executable: String::new(),

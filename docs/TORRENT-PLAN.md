@@ -30,7 +30,7 @@ This plan adds torrents as a **separate feature island**:
   `CompositeDownloadExecutor`, or the existing renderer download logic.
 
 The engine is `librtbit` from rustTorrent, published on crates.io as
-`swarmforge` (Apache-2.0). It is embedded in-process behind a Cargo feature flag
+`swarmforge` (Apache-2.0). It is embedded in-process
 so it can be disabled or removed without touching the download manager.
 
 ---
@@ -44,7 +44,7 @@ so it can be disabled or removed without touching the download manager.
 | G3 | Seed and leech with visible upload/download speed, peers, seeds, ratio. |
 | G4 | Survive app restart with engine state intact (fastresume). |
 | G5 | Run independently of the download queue and concurrency limiter. |
-| G6 | Keep the torrent subsystem removable via one Cargo feature flag. |
+| G6 | Keep the torrent subsystem isolated so it can be replaced or removed in one place. |
 
 ## 3. Non-goals (this plan)
 
@@ -159,7 +159,7 @@ explicit design review.
 
 | Path | Edit |
 |---|---|
-| `src-tauri/Cargo.toml` | Optional `librtbit` dependency + `torrent` feature. |
+| `src-tauri/Cargo.toml` | The `librtbit` dependency (always compiled). |
 | `src-tauri/src/lib.rs` | Register torrent module, state, commands, setup/exit hooks. |
 | `src-tauri/src/presentation/app_state.rs` | Add one optional `torrents` field. |
 | `src-tauri/src/presentation/window_manager.rs` | Add `open_torrent_window` + label constant. |
@@ -469,7 +469,7 @@ before its predecessor's acceptance criteria pass.
 **Kill criteria:** Windows arm64 cannot build and is required; or installer
 growth exceeds budget; or engine cannot start under Tauri's runtime.
 
-### Phase 1 — Skeleton behind feature flag (4 days)
+### Phase 1 — Isolated skeleton (4 days)
 
 **Tasks**
 
@@ -485,7 +485,7 @@ growth exceeds budget; or engine cannot start under Tauri's runtime.
 
 **Acceptance**
 
-- Build without `torrent` feature is byte-for-byte behaviorally identical.
+- The download manager keeps working when the torrent subsystem is not used.
 - Build with feature opens an empty Torrents window.
 - Engine failure shows an error state, app still works.
 - No changes to download tests.
@@ -628,13 +628,13 @@ Non-blockers confirmed:
 ## 17. Rollout
 
 1. **Feature flag off by default** for the first merged PRs. No user-visible change.
-2. Internal builds with `--features torrent` for dogfooding.
+2. Internal builds for dogfooding.
 3. Beta channel: flag on, Torrents tab visible, "Beta" badge.
 4. Stable: flag on after Phase 6 acceptance.
 5. Kill switch: `torrent-settings.json` → `"enabled": false` disables session
    and UI without a rebuild.
 
-Rollback: remove the feature flag from the build. No download-manager code
+Rollback: remove the torrent subsystem from the build. No download-manager code
 depends on the torrent module.
 
 ---

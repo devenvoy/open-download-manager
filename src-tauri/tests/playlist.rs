@@ -244,7 +244,7 @@ async fn test_playlist_commands_through_app_state() {
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&data_dir)).unwrap();
     let executor = HttpDownloadExecutor::new().unwrap();
     let transfer = DownloadTransferService::new(history.clone(), executor, 2);
-    let integration = IntegrationService::new(data_dir.clone());
+    let integration = IntegrationService::new(data_dir.clone(), data_dir.join("extension"));
     let file_icons = FileIconProvider::new(data_dir.join("FileTypeIcons"));
     let update_client = Arc::new(open_download_manager_lib::infrastructure::updater::GitHubReleaseClient::default_client());
     let updater = UpdateService::new(update_client, "0.1.2", true);

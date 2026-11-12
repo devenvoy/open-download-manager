@@ -15,8 +15,6 @@ pub struct BrowserStatus {
     #[serde(default = "default_setup_state")]
     pub setup_state: String,
     #[serde(default)]
-    pub profiles: usize,
-    #[serde(default)]
     pub icon: String,
     #[serde(default)]
     pub extension_page: String,
@@ -24,6 +22,10 @@ pub struct BrowserStatus {
     pub store_url: Option<String>,
     #[serde(default)]
     pub extension_path: String,
+    #[serde(default)]
+    pub extension_available: bool,
+    #[serde(default)]
+    pub last_seen_ms: Option<u64>,
     #[serde(default = "default_support")]
     pub support: String,
 }

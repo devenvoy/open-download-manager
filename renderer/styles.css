@@ -66,6 +66,26 @@ textarea:focus-visible,
 	white-space: nowrap;
 	flex-shrink: 0;
 }
+/* Beta marker for features that are still settling. */
+.beta-tag {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	padding: 0 4px;
+	border-radius: 7px;
+	background: #d67b1f;
+	color: #fff;
+	font-size: 8px;
+	font-weight: 700;
+	line-height: 13px;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	pointer-events: none;
+}
+.tool {
+	position: relative;
+}
+
 .tool:hover:not(:disabled) {
 	border-color: #99b4d1;
 	background: #e5eff9;

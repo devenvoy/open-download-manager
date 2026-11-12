@@ -5,19 +5,15 @@
 // opens ODM via protocol or file association.
 
 use std::path::PathBuf;
-#[cfg(feature = "torrent")]
 use std::sync::Mutex;
-#[cfg(feature = "torrent")]
 use std::time::{Duration, Instant};
 
-#[cfg(all(feature = "torrent", target_os = "windows"))]
+#[cfg(target_os = "windows")]
 use std::process::Command;
 
 use tauri::AppHandle;
-#[cfg(feature = "torrent")]
 use tauri::{Emitter, Manager};
 
-#[cfg(feature = "torrent")]
 use crate::{
     domain::torrent::TorrentReviewRequest,
     presentation::app_state::AppState,
@@ -27,7 +23,6 @@ pub const MAGNET_SCHEME: &str = "magnet";
 pub const TORRENT_EXTENSION: &str = "torrent";
 
 /// How long a magnet link or .torrent path stays "already handled".
-#[cfg(feature = "torrent")]
 const RECENT_HANDLE_WINDOW: Duration = Duration::from_secs(60);
 
 /// Remembers the magnet links and .torrent paths that were handled recently.
@@ -36,11 +31,9 @@ const RECENT_HANDLE_WINDOW: Duration = Duration::from_secs(60);
 /// launch arguments of a cold start, the single-instance callback of a warm
 /// start, and the deep-link event the plugin derives from `RunEvent::Opened`.
 /// Without this guard the torrent would be added more than once.
-#[cfg(feature = "torrent")]
 static RECENT_HANDLES: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
 
 /// Records the handle and reports whether this is the first time it is seen.
-#[cfg(feature = "torrent")]
 pub fn claim_handle(key: &str) -> bool {
     let Ok(mut recent) = RECENT_HANDLES.lock() else {
         return true;
@@ -94,14 +87,14 @@ pub fn register_torrent_associations() -> Result<(), String> {
     {
         register_windows_associations()?;
     }
-    #[cfg(all(feature = "torrent", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
     {
         register_macos_associations()?;
     }
     Ok(())
 }
 
-#[cfg(all(feature = "torrent", target_os = "windows"))]
+#[cfg(target_os = "windows")]
 fn register_windows_associations() -> Result<(), String> {
     let exe_path = std::env::current_exe()
         .map_err(|e| format!("Could not get executable path: {e}"))?;
@@ -156,17 +149,12 @@ fn register_windows_associations() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(all(feature = "torrent", not(target_os = "windows")))]
+#[cfg(not(target_os = "windows"))]
 #[allow(dead_code)]
 fn register_windows_associations() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(feature = "torrent"))]
-#[allow(dead_code)]
-fn register_windows_associations() -> Result<(), String> {
-    Ok(())
-}
 
 /// Asks LaunchServices to make ODM the default application for the `magnet:`
 /// scheme and for the `.torrent` content type.
@@ -177,7 +165,7 @@ fn register_windows_associations() -> Result<(), String> {
 /// `LSHandlers`, so the OS keeps routing magnet links and `.torrent` files to
 /// whichever app claimed them last. Only an explicit request to
 /// LaunchServices changes that.
-#[cfg(all(feature = "torrent", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 fn register_macos_associations() -> Result<(), String> {
     use block2::RcBlock;
     use objc2_app_kit::NSWorkspace;
@@ -244,7 +232,6 @@ fn register_macos_associations() -> Result<(), String> {
 /// The window drops the pending copy as soon as it receives the event, so a
 /// review is only ever handed out once. The copy stays only when no window was
 /// listening yet, so a window that opens later still finds it.
-#[cfg(feature = "torrent")]
 pub fn deliver_review(
     app: &AppHandle,
     torrents: &crate::application::torrent_service::TorrentService,
@@ -257,7 +244,6 @@ pub fn deliver_review(
 /// Handles magnet links and .torrent files passed as launch arguments.
 /// Adds them in review mode (metadata fetched, no payload yet) and opens the
 /// torrent window so the user can pick files and confirm the download.
-#[cfg(feature = "torrent")]
 pub fn handle_torrent_launch_args(app: &AppHandle, args: &[String]) -> Result<(), String> {
     let torrent_args = extract_torrent_launch_args(args);
     if torrent_args.is_empty() {
@@ -276,7 +262,6 @@ pub fn handle_torrent_launch_args(app: &AppHandle, args: &[String]) -> Result<()
 }
 
 /// Handles a single magnet URL received via deep-link (macOS/Windows).
-#[cfg(feature = "torrent")]
 pub fn handle_torrent_url(app: &AppHandle, url: &str) -> Result<(), String> {
     if !url.starts_with("magnet:") {
         return Ok(());
@@ -297,7 +282,6 @@ pub fn handle_torrent_url(app: &AppHandle, url: &str) -> Result<(), String> {
 }
 
 /// Handles a single .torrent file path received via file open (macOS).
-#[cfg(feature = "torrent")]
 pub fn handle_torrent_file(app: &AppHandle, path: &str) -> Result<(), String> {
     let Some(path) = torrent_file_path(path) else {
         return Ok(());
@@ -326,7 +310,6 @@ pub fn handle_torrent_file(app: &AppHandle, path: &str) -> Result<(), String> {
 ///
 /// macOS reports opened documents as `file://` URLs, while Windows and Linux
 /// pass the plain path.
-#[cfg(feature = "torrent")]
 fn torrent_file_path(raw: &str) -> Option<PathBuf> {
     let trimmed = raw.trim();
     if trimmed.starts_with("file:") {
@@ -338,7 +321,6 @@ fn torrent_file_path(raw: &str) -> Option<PathBuf> {
 }
 
 /// Internal: adds a magnet URL in review mode and emits the review event.
-#[cfg(feature = "torrent")]
 async fn handle_torrent_url_internal(app: &AppHandle<tauri::Wry>, url: &str) -> Result<(), String> {
     let state = match app.try_state::<AppState>() {
         Some(s) => s,
@@ -381,7 +363,6 @@ async fn handle_torrent_url_internal(app: &AppHandle<tauri::Wry>, url: &str) -> 
 }
 
 /// Internal: reads a .torrent file and adds it in review mode, emitting the review event.
-#[cfg(feature = "torrent")]
 async fn handle_torrent_file_internal(app: &AppHandle<tauri::Wry>, path: &str) -> Result<(), String> {
     let state = match app.try_state::<AppState>() {
         Some(s) => s,
@@ -425,24 +406,5 @@ async fn handle_torrent_file_internal(app: &AppHandle<tauri::Wry>, path: &str) -
     Ok(())
 }
 
-#[cfg(not(feature = "torrent"))]
-pub fn deliver_review(
-    _app: &AppHandle,
-    _torrents: &crate::application::torrent_service::TorrentService,
-    _review: crate::domain::torrent::TorrentReviewRequest,
-) {
-}
 
-#[cfg(not(feature = "torrent"))]
-pub fn handle_torrent_launch_args(_app: &AppHandle, _args: &[String]) -> Result<(), String> {
-    Ok(())
-}
-#[cfg(not(feature = "torrent"))]
-pub fn handle_torrent_url(_app: &AppHandle, _url: &str) -> Result<(), String> {
-    Ok(())
-}
 
-#[cfg(not(feature = "torrent"))]
-pub fn handle_torrent_file(_app: &AppHandle, _path: &str) -> Result<(), String> {
-    Ok(())
-}

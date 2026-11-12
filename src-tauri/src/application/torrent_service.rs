@@ -13,7 +13,6 @@ use std::{
 
 // Only used by the feature-enabled implementation (`start`, rate limiting,
 // peer tracking, and the poll loop).
-#[cfg(feature = "torrent")]
 use std::{
     collections::HashSet,
     path::Path,
@@ -29,43 +28,33 @@ use crate::{
     infrastructure::torrent::settings_store::TorrentSettingsStore,
 };
 
-#[cfg(feature = "torrent")]
 const MAX_MAGNET_LENGTH: usize = 16 * 1024;
-#[cfg(feature = "torrent")]
 const MAX_TORRENT_FILE_BYTES: u64 = 32 * 1024 * 1024;
-#[cfg(feature = "torrent")]
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// How many times an add is retried while the engine is still starting.
-#[cfg(feature = "torrent")]
 const ENGINE_READY_ATTEMPTS: usize = 40;
 
 /// Pause between two attempts while the engine is still starting.
-#[cfg(feature = "torrent")]
 const ENGINE_READY_DELAY: Duration = Duration::from_millis(250);
 
 /// How long the engine may take to finish setting a torrent up before the
 /// window gives up on changing its file selection.
-#[cfg(feature = "torrent")]
 const ENGINE_SETTLE_ATTEMPTS: usize = 240;
 
 /// Pause between two attempts while the engine sets a torrent up.
-#[cfg(feature = "torrent")]
 const ENGINE_SETTLE_DELAY: Duration = Duration::from_millis(250);
 
 /// A torrent that receives nothing for this long asks the trackers for new
 /// peers.
-#[cfg(feature = "torrent")]
 const STALE_TRANSFER: Duration = Duration::from_secs(45);
 
 /// Fewer connected peers than this means the torrent needs a fresh peer
 /// list.
-#[cfg(feature = "torrent")]
 const THIN_SWARM: u32 = 10;
 
 /// The shortest time between two re-announces for one torrent. Trackers do
 /// not like being hammered.
-#[cfg(feature = "torrent")]
 const REANNOUNCE_COOLDOWN: Duration = Duration::from_secs(60);
 
 /// Decides whether a torrent should ask the trackers for new peers.
@@ -75,7 +64,6 @@ const REANNOUNCE_COOLDOWN: Duration = Duration::from_secs(60);
 /// than five peers are left, so a torrent that is connected to a handful of
 /// leechers never asks for the seeds. Asking again keeps the torrent in the
 /// swarm.
-#[cfg(feature = "torrent")]
 fn needs_new_peers(peers: u32, stalled: bool, cooled: bool) -> bool {
     if !cooled {
         return false;
@@ -85,7 +73,6 @@ fn needs_new_peers(peers: u32, stalled: bool, cooled: bool) -> bool {
 
 /// What the service remembers about a running torrent to decide whether it
 /// needs new peers.
-#[cfg(feature = "torrent")]
 struct TorrentRefresh {
     last_progress_bytes: u64,
     last_progress_at: std::time::Instant,
@@ -135,11 +122,8 @@ pub struct TorrentService {
     pending_review: RwLock<Option<TorrentReviewRequest>>,
     /// What the service remembers about running torrents, to decide when a
     /// torrent needs new peers.
-    #[cfg(feature = "torrent")]
     peer_refresh: RwLock<std::collections::HashMap<usize, TorrentRefresh>>,
-    #[cfg(feature = "torrent")]
     engine: RwLock<Option<crate::infrastructure::torrent::engine::TorrentEngine>>,
-    #[cfg(feature = "torrent")]
     app: Option<tauri::AppHandle>,
 }
 
@@ -160,11 +144,8 @@ impl TorrentService {
             restart_required: AtomicBool::new(false),
             watching: AtomicUsize::new(0),
             pending_review: RwLock::new(None),
-            #[cfg(feature = "torrent")]
             peer_refresh: RwLock::new(std::collections::HashMap::new()),
-            #[cfg(feature = "torrent")]
             engine: RwLock::new(None),
-            #[cfg(feature = "torrent")]
             app: None,
         })
     }
@@ -174,7 +155,7 @@ impl TorrentService {
     /// The production path is [`TorrentService::start`], which needs a Tauri
     /// application handle. The tests only need the engine, so they use this
     /// constructor instead of building a whole application.
-    #[cfg(all(test, feature = "torrent"))]
+    #[cfg(test)]
     pub fn with_engine(
         data_directory: PathBuf,
         default_download_directory: PathBuf,
@@ -200,7 +181,6 @@ impl TorrentService {
 
     /// Builds the service, loads torrent settings, and starts the engine in the
     /// background so application startup is never blocked by network work.
-    #[cfg(feature = "torrent")]
     pub fn start(
         app: tauri::AppHandle,
         data_directory: PathBuf,
@@ -224,7 +204,6 @@ impl TorrentService {
             restart_required: AtomicBool::new(false),
             watching: AtomicUsize::new(0),
             pending_review: RwLock::new(None),
-            #[cfg(feature = "torrent")]
             peer_refresh: RwLock::new(std::collections::HashMap::new()),
             engine: RwLock::new(None),
             app: Some(app),
@@ -238,20 +217,11 @@ impl TorrentService {
         service
     }
 
-    #[cfg(not(feature = "torrent"))]
-    pub fn start(
-        _app: tauri::AppHandle,
-        _data_directory: PathBuf,
-        _default_download_directory: PathBuf,
-    ) -> Arc<Self> {
-        Self::disabled()
-    }
 
     pub fn status(&self) -> TorrentEngineStatus {
         let settings = self.settings();
         let state = *self.state.read().unwrap();
         let listen_port = {
-            #[cfg(feature = "torrent")]
             {
                 self.engine
                     .read()
@@ -259,13 +229,9 @@ impl TorrentService {
                     .as_ref()
                     .map(|engine| engine.api.api_listen_port())
             }
-            #[cfg(not(feature = "torrent"))]
-            {
-                None
-            }
         };
         TorrentEngineStatus {
-            available: cfg!(feature = "torrent"),
+            available: true,
             enabled: settings.enabled,
             state: state.as_str().to_owned(),
             message: self.message.read().unwrap().clone(),
@@ -298,7 +264,6 @@ impl TorrentService {
     /// different download.
     pub fn take_pending_review(&self) -> Option<TorrentReviewRequest> {
         let review = self.pending_review.write().unwrap().take()?;
-        #[cfg(feature = "torrent")]
         {
             let still_there = self
                 .engine
@@ -320,7 +285,6 @@ impl TorrentService {
     }
 
     pub fn shutdown(&self) {
-        #[cfg(feature = "torrent")]
         {
             let engine = self.engine.write().unwrap().take();
             if let Some(engine) = engine {
@@ -334,7 +298,6 @@ impl TorrentService {
     // Feature-enabled implementation
     // ---------------------------------------------------------------------
 
-    #[cfg(feature = "torrent")]
     fn api(&self) -> AppResult<librtbit::Api> {
         self.engine
             .read()
@@ -344,7 +307,6 @@ impl TorrentService {
             .ok_or_else(|| self.unavailable_error())
     }
 
-    #[cfg(feature = "torrent")]
     fn unavailable_error(&self) -> AppError {
         let state = *self.state.read().unwrap();
         let message = self
@@ -361,7 +323,6 @@ impl TorrentService {
         AppError::torrent_unavailable(message)
     }
 
-    #[cfg(feature = "torrent")]
     fn set_state(&self, state: EngineState, message: Option<String>) {
         *self.state.write().unwrap() = state;
         *self.message.write().unwrap() = message;
@@ -371,7 +332,6 @@ impl TorrentService {
         }
     }
 
-    #[cfg(feature = "torrent")]
     async fn start_engine(self: &Arc<Self>) -> AppResult<()> {
         let settings = self.settings();
         if !settings.enabled {
@@ -403,7 +363,6 @@ impl TorrentService {
         }
     }
 
-    #[cfg(feature = "torrent")]
     async fn stop_engine(&self) {
         let engine = self.engine.write().unwrap().take();
         if let Some(engine) = engine {
@@ -417,14 +376,12 @@ impl TorrentService {
         self.set_state(next, None);
     }
 
-    #[cfg(feature = "torrent")]
     pub async fn restart_engine(self: &Arc<Self>) -> AppResult<()> {
         self.stop_engine().await;
         self.restart_required.store(false, Ordering::SeqCst);
         self.start_engine().await
     }
 
-    #[cfg(feature = "torrent")]
     pub fn list(&self) -> AppResult<Vec<TorrentListItem>> {
         let api = self.api()?;
         let response = api.api_torrent_list_ext(librtbit::api::ApiTorrentListOpts {
@@ -434,7 +391,6 @@ impl TorrentService {
         Ok(response.torrents.iter().map(map_list_item).collect())
     }
 
-    #[cfg(feature = "torrent")]
     pub async fn add_magnet(
         &self,
         magnet: String,
@@ -458,7 +414,6 @@ impl TorrentService {
     }
 
     /// Adds a .torrent payload, waiting for the engine to finish starting.
-    #[cfg(feature = "torrent")]
     pub async fn add_file_bytes_when_ready(
         &self,
         bytes: Vec<u8>,
@@ -486,7 +441,6 @@ impl TorrentService {
     /// while the app is still starting would otherwise be rejected. Only
     /// errors that happen while the engine is starting are retried; every
     /// other failure is final and reported to the caller.
-    #[cfg(feature = "torrent")]
     pub async fn add_magnet_when_ready(
         &self,
         magnet: String,
@@ -508,7 +462,6 @@ impl TorrentService {
         ))
     }
 
-    #[cfg(feature = "torrent")]
     pub async fn add_file(
         &self,
         path: String,
@@ -541,7 +494,6 @@ impl TorrentService {
     }
 
     /// Adds a .torrent payload fetched by the browser bridge.
-    #[cfg(feature = "torrent")]
     pub async fn add_file_bytes(
         &self,
         bytes: Vec<u8>,
@@ -558,7 +510,6 @@ impl TorrentService {
             .await
     }
 
-    #[cfg(feature = "torrent")]
     async fn add(
         &self,
         api: librtbit::Api,
@@ -621,7 +572,6 @@ impl TorrentService {
         })
     }
 
-    #[cfg(feature = "torrent")]
     pub async fn action(&self, id: usize, action: TorrentAction) -> AppResult<()> {
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
@@ -646,7 +596,6 @@ impl TorrentService {
             .map_err(|error| AppError::torrent(format!("{error:#}")))
     }
 
-    #[cfg(feature = "torrent")]
     pub async fn set_files(&self, id: usize, included: Vec<usize>) -> AppResult<()> {
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
@@ -683,7 +632,6 @@ impl TorrentService {
     ///
     /// The connected peers are only a handful of the swarm, so the tracker
     /// numbers are what shows whether a torrent is worth waiting for.
-    #[cfg(feature = "torrent")]
     pub fn tracker_status(&self, id: usize) -> AppResult<Vec<TorrentTrackerStatus>> {
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
@@ -704,7 +652,6 @@ impl TorrentService {
             .collect())
     }
 
-    #[cfg(feature = "torrent")]
     pub fn files(&self, id: usize) -> AppResult<Vec<TorrentFileItem>> {
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
@@ -718,7 +665,6 @@ impl TorrentService {
         Ok(map_files(&details, &progress))
     }
 
-    #[cfg(feature = "torrent")]
     pub fn update_settings(
         self: &Arc<Self>,
         next: TorrentSettings,
@@ -756,7 +702,6 @@ impl TorrentService {
         Ok(next)
     }
 
-    #[cfg(feature = "torrent")]
     fn spawn_poller(self: &Arc<Self>) {
         let Some(app) = self.app.clone() else {
             return;
@@ -795,7 +740,6 @@ impl TorrentService {
     ///
     /// Asking for a re-announce when the transfer stops or the peer list
     /// runs thin keeps the torrent in the swarm.
-    #[cfg(feature = "torrent")]
     fn refresh_peers(&self, list: &[TorrentListItem]) {
         let Ok(api) = self.api() else {
             return;
@@ -832,100 +776,24 @@ impl TorrentService {
     // registration and AppState do not need conditional compilation.
     // ---------------------------------------------------------------------
 
-    #[cfg(not(feature = "torrent"))]
-    fn unavailable_error(&self) -> AppError {
-        AppError::torrent_unavailable(
-            "This build does not include BitTorrent support. Rebuild with --features torrent.",
-        )
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub fn list(&self) -> AppResult<Vec<TorrentListItem>> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn add_magnet(
-        &self,
-        _magnet: String,
-        _options: TorrentAddOptions,
-    ) -> AppResult<TorrentAddResult> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn add_file(
-        &self,
-        _path: String,
-        _options: TorrentAddOptions,
-    ) -> AppResult<TorrentAddResult> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn add_file_bytes(
-        &self,
-        _bytes: Vec<u8>,
-        _options: TorrentAddOptions,
-    ) -> AppResult<TorrentAddResult> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn add_magnet_when_ready(
-        &self,
-        _magnet: String,
-        _options: TorrentAddOptions,
-    ) -> AppResult<TorrentAddResult> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn add_file_bytes_when_ready(
-        &self,
-        _bytes: Vec<u8>,
-        _options: TorrentAddOptions,
-    ) -> AppResult<TorrentAddResult> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn action(&self, _id: usize, _action: TorrentAction) -> AppResult<()> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn set_files(&self, _id: usize, _included: Vec<usize>) -> AppResult<()> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub fn tracker_status(&self, _id: usize) -> AppResult<Vec<TorrentTrackerStatus>> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub fn files(&self, _id: usize) -> AppResult<Vec<TorrentFileItem>> {
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub fn update_settings(self: &Arc<Self>, next: TorrentSettings) -> AppResult<TorrentSettings> {
-        next.validate().map_err(AppError::invalid_settings)?;
-        Err(self.unavailable_error())
-    }
 
-    #[cfg(not(feature = "torrent"))]
-    pub async fn restart_engine(self: &Arc<Self>) -> AppResult<()> {
-        Err(self.unavailable_error())
-    }
 }
 
 /// Parses the peer addresses a caller wants the engine to try first.
 ///
 /// An empty list means "no preference", so it is reported as `None` instead of
 /// an empty peer set, which the engine would treat as "no way to find peers".
-#[cfg(feature = "torrent")]
 fn parse_initial_peers(
     peers: Option<&[String]>,
 ) -> AppResult<Option<Vec<std::net::SocketAddr>>> {
@@ -950,7 +818,6 @@ fn parse_initial_peers(
     }
 }
 
-#[cfg(feature = "torrent")]
 fn map_files(
     details: &librtbit::api::TorrentDetailsResponse,
     progress: &[u64],
@@ -981,7 +848,6 @@ fn map_files(
 /// live"), so the caller has to know the state before it asks for a resume.
 /// `api_torrent_details` does not carry the stats, so the state comes from
 /// `api_stats_v1`.
-#[cfg(feature = "torrent")]
 fn is_live(api: &librtbit::Api, id: usize) -> bool {
     let target = librtbit::api::TorrentIdOrHash::Id(id);
     api.api_stats_v1(target)
@@ -994,7 +860,6 @@ fn is_live(api: &librtbit::Api, id: usize) -> bool {
 /// While a torrent initializes, the engine refuses to change the file
 /// selection or to start it. A magnet resolves its metadata in the
 /// background, so the window can act before the engine is ready.
-#[cfg(feature = "torrent")]
 async fn wait_until_settled(api: &librtbit::Api, id: usize) -> AppResult<()> {
     let target = librtbit::api::TorrentIdOrHash::Id(id);
     for _ in 0..ENGINE_SETTLE_ATTEMPTS {
@@ -1012,7 +877,6 @@ async fn wait_until_settled(api: &librtbit::Api, id: usize) -> AppResult<()> {
     ))
 }
 
-#[cfg(feature = "torrent")]
 fn map_list_item(details: &librtbit::api::TorrentDetailsResponse) -> TorrentListItem {    let stats = details.stats.as_ref();
     let live = stats.and_then(|stats| stats.live.as_ref());
     let progress_bytes = stats.map(|stats| stats.progress_bytes).unwrap_or(0);
@@ -1072,7 +936,7 @@ fn map_list_item(details: &librtbit::api::TorrentDetailsResponse) -> TorrentList
 // silently break the confirmation again.
 // ---------------------------------------------------------------------------
 
-#[cfg(all(test, feature = "torrent"))]
+#[cfg(test)]
 mod peer_refresh_tests {
     use super::{needs_new_peers, THIN_SWARM};
 
@@ -1102,7 +966,7 @@ mod peer_refresh_tests {
     }
 }
 
-#[cfg(all(test, feature = "torrent"))]
+#[cfg(test)]
 mod engine_contract_tests {
     use std::collections::HashSet;
     use std::path::PathBuf;

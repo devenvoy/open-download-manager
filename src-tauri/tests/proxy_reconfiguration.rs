@@ -88,6 +88,7 @@ fn create_test_app(data_dir: &Path) -> tauri::App<tauri::test::MockRuntime> {
     let integration = IntegrationService::with_shell(
         data_dir.to_path_buf(),
         data_dir.to_path_buf(),
+        Some(data_dir.join("Downloads")),
         DummyShell,
     );
 

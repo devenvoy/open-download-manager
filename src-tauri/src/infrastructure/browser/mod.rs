@@ -7,17 +7,22 @@
 // Description: Browser detection and native messaging manifest registration implementations.
 
 pub mod advanced_adapter;
+pub mod connection;
+pub mod contact;
+pub mod delivery;
 pub mod registration;
 pub mod scanner;
 
 pub use advanced_adapter::{AdvancedIntegrationPlatformAdapter, PlatformAdvancedAdapter};
+pub use connection::{BrowserConnectionState, FRESH_CONTACT_MS};
+pub use contact::BrowserContact;
 pub use registration::{
     browser_native_messaging_dir, create_manifest, register_browser_manifest,
     sync_browser_manifests, unregister_browser_manifest, BrowserType, NativeHostManifest,
     NATIVE_HOST_NAME,
 };
 pub use scanner::{
-    find_browser_executable, is_store_browser, launch_browser, prepare_chrome_extension,
-    prepare_firefox_extension, resolve_host_exe, resolve_integration_root, scan_browsers,
-    EXTENSION_ID, FIREFOX_EXTENSION_ID, STORE_URL,
+    extension_dir_for, find_browser_executable, is_store_browser, launch_browser,
+    resolve_host_exe, scan_browsers, user_downloads_dir, user_extension_dir, EXTENSION_ID,
+    FIREFOX_EXTENSION_ID, STORE_URL,
 };

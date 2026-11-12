@@ -163,19 +163,29 @@ $("#add-directory").closest(".form-line").after(rememberLabel);
 let integrationBrowsers = [],
 	selectedBrowserName = null,
 	setupPolling = false;
+// The connection states reported by the backend:
+//   connected     the extension talked to the app
+//   setup-needed  the browser is installed, the extension never talked
+//   disconnected  the extension was removed or disabled
+//   not-installed the browser is not on this computer
 const browserStatus = (browser) =>
-	browser.connected
-		? ["Connected", "connected"]
-		: !browser.installed
-			? ["Not installed", "missing"]
-			: browser.setupState === "approval"
-				? ["Enable extension", "setup"]
-				: browser.setupState === "disabled"
-					? ["Disabled", "setup"]
-					: browser.setupState === "removed"
-						? ["Reinstall needed", "setup"]
-						: ["Setup needed", "setup"];
+	browser.setupState === "not-installed"
+		? ["Not installed", "missing"]
+		: browser.setupState === "connected"
+			? ["Connected", "connected"]
+			: browser.setupState === "disconnected"
+				? ["Disconnected", "setup"]
+				: ["Setup needed", "setup"];
 const storeFallback = element("button", "button", "Install from Web Store");
+function lastSeenLabel(lastSeenMs) {
+	if (!lastSeenMs) return "Connected";
+	const minutes = Math.max(0, Math.round((Date.now() - lastSeenMs) / 60000));
+	if (minutes < 1) return "Connected just now";
+	if (minutes < 60) return `Connected ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+	const hours = Math.round(minutes / 60);
+	if (hours < 24) return `Connected ${hours} hour${hours === 1 ? "" : "s"} ago`;
+	return `Connected ${Math.round(hours / 24)} day${Math.round(hours / 24) === 1 ? "" : "s"} ago`;
+}
 storeFallback.type = "button";
 storeFallback.id = "browser-store-action";
 $("#browser-primary-action").after(storeFallback);
@@ -209,14 +219,12 @@ function renderBrowserGrid(info) {
 		card.dataset.browser = browser.name;
 		const copy = element("span", "browser-card-copy");
 		const subtitle = browser.connected
-			? `Connected in ${browser.profiles || 1} profile${browser.profiles === 1 ? "" : "s"}`
-			: browser.setupState === "approval"
-				? "Downloaded; waiting for your approval"
-				: browser.setupState === "disabled"
-					? "Enable it in your browser"
-					: browser.setupState === "removed"
-						? "Previously removed from this browser"
-						: "Extension not detected";
+			? lastSeenLabel(browser.lastSeenMs)
+			: browser.setupState === "disconnected"
+				? "Extension removed or disabled"
+				: browser.setupState === "not-installed"
+					? "Browser is not installed"
+					: "Extension not detected";
 		copy.append(
 			element("strong", "", browser.name),
 			element("span", "browser-card-subtitle", subtitle),
@@ -311,63 +319,54 @@ function showBrowserDetail(name) {
 	const primary = $("#browser-primary-action");
 	primary.disabled = !browser.installed;
 	primary.dataset.browser = browser.name;
-	const enableExisting = ["approval", "disabled"].includes(
-		browser.setupState,
-	);
-	primary.dataset.action =
-		browser.storeUrl && !enableExisting && !browser.connected
-			? "store"
-			: browser.name === "Firefox"
-				? "prepare"
-				: "open";
+	primary.dataset.action = browser.storeUrl && !browser.connected
+		? "store"
+		: browser.name === "Firefox"
+			? "prepare"
+			: "open";
 	primary.textContent =
 		primary.dataset.action === "store"
-			? browser.setupState === "removed"
-				? "Reinstall extension"
-				: "Install browser extension"
+			? "Install browser extension"
 			: `Open ${browser.name}`;
 	storeFallback.hidden =
 		!browser.storeUrl || primary.dataset.action === "store";
+	const download = $("#browser-download-action");
+	download.hidden = Boolean(browser.storeUrl);
+	download.dataset.browser = browser.name;
+	download.disabled = !browser.installed;
+	const disconnected = browser.setupState === "disconnected";
 	$("#browser-detail-summary").textContent = browser.connected
-		? "The extension and desktop connector are ready. Refresh an existing video tab if its download button is missing."
-		: browser.setupState === "removed"
-			? `${browser.name} remembers an earlier removal and will not add this extension automatically. Reinstall it from the official store to reconnect.`
-			: browser.setupState === "approval"
-				? `${browser.name} has downloaded the extension. Enable it in the browser to finish setup.`
-				: browser.setupState === "disabled"
-					? `The extension is installed but disabled. Enable it in ${browser.name} to reconnect.`
-					: "Complete this one-time setup for this browser. If you just installed the app, fully close and reopen this browser to see its extension approval prompt.";
+		? `The extension and desktop connector are ready. ${lastSeenLabel(browser.lastSeenMs)}. Refresh an existing video tab if its download button is missing.`
+		: disconnected
+			? `The extension in ${browser.name} was removed or disabled. Load it again to reconnect.`
+			: browser.setupState === "not-installed"
+				? `${browser.name} is not installed on this computer.`
+				: "Download the extension, then load it in the browser to connect.";
 	const steps = $("#browser-steps");
 	steps.replaceChildren();
-	const texts =
-		browser.storeUrl && (enableExisting || browser.connected)
+	const texts = browser.storeUrl
+		? [
+				`Click Install browser extension to open the official Chrome Web Store listing in this browser.`,
+				"Click Add to Chrome (or the equivalent button in your browser), then confirm the installation.",
+				"The desktop connector is prepared automatically. Return here and click Refresh, then reload your video page.",
+			]
+		: browser.name === "Firefox"
 			? [
-					`Click Open ${browser.name}. Use the browser's Action required menu to enable Open Download Manager Integration if that prompt is shown.`,
-					`Otherwise, enter ${browser.extensionPage} in the address bar and enable Open Download Manager Integration.`,
-					"Return here and click Refresh, then reload your video page. If the extension is missing, use Install from Web Store.",
+					"Click Download extension. The extension is saved in your Downloads folder and the folder opens in Finder.",
+					"Click Open Firefox. Open Download Manager registers its local connector and opens Firefox.",
+					`Enter ${browser.extensionPage} in Firefox's address bar.`,
+					"On the Firefox page, select This Firefox, then Load Temporary Add-on.",
+					"Choose manifest.json inside the extension folder shown below.",
+					"Return here, click Refresh, then reload your video page.",
 				]
-			: browser.storeUrl
-				? [
-						`Click ${browser.setupState === "removed" ? "Reinstall extension" : "Install browser extension"} to open the official Chrome Web Store listing in this browser.`,
-						"Click Add to Chrome (or the equivalent button in your browser), then confirm the installation.",
-						"The desktop connector is prepared automatically. Return here and click Refresh, then reload your video page.",
-					]
-				: browser.name === "Firefox"
-					? [
-							"Click Open Firefox. Open Download Manager prepares the Firefox extension, registers its local connector, and opens Firefox.",
-							`Enter ${browser.extensionPage} in Firefox's address bar.`,
-							"On the Firefox page, select This Firefox, then Load Temporary Add-on.",
-							"Choose manifest.json inside the extension folder shown below.",
-							"Return here, click Refresh, then reload your video page.",
-						]
-					: [
-							`Click Open ${browser.name}.`,
-							`Enter ${browser.extensionPage} in ${browser.name}'s address bar.`,
-							"Turn on Developer mode on the Extensions page.",
-							"Choose Load unpacked. In the Windows folder picker, paste the extension folder path shown below into the address bar.",
-							"Select the extension folder itself, then return here and click Refresh.",
-							"Reload your video page. The Download this video button should appear when playable media is detected.",
-						];
+			: [
+					"Click Download extension. The extension is saved in your Downloads folder and the folder opens in Finder.",
+					`Click Open ${browser.name}.`,
+					`Enter ${browser.extensionPage} in ${browser.name}'s address bar.`,
+					"Turn on Developer mode on the Extensions page.",
+					"Choose Load unpacked and select the extension folder shown below.",
+					"Return here and click Refresh. The browser shows as Connected once the extension answers.",
+				];
 	for (const text of texts) steps.append(element("li", "", text));
 	document.querySelector(".extension-path-label").hidden = Boolean(
 		browser.storeUrl,
@@ -399,6 +398,10 @@ async function runBrowserSetup(action, browserName = selectedBrowserName) {
 			});
 		} else await call("browserSetup", { action, browser: browserName });
 		if (action === "copy") notify("Extension folder path copied.");
+		if (action === "download") {
+			notify("Extension saved in your Downloads folder.");
+			await refreshIntegrationInfo();
+		}
 	} catch (problem) {
 		error.textContent = messageOf(problem);
 		error.hidden = false;
@@ -423,6 +426,9 @@ $("#copy-extension-path").addEventListener("click", () =>
 );
 $("#show-extension-folder").addEventListener("click", () =>
 	runBrowserSetup("folder"),
+);
+$("#browser-download-action").addEventListener("click", (event) =>
+	runBrowserSetup("download", event.currentTarget.dataset.browser),
 );
 async function refreshIntegrationInfo(showErrors = false) {
 	if (setupPolling) return;
@@ -477,7 +483,8 @@ $("#advanced-disable-button")?.addEventListener("click", async () => {
 });
 const setupPoll = setInterval(() => {
 	if (integrationMode) refreshIntegrationInfo();
-}, 3000);
+	else refreshIntegrationBadge();
+}, integrationMode ? 3000 : 5000);
 window.addEventListener("beforeunload", () => clearInterval(setupPoll));
 const completionActions = element("div", "transfer-buttons");
 completionActions.id = "download-complete-actions";
@@ -842,18 +849,34 @@ function render() {
 		`${visibleDownloads.length} ${visibleDownloads.length === 1 ? "download" : "downloads"}${state.downloads.length !== visibleDownloads.length ? ` of ${state.downloads.length}` : ""} (${complete} completed)`;
 	$("#status-summary").textContent =
 		`${bytes(state.downloads.reduce((sum, d) => sum + numeric(d.speed), 0))}/sec`;
+	updateIntegrationButton();
+	updateControls();
+	if ($("#details-dialog").open) renderDetails();
+	if ($("#scheduler-dialog").open) renderScheduler();
+}
+function updateIntegrationButton() {
 	const integrationButton = $("#integration-button"),
+		installed = (state.integration?.browsers || []).filter(
+			(browser) => browser.installed,
+		).length,
+		// Only nag when a browser is installed and none of them is connected.
 		needsBrowser =
 			Boolean(state.integration?.packaged) &&
+			installed > 0 &&
 			!state.integration?.connectedBrowsers?.length;
 	integrationButton.classList.toggle("needs-attention", needsBrowser);
 	integrationButton.title = needsBrowser
 		? "No browser integration is connected. Click to set it up."
 		: "Browser Integration";
 	integrationButton.setAttribute("aria-label", integrationButton.title);
-	updateControls();
-	if ($("#details-dialog").open) renderDetails();
-	if ($("#scheduler-dialog").open) renderScheduler();
+}
+async function refreshIntegrationBadge() {
+	try {
+		const info = await call("integration");
+		if (!info) return;
+		state.integration = info;
+		updateIntegrationButton();
+	} catch {}
 }
 async function performAction(d, action) {
 	if (!d || pending.has(d.id)) return;
