@@ -10,6 +10,8 @@
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: fix(browser): sync native messaging host manifests on startup
 // Reason: feat(window): register resize_auxiliary_window for runtime content fitting
+// Last updated: 2026-11-12
+// Reason: fix(tray): register the command that sets the active download count
 // Description: Core Tauri library initialization registering IPC command handlers, application state, and window lifecycle.
 
 use application::{
@@ -38,6 +40,7 @@ use presentation::{
         update_settings, validate_directory,
     },
     download_event_publisher::TauriDownloadEventPublisher,
+    tray::tray_set_active_downloads,
     window_manager::{
         close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
         open_progress_window, open_scheduler_window, open_torrent_window, resize_auxiliary_window,
@@ -467,6 +470,7 @@ pub fn run() {
             torrent_restart_engine,
             torrent_take_review,
             torrent_tracker_status,
+            tray_set_active_downloads,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Open Download Manager")

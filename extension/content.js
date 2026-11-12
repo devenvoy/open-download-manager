@@ -2,6 +2,8 @@
 // Reason: Initial public release
 // Last updated: 2026-11-08
 // Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-12
+// Reason: fix(extension): stop offering the page as a video and leave the browser alone on decline
 // Description: Content script injected into web pages to detect HTML5 video elements and render media download overlay buttons.
 
 (() => {
@@ -14,7 +16,10 @@
   const observedRoots = new WeakSet();
   const listeners = new AbortController();
   const resizeObserver = new ResizeObserver(() => position());
-  const direct = value => { try { const u = new URL(value, location.href); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
+  // An empty or missing source must not resolve to the page URL: `new URL('',
+  // location.href)` is the page itself, and that would offer the page as a
+  // downloadable video.
+  const direct = value => { if (typeof value !== 'string' || !value.trim()) return null; try { const u = new URL(value, location.href); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
   const PANEL_CSS = ':host{font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a}.bar{display:flex;justify-content:flex-end;align-items:stretch}.download,.dismiss{font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f8fafc;color:#0f172a;border:1px solid #cbd5e1;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);height:27px;box-sizing:border-box}.download{border-radius:4px 0 0 4px;padding:3px 10px;font-weight:500}.dismiss{width:24px;padding:0;border-left:0;border-radius:0 4px 4px 0;font-size:15px;line-height:22px;color:#64748b}.download:hover,.dismiss:hover{background:#f1f5f9}.dismiss:hover{color:#b91c1c}.download:disabled{opacity:.6;cursor:not-allowed}.chooser{position:fixed;background:#ffffff;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;width:min(420px,calc(100vw - 12px));box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 3px rgba(0,0,0,0.08);max-height:min(360px,60vh);overflow-y:auto;overflow-x:hidden;box-sizing:border-box;font-family:inherit;z-index:2147483647}.chooser p,.hint{margin:0;padding:8px 12px;font-size:11px;font-weight:500;color:#475569;border-bottom:1px solid #f1f5f9;line-height:1.4}.section-label{padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;background:#f8fafc;border-bottom:1px solid #f1f5f9}.row{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid #f1f5f9;padding:7px 12px;cursor:pointer;box-sizing:border-box;font-family:inherit;color:inherit;transition:background .08s ease}.row:hover:not(:disabled),.row:focus-visible{background:#f1f5f9;outline:1px solid #0284c7;outline-offset:-1px}.row:disabled{opacity:.45;cursor:not-allowed}.row-left{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.row-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.badge-quality{display:inline-block;padding:1px 5px;font-size:10px;font-weight:700;border-radius:3px;line-height:1.3;text-transform:uppercase;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}.badge-4k,.badge-2k,.badge-fhd{background:#e0f2fe;color:#0369a1;border-color:#7dd3fc}.badge-hd{background:#f0fdf4;color:#15803d;border-color:#86efac}.badge-audio{background:#fef3c7;color:#92400e;border-color:#fde68a}.tag-format{font-size:11px;font-weight:600;color:#0f172a}.meta-sub{font-size:11px;color:#64748b}.row-title{font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px}.row-right{display:flex;align-items:center;margin-left:8px;flex-shrink:0}.action-btn{font-size:13px;color:#64748b;font-weight:600}.row:hover:not(:disabled) .action-btn,.row:focus-visible .action-btn{color:#0284c7}@media(prefers-color-scheme:dark){:host{color:#f4f4f5}.download,.dismiss{background:#27272a;color:#f4f4f5;border-color:#3f3f46;box-shadow:0 1px 3px rgba(0,0,0,0.3)}.download:hover,.dismiss:hover{background:#3f3f46}.dismiss{color:#a1a1aa}.dismiss:hover{color:#f87171}.chooser{background:#18181b;color:#f4f4f5;border-color:#27272a;box-shadow:0 8px 24px rgba(0,0,0,0.45)}.chooser p,.hint{color:#a1a1aa;border-bottom-color:#27272a}.section-label{color:#71717a;background:#202023;border-bottom-color:#27272a}.row{border-bottom-color:#27272a;color:#f4f4f5}.row:hover:not(:disabled),.row:focus-visible{background:#27272a;outline-color:#38bdf8}.row-title{color:#a1a1aa}.badge-quality{background:#27272a;color:#e4e4e7;border-color:#3f3f46}.badge-fhd,.badge-4k,.badge-2k{background:#082f49;color:#7dd3fc;border-color:#0369a1}.badge-hd{background:#052e16;color:#86efac;border-color:#166534}.badge-audio{background:#451a03;color:#fcd34d;border-color:#92400e}.tag-format{color:#f4f4f5}.meta-sub{color:#71717a}.action-btn{color:#71717a}.row:hover:not(:disabled) .action-btn,.row:focus-visible .action-btn{color:#38bdf8}}';
   function shutdown() {
     if(stopped)return;
@@ -431,7 +436,7 @@
           const isBlob = directSrc && directSrc.startsWith('blob:');
           const notice = isBlob
             ? 'Play the video briefly to capture the stream. Modern players load stream chunks after playback starts.'
-            : (result.notice || (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No downloadable formats found. Play the video briefly to capture the stream, or this player may require DRM.'));
+            : (youtube ? 'Play the video briefly, then reopen this menu. No complete video with audio has been captured yet.' : 'No downloadable formats found. Play the video briefly to capture the stream, or this player may require DRM.');
           hint.textContent = notice;
           return;
         }
@@ -611,11 +616,14 @@
     const target = torrentHandoff(event);
     if (!target) return;
     const label = target.kind === 'magnet' ? 'magnet link' : '.torrent download';
-    event.preventDefault();
-    event.stopPropagation();
     let confirmed = false;
     try { confirmed = globalThis.confirm?.(`Open this ${label} with Open Download Manager?`) === true; } catch {}
+    // The default action is only cancelled when the user agrees. Declining has
+    // to leave the browser alone, otherwise the magnet or the file is blocked
+    // everywhere and never opens.
     if (!confirmed) return;
+    event.preventDefault();
+    event.stopPropagation();
     send({action: 'torrent', ...target})
       .then(response => {
         if (!response?.ok) throw new Error(response?.error || 'The desktop app did not accept it.');

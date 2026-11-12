@@ -2,6 +2,8 @@
 // Reason: extension: keep raw URLs out of quality-row tooltips and add #6 regression coverage
 // Last updated: 2026-11-07
 // Reason: feat(media): modularize download executors, enable native multi-track streaming, and fix progress UX
+// Last updated: 2026-11-12
+// Reason: test(extension): a declined magnet confirmation no longer blocks the browser
 // Description: Regression tests verifying multi-video panels, SPA navigations, shadow DOM discovery, and keyboard focus.
 
 // Regression coverage for issue #6: multi-video pages, nested scrolling, SPA
@@ -304,6 +306,6 @@ test('declining the magnet confirmation leaves the browser alone', async () => {
   const before = (h.sent || []).length;
   for (const fn of h.documentListeners.click || []) fn({ target: anchor, button: 0, preventDefault() { prevented += 1; }, stopPropagation() {} });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(prevented, 1, 'navigation is blocked while the user decides');
+  assert.equal(prevented, 0, 'navigation is not blocked when the user declines');
   assert.equal((h.sent || []).length, before, 'nothing is sent without confirmation');
 });

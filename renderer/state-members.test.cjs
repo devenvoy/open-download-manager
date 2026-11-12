@@ -12,7 +12,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-const RENDERER_DIR = __dirname;
+// The renderer and the extension share the same bug class.
+const SOURCE_DIRS = [__dirname, path.join(__dirname, "..", "extension")];
 
 // Members that every object inherits. They are never declared in a literal.
 const INHERITED = new Set([
@@ -77,10 +78,14 @@ function hasComputedWrite(src, name) {
 }
 
 function readOnlyFiles() {
-	return fs
-		.readdirSync(RENDERER_DIR)
-		.filter(file => file.endsWith(".js"))
-		.map(file => path.join(RENDERER_DIR, file));
+	const files = [];
+	for (const dir of SOURCE_DIRS) {
+		for (const file of fs.readdirSync(dir)) {
+			if (!file.endsWith(".js")) continue;
+			files.push(path.join(dir, file));
+		}
+	}
+	return files;
 }
 
 test("every object literal member that is read is declared", () => {
@@ -97,7 +102,7 @@ test("every object literal member that is read is declared", () => {
 				if (declared.has(key)) continue;
 				const line = src.slice(0, member.index).split("\n").length;
 				problems.push(
-					`${path.basename(file)}:${line} ${name}.${key} is read but never declared`,
+					`${path.basename(path.dirname(file))}/${path.basename(file)}:${line} ${name}.${key} is read but never declared`,
 				);
 			}
 		}

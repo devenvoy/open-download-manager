@@ -2,6 +2,8 @@
 // Reason: Initial public release
 // Last updated: 2026-11-08
 // Reason: feat(browser): add configurable context menu actions & file capture rules (#29)
+// Last updated: 2026-11-12
+// Reason: test(extension): cover the player cache across tab navigations
 // Description: Unit tests verifying background service worker download interception, tab caching, and native messaging handoff.
 
 const test=require('node:test');
@@ -78,6 +80,17 @@ test('YouTube menu uses captured player formats without a desktop discovery requ
  assert.equal(h.nativeRequests[0].url,base+137);assert.equal(h.nativeRequests[0].audioUrl,base+140);
  const other=await h.request({action:'listForFrame'},{...sender,tab:{...sender.tab,url:'https://www.youtube.com/watch?v=abcdefghijk'}});
  assert.equal(other.items.length,0);
+});
+test('navigating another tab keeps the captured player for the running video',async()=>{
+  const h=harness(),first={id:'extension-id',tab:{id:7,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
+  const other={id:'extension-id',tab:{id:8,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};
+  const base='https://r1.googlevideo.com/videoplayback?id=asset&expire=9999999999&itag=';
+  await h.request({action:'playerResponse',data:{videoId:'wLdZWyLOJCI',title:'Captured',formats:[{itag:137,url:base+137,mimeType:'video/mp4',height:1080},{itag:140,url:base+140,mimeType:'audio/mp4'}]}},first);
+  assert.ok((await h.request({action:'listForFrame'},other)).items.length>0,'the second tab resolves the player by video id');
+  // An unrelated tab navigates. That must not empty the video id cache.
+  await h.events.updated(9,{status:'loading'});
+  const after=(await h.request({action:'listForFrame'},other)).items;
+  assert.ok(after.length>0,'the captured player survives another tab navigating');
 });
 test('captured SABR request context is handed to the desktop with the selected tracks',async()=>{
  const h=harness(),sender={id:'extension-id',tab:{id:8,url:'https://www.youtube.com/watch?v=wLdZWyLOJCI'}};

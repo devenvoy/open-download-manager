@@ -2,6 +2,8 @@
 // Reason: Initial public release
 // Last updated: 2026-11-08
 // Reason: feat(media): expand browser media panel and adaptive stream support (Closes #37)
+// Last updated: 2026-11-12
+// Reason: fix(extension): keep the player cache, the session store and the download interceptor safe
 // Description: Extension service worker managing browser download interception, context menus, and native messaging communication.
 
 /* Downloads require extension UI messages; page player metadata is bounded and sanitized. */
@@ -85,7 +87,7 @@ async function sabrCapture(tabId){
   if(live)return live;
   await serial;
   try{
-    const data=await api.storage.session.get(SABR_KEY),stored=data[SABR_KEY]?.[tabId];
+    const data=await sessionGet(SABR_KEY),stored=data[SABR_KEY]?.[tabId];
     if(stored&&typeof stored.url==='string'&&typeof stored.requestBody==='string'){
       const capture={...stored,tabId};youtubeSabrObserved.set(tabId,capture);return capture;
     }
@@ -257,15 +259,28 @@ async function enqueue(item, tabId) {
     requestHeaders
   });
 }
+// `chrome.storage.session` only exists from Chrome 102 and Firefox 115 on.
+// Older browsers have no session store, so the cache falls back to an empty
+// map instead of throwing inside the service worker.
+async function sessionGet(key){
+  const store = api.storage && api.storage.session;
+  if(!store) return {};
+  try { return await store.get(key); } catch { return {}; }
+}
+async function sessionSet(value){
+  const store = api.storage && api.storage.session;
+  if(!store) return;
+  try { await store.set(value); } catch {}
+}
 function updateSession(key,change) {
   const next = serial.then(async () => {
-    const data = await api.storage.session.get(key);
+    const data = await sessionGet(key);
     const map = data[key] || {};
     await change(map);
     // Bound total tracked tabs as well as each tab's results.
     const keys = Object.keys(map);
     keys.slice(0, Math.max(0, keys.length - 50)).forEach(entry => delete map[entry]);
-    await api.storage.session.set({[key]: map});
+    await sessionSet({[key]: map});
   });
   serial = next.catch(() => {});
   return next;
@@ -322,14 +337,17 @@ api.webRequest.onHeadersReceived.addListener(details => {
   }
   if (isHls) discoverHls(details.tabId, details.url);
 }, {urls: ['http://*/*', 'https://*/*']}, ['responseHeaders']);
-api.tabs.onRemoved.addListener(tabId => {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});});
-api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading') {youtubePlayers.delete(tabId);youtubePlayersByVideo.clear();youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});} });
+function dropVideoPlayersForTab(tabId){
+  for(const [videoId,player] of youtubePlayersByVideo) if(player && player.tabId===tabId) youtubePlayersByVideo.delete(videoId);
+}
+api.tabs.onRemoved.addListener(tabId => {youtubePlayers.delete(tabId);dropVideoPlayersForTab(tabId);youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});});
+api.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading') {youtubePlayers.delete(tabId);dropVideoPlayersForTab(tabId);youtubeObserved.delete(tabId);clearSabrCapture(tabId);requestContext.delete(tabId);hlsSeen.delete(tabId);updateCache(map => { delete map[tabId]; }).catch(() => {});} });
 api.runtime.onInstalled.addListener(async () => {
   try {
     await api.contextMenus.removeAll();
-    api.contextMenus.create({id: 'odm-link', title: 'Download with Open Download Manager', contexts: ['link', 'video', 'audio']});
-    api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
-  } catch (error) { await api.storage.local.set({lastError: error.message}); }
+    await api.contextMenus.create({id: 'odm-link', title: 'Download with Open Download Manager', contexts: ['link', 'video', 'audio']});
+    await api.contextMenus.create({id: 'odm-page', title: 'Find downloadable links on this page', contexts: ['page']});
+  } catch (error) { await api.storage.local.set({lastError: String(error && error.message || error)}).catch(() => {}); }
   refreshCapturePolicy().catch(() => {});
   scheduleHeartbeat();
   sendHeartbeat();
@@ -369,7 +387,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
         const previous=youtubePlayers.get(sender.tab.id);
         if(previous&&previous.videoId!==clean.videoId){clearSabrCapture(sender.tab.id);youtubeObserved.delete(sender.tab.id);}
         youtubePlayers.set(sender.tab.id,clean);if(youtubePlayers.size>50)youtubePlayers.delete(youtubePlayers.keys().next().value);
-        youtubePlayersByVideo.set(clean.videoId,clean);if(youtubePlayersByVideo.size>50)youtubePlayersByVideo.delete(youtubePlayersByVideo.keys().next().value);
+        youtubePlayersByVideo.set(clean.videoId,{...clean,tabId:sender.tab.id});if(youtubePlayersByVideo.size>50)youtubePlayersByVideo.delete(youtubePlayersByVideo.keys().next().value);
       }
       return {ok:true};
     }
@@ -391,11 +409,6 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
       if (!magnet && !torrentUrl) throw new Error('Only magnet links and HTTP(S) .torrent files are supported.');
       await nativeSend({action: 'torrent', magnet: magnet || undefined, url: magnet ? undefined : torrentUrl});
       return {ok: true};
-    }
-    if (message.action === 'list' && !sender.tab) {
-      await serial;
-      const data = await api.storage.session.get(CACHE_KEY);
-      return {ok: true, items: data[CACHE_KEY]?.[message.tabId] || []};
     }
     if (message.action === 'listForFrame' && sender.tab) {
       const page=new URL(sender.tab.url||'https://invalid.local');
@@ -437,7 +450,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
         return {ok: true, items: []};
       }
       await serial;
-      const data = await api.storage.session.get(CACHE_KEY);
+      const data = await sessionGet(CACHE_KEY);
       const policy = globalThis.mediaPolicy;
       return {
         ok: true,
@@ -547,21 +560,22 @@ async function handleInterceptedDownload(item, fromDetermining = false) {
 
     await eraseBrowserDownload(item);
   } catch (e) {
+    const reason = String((e && e.message) || e);
     if (paused && !accepted) {
       await api.downloads.resume(item.id).catch(() => {});
     }
     await api.storage.local.set({
       lastError: accepted
-        ? `The browser download could not be canceled; Open Download Manager continues the transfer: ${e.message}`
-        : `Browser download was kept: ${e.message}`,
-    });
+        ? `The browser download could not be canceled; Open Download Manager continues the transfer: ${reason}`
+        : `Browser download was kept: ${reason}`,
+    }).catch(() => {});
   }
 }
 
-api.downloads.onCreated.addListener(item => handleInterceptedDownload(item, false));
+api.downloads.onCreated.addListener(item => handleInterceptedDownload(item, false).catch(() => {}));
 
 if (api.downloads.onDeterminingFilename) {
-  api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item, true));
+  api.downloads.onDeterminingFilename.addListener((item, _suggest) => handleInterceptedDownload(item, true).catch(() => {}));
 }
 
 // Service worker start: tell the desktop app that this browser is connected.
