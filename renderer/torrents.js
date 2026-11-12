@@ -1,5 +1,7 @@
 // Created: 2026-11-11
 // Reason: feat(torrent): dedicated Torrents window UI
+// Last updated: 2026-11-12
+// Reason: fix(torrent): declare the file list hash map that the cache compares against
 // Description: Controller for the standalone Torrents window. Talks only to the
 // torrent IPC commands and never touches download history or queue state.
 
@@ -27,6 +29,9 @@ const state = {
 	files: new Map(),
 	filesLoading: new Map(),
 	filesFetchedAt: new Map(),
+	// The info hash each cached file list belongs to. The engine reuses
+	// torrent ids, so the id alone cannot identify a download.
+	filesHash: new Map(),
 	// What the trackers report about the swarm of a torrent.
 	swarm: new Map(),
 	swarmLoading: new Map(),

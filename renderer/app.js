@@ -10,6 +10,8 @@
 // Reason: feat(proxy): import system and browser proxy configurations (Closes #39)
 // Reason: feat(queues): add named download queues and recurring schedules (Closes #13)
 // Reason: feat(theme): add light, dark, and system theme options to the desktop app (Closes #4)
+// Last updated: 2026-11-12
+// Reason: fix(app): declare the missing members the settings, error and clipboard paths used
 // Reason: feat(ui): provide solution flow dialog with steps to install yt-dlp and auto-resume YouTube downloads
 // Description: Main frontend application controller managing DOM interactions, dialogs, state updates, and Tauri IPC event subscriptions.
 
@@ -541,6 +543,9 @@ suppressCompletion.addEventListener("change", async () => {
 });
 $("#details-dialog").append(completedPanel);
 const renderTransferDetails = renderDetails;
+// The details renderer is wrapped so the completed panel can add its own
+// summary to the dialog. The wrapper replaces the original function.
+// eslint-disable-next-line no-func-assign
 renderDetails = function () {
 	renderTransferDetails();
 	const d = detailDownload();
@@ -952,7 +957,13 @@ async function removeCompleted() {
 }
 function showDialog(id) {
 	const dialog = $(id);
+	if (!dialog) return;
 	if (!dialog.open) dialog.showModal();
+}
+function hideDialog(id) {
+	const dialog = $(id);
+	if (!dialog) return;
+	if (dialog.open) dialog.close();
 }
 let chosenYouTubeFormat = null;
 let currentVideoChoices = [];
@@ -1577,6 +1588,9 @@ function openProxyDiscoveryDialog(detected) {
 }
 
 let optionsConnectionOverrides = [];
+// The folder that belongs to each download category. The options dialog
+// edits this map and saves it with the settings.
+let optionsCategoryDirectories = {};
 
 function renderSiteOverrides() {
 	const container = $("#site-overrides-list");
@@ -1839,7 +1853,7 @@ let activeMediaToolDownloadId = null;
 
 function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
 	activeMediaToolType = tool === "yt-dlp" ? "yt-dlp" : "ffmpeg";
-	activeMediaToolDownloadId = downloadId || progressMode || state.selectedId || null;
+	activeMediaToolDownloadId = downloadId || progressMode || selectedId || null;
 	const dialog = $("#media-tool-dialog");
 	if (!dialog) return;
 
@@ -1902,14 +1916,11 @@ function openMediaToolDialog(tool = "ffmpeg", downloadId = null) {
 	}
 }
 
-let activeErrorDownloadId = null;
-
 function openErrorDialog(downloadId = null) {
-	const targetId = downloadId || state.selectedId;
+	const targetId = downloadId || selectedId;
 	const d = state.downloads.find((item) => item.id === targetId);
 	if (!d) return;
 
-	activeErrorDownloadId = d.id;
 	const errorDialog = $("#error-dialog");
 	if (!errorDialog) return;
 
@@ -2016,7 +2027,7 @@ function openErrorDialog(downloadId = null) {
 					await navigator.clipboard.writeText(diagnosticData);
 				}
 				notify("Diagnostic details copied to clipboard.");
-			} catch (_) {
+			} catch {
 				notify("Could not copy to clipboard.", true);
 			}
 		};
@@ -2839,7 +2850,7 @@ $("#playlist-deselect-all")?.addEventListener("click", () => {
 $("#install-ffmpeg-btn")?.addEventListener("click", () => installMediaToolAction("ffmpeg"));
 $("#install-ytdlp-btn")?.addEventListener("click", () => installMediaToolAction("yt-dlp"));
 $("#media-tool-install-btn")?.addEventListener("click", () => {
-	openMediaToolDialog("ffmpeg", state.selectedId);
+	openMediaToolDialog("ffmpeg", selectedId);
 });
 
 $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
@@ -2863,7 +2874,7 @@ $("#media-tool-confirm-btn")?.addEventListener("click", async () => {
 		notify(`${toolLabel} installed successfully.`);
 		await refreshMediaToolsStatus();
 
-		const downloadIdToResume = activeMediaToolDownloadId || progressMode || state.selectedId;
+		const downloadIdToResume = activeMediaToolDownloadId || progressMode || selectedId;
 		if (downloadIdToResume) {
 			try {
 				await refresh();
@@ -3365,6 +3376,53 @@ $("#settings-form").addEventListener("submit", async (event) => {
 window.addEventListener("downloader:api-error", (event) =>
 	notify(messageOf(event.detail), true),
 );
+// Clipboard monitoring. These live at module scope because the engine
+// pushes a candidate through an event listener that is wired up long
+// before this code runs.
+let currentClipboardCandidate = null;
+
+function handleClipboardCandidate(candidate) {
+	if (!candidate || !candidate.url) return;
+	currentClipboardCandidate = candidate;
+	if (state?.settings?.clipboardMonitoring?.autoEnqueue) {
+		openAdd(candidate.url);
+		return;
+	}
+	const descEl = $("#clipboard-prompt-desc");
+	if (descEl) {
+		descEl.textContent = `Download "${candidate.filename}" from ${candidate.host}?`;
+	}
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) {
+		promptEl.hidden = false;
+	}
+}
+
+function dismissClipboardPrompt() {
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	if (currentClipboardCandidate) {
+		if (typeof api.dismissClipboardCandidate === "function") {
+			api.dismissClipboardCandidate(currentClipboardCandidate.url);
+		}
+		currentClipboardCandidate = null;
+	}
+}
+
+// The prompt buttons are wired as soon as the script runs. The prompt can
+// appear while the app is still starting up.
+$("#clipboard-prompt-close")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-dismiss")?.addEventListener("click", dismissClipboardPrompt);
+$("#clipboard-prompt-add")?.addEventListener("click", () => {
+	const cand = currentClipboardCandidate;
+	const promptEl = $("#clipboard-prompt");
+	if (promptEl) promptEl.hidden = true;
+	currentClipboardCandidate = null;
+	if (cand?.url) {
+		openAdd(cand.url);
+	}
+});
+
 async function start() {
 	try {
 		await refresh();
@@ -3528,48 +3586,6 @@ $("#credentials-list")?.addEventListener("click", async (e) => {
 		await refreshCredentialRules();
 	} catch (err) {
 		notify(`Failed to delete credential rule: ${messageOf(err)}`, true);
-	}
-});
-
-let currentClipboardCandidate = null;
-
-function handleClipboardCandidate(candidate) {
-	if (!candidate || !candidate.url) return;
-	currentClipboardCandidate = candidate;
-	if (state?.settings?.clipboardMonitoring?.autoEnqueue) {
-		openAdd(candidate.url);
-		return;
-	}
-	const descEl = $("#clipboard-prompt-desc");
-	if (descEl) {
-		descEl.textContent = `Download "${candidate.filename}" from ${candidate.host}?`;
-	}
-	const promptEl = $("#clipboard-prompt");
-	if (promptEl) {
-		promptEl.hidden = false;
-	}
-}
-
-function dismissClipboardPrompt() {
-	const promptEl = $("#clipboard-prompt");
-	if (promptEl) promptEl.hidden = true;
-	if (currentClipboardCandidate) {
-		if (typeof api.dismissClipboardCandidate === "function") {
-			api.dismissClipboardCandidate(currentClipboardCandidate.url);
-		}
-		currentClipboardCandidate = null;
-	}
-}
-
-$("#clipboard-prompt-close")?.addEventListener("click", dismissClipboardPrompt);
-$("#clipboard-prompt-dismiss")?.addEventListener("click", dismissClipboardPrompt);
-$("#clipboard-prompt-add")?.addEventListener("click", () => {
-	const cand = currentClipboardCandidate;
-	const promptEl = $("#clipboard-prompt");
-	if (promptEl) promptEl.hidden = true;
-	currentClipboardCandidate = null;
-	if (cand?.url) {
-		openAdd(cand.url);
 	}
 });
 
