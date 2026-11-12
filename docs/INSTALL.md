@@ -36,6 +36,22 @@ Open Download Manager is available across macOS, Windows, and Linux, with native
 
 ---
 
+## First launch (unsigned beta)
+
+The beta builds are not signed with an Apple Developer ID or a Windows code
+signing certificate yet, so the operating system checks them:
+
+- **macOS**: "Open Download Manager" cannot be opened because the developer
+  cannot be verified. Open **System Settings → Privacy & Security**, scroll to
+  the blocked section and click **Open Anyway**. On older macOS versions use
+  right-click → **Open** instead of double-clicking the app.
+- **Windows**: "Windows protected your PC". Click **More info** →
+  **Run anyway**.
+
+Both prompts disappear as soon as the release is signed and notarized.
+
+---
+
 ## 2. Browser Extension Setup
 
 Open Download Manager communicates seamlessly with your browser using the Native Messaging protocol.
