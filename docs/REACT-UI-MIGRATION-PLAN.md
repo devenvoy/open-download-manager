@@ -54,7 +54,7 @@ Measured on 2026-11-14 against the working tree after the complete renderer rewr
 - **Add Download window (`AddDownloadScreen`)**: URL batch input, clipboard paste, category auto-folder assignment, single-file filename override, queue assignment, playlist detection & dialog, video format detection & dialog, download conflict validation.
 - **Scheduler window (`SchedulerScreen`)**: download queues list, start/pause toggle, queue create & edit dialog with ISO day recurring schedules, one-off scheduled downloads list.
 - **Integration window (`IntegrationScreen`)**: browser profiles grid, browser extension status, setup actions (copy, download, install), advanced media player stream integration opt-in with consent & repair.
-- **Gates & verification**: `tsc`, ESLint, Vitest (115 tests), Vite frontend build, and local `cargo test` (all unit and integration tests) are 100% green.
+- **Gates & verification**: `tsc`, ESLint, Vitest (112 tests in 17 files), extension tests (101 tests in 13 files), Vite frontend build, and local `cargo test` (all unit and integration tests) are 100% green.
 
 ### 0.2 Remaining Roadmap
 
