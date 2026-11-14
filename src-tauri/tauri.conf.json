@@ -11,9 +11,10 @@
     }
   },
   "build": {
-    "beforeDevCommand": "cargo build --bin open-download-manager-native-host",
-    "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host",
-    "frontendDist": "../renderer"
+    "beforeDevCommand": "bun run frontend:dev",
+    "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host && bun run frontend:build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../renderer/dist"
   },
   "app": {
     "withGlobalTauri": true,
@@ -52,10 +53,6 @@
       "icons/icon.icns",
       "icons/icon.ico",
       "icons/icon.png"
-    ],
-    "resources": [
-      "extension/**/*",
-      "extension-firefox/**/*"
     ],
     "macOS": {
       "frameworks": [],

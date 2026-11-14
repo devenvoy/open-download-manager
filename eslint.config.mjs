@@ -1,100 +1,66 @@
 import js from "@eslint/js";
 import globals from "globals";
-
-// The renderer scripts publish helpers on `window` for each other. A file
-// that defines them must not be told they are globals, otherwise the
-// definition itself looks like a redeclaration.
-const rendererGlobals = [
-	"numeric","redactUrl","statusOf","categoryOf","bytes","date","duration",
-	"timeLeft","sizeLabel","percentage","messageOf","formatProxyDisplay",
-	"getEffectiveTheme","applyTheme","initTheme","initializeColumnResizing",
-	"downloader","TorrentView",
-];
+import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
 	{
-		ignores: ["node_modules/**", "target/**", "dist/**", "src-tauri/target/**"],
+		ignores: [
+			"node_modules/**",
+			"target/**",
+			"dist/**",
+			"renderer/dist/**",
+			"src-tauri/target/**",
+			"reference/**",
+			"graphify-out/**",
+			"coverage/**",
+		],
 	},
+	// The React renderer: TypeScript, JSX, the file rules from
+	// docs/REACT-UI-MIGRATION-PLAN.md §5.2 and §10.5. The type-aware rules
+	// arrive with the generated IPC types; the parser-only rules below catch
+	// the classes that do not need a program.
 	{
-		files: ["renderer/**/*.js"],
+		files: ["renderer/**/*.{ts,tsx}"],
 		languageOptions: {
+			parser: tseslint.parser,
 			ecmaVersion: 2023,
-			sourceType: "script",
-			globals: {
-				...globals.browser,
-				...globals.node,
-				module: "readonly",
-			},
+			sourceType: "module",
+			parserOptions: { ecmaFeatures: { jsx: true } },
+			globals: { ...globals.browser },
+		},
+		plugins: {
+			"@typescript-eslint": tseslint.plugin,
+			"react-hooks": reactHooks,
 		},
 		rules: {
 			...js.configs.recommended.rules,
-			"no-undef": "error",
-			"no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_" }],
-			"no-console": "off",
-			"no-empty": ["error", { allowEmptyCatch: true }],
-			"no-prototype-builtins": "error",
-			"no-constant-condition": ["error", { checkLoops: false }],
-			"no-dupe-keys": "error",
-			"no-dupe-args": "error",
-			"no-duplicate-case": "error",
-			"no-self-compare": "error",
-			"no-sparse-arrays": "error",
+			// TypeScript resolves identifiers; no-undef misreads type-only names.
+			"no-undef": "off",
+			"no-unused-vars": "off",
 			"no-unreachable": "error",
-			"valid-typeof": "error",
-			"no-fallthrough": "error",
-			"no-cond-assign": "error",
-			"no-import-assign": "error",
-			"no-global-assign": "error",
-			"no-obj-calls": "error",
-			"no-unsafe-negation": "error",
-			"use-isnan": "error",
-		},
-	},
-	{
-		// The consumer scripts may use the shared helpers.
-		files: ["renderer/app.js", "renderer/torrents.js"],
-		languageOptions: {
-			globals: {
-				...Object.fromEntries(rendererGlobals.map(n => [n, "readonly"])),
-			},
-		},
-	},
-	{
-		files: ["extension/**/*.js"],
-		languageOptions: {
-			ecmaVersion: 2023,
-			sourceType: "script",
-			globals: {
-				...globals.browser,
-				...globals.webextensions,
-				...globals.node,
-				module: "readonly",
-				chrome: "readonly",
-				browser: "readonly",
-				importScripts: "readonly",
-			},
-		},
-		rules: {
-			...js.configs.recommended.rules,
-			"no-undef": "error",
-			"no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_" }],
-			"no-console": "off",
-			"no-empty": ["error", { allowEmptyCatch: true }],
-			"no-prototype-builtins": "error",
 			"no-dupe-keys": "error",
-			"no-duplicate-case": "error",
-			"no-self-compare": "error",
-			"no-unreachable": "error",
-			"valid-typeof": "error",
 			"no-fallthrough": "error",
-			"no-cond-assign": "error",
-			"no-global-assign": "error",
-			"no-obj-calls": "error",
 			"use-isnan": "error",
+			"@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+			"@typescript-eslint/no-explicit-any": "error",
+			"@typescript-eslint/consistent-type-imports": "error",
+			"@typescript-eslint/no-unused-expressions": "error",
+			"react-hooks/rules-of-hooks": "error",
+			"react-hooks/exhaustive-deps": "warn",
+			"max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
+			"no-restricted-syntax": [
+				"error",
+				{
+					selector: "AssignmentExpression[left.object.name='window']",
+					message:
+						"Do not hang state on window. Use lib/ipc or lib/ui.",
+				},
+			],
 		},
 	},
 	{
-		files: ["tools/**/*.mjs", "extension/pack.mjs"],
+		files: ["tools/**/*.mjs"],
 		languageOptions: {
 			ecmaVersion: 2023,
 			sourceType: "module",

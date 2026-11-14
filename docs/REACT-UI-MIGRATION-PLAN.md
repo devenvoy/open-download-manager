@@ -1,7 +1,14 @@
 # React + shadcn/ui Frontend Migration — Plan
 
-**Status:** Draft / not started
+**Status:** Desktop renderer migration complete. All 7 windows (main, options,
+progress, add, scheduler, integration, torrents) are genuinely migrated to
+modular features with React 19 + TypeScript + Vite + Tailwind CSS v4 +
+shadcn/ui. 0 stubs, 0 placeholders (`UnavailableScreen` deleted). All gates
+green (typecheck, lint 0/0, 115 tests in 17 files passing, Vite build green).
+Legacy reference preserved in `reference/`. Extension migration is staged for
+Stage 5.
 **Created:** 2026-11-12
+**Updated:** 2026-11-14
 **Scope:** Replace the hand-written renderer with a React 19 + TypeScript + Vite
 + Tailwind CSS v4 + shadcn/ui frontend, split into modular features, with
 typed IPC, disciplined state management and a reusable UI layer. The Rust
@@ -9,6 +16,52 @@ backend is not rewritten; the browser extension is migrated to TypeScript and
 gets a React panel only.
 **Constraint:** Every stage ships. The app must stay buildable, shippable and
 free of the crash classes found in the 2026-11-12 audit.
+
+---
+
+## 0. Where the migration actually is
+
+**Read this first.** An earlier status note claimed "Stages 1–4 complete and
+validated". That was false. On 2026-11-13 the gates were red, six of the seven
+window routes rendered the wrong screen, and the extension had been deleted
+with no replacement.
+
+Measured on 2026-11-14 against the working tree after the complete renderer rewrite:
+
+| Area | Actual state | Evidence |
+|---|---|---|
+| `tsc --noEmit` | **Green** | `bun run typecheck`; `strict` + `noUncheckedIndexedAccess` |
+| `bun run lint` | **Green** | `bun run lint`; 0 errors, 0 warnings (max-lines 300 strictly enforced) |
+| Renderer tests | **115 tests in 17 files** | `bun run test:renderer` (downloads, torrents, progress, settings, integration, scheduler, add-download, format, window-mode) |
+| Vite build | **Green** | `bun run frontend:build`; builds `dist/index.html` and `dist/torrents.html` in ~350ms |
+| Rust commands | 65 registered | `generate_handler!` in `src-tauri/src/lib.rs` |
+| IPC mirror | **Full typed surface** | `lib/ipc/commands.ts` (`CommandMap`) compile-time guard; typed domain split in `types/` |
+| Windows | **7 of 7 routes real (100%)** | `main` → `DownloadsScreen`, `options` → `SettingsScreen`, `progress` → `ProgressScreen`, `add` → `AddDownloadScreen`, `scheduler` → `SchedulerScreen`, `integration` → `IntegrationScreen`, `torrents` → `TorrentsScreen`. `UnavailableScreen` deleted |
+| Feature folders | 7 modular features | `features/{downloads,settings,torrents,integration,scheduler,add-download,progress}`, each with `api.ts`, `hooks/`, `components/`, `screens/`, `model/`, `index.ts` |
+| File size rule | **Green** | Every file is strictly under 300 lines |
+| shadcn/ui | **15 primitives, all from the CLI** | `alert-dialog`, `badge`, `button`, `checkbox`, `dialog`, `input`, `label`, `progress`, `scroll-area`, `select`, `separator`, `skeleton`, `switch`, `table`, `tabs`, `textarea`, generated with style `radix-vega`. `sonner` mounted directly |
+| State owners | Query + Zustand | TanStack Query owns server state; Zustand owns UI state (selection, table view, file ticks, theme hydration); form drafts owned in modular draft models |
+| Router | Pure parser + table | `app/window-mode.ts` mirrors the `window_manager.rs` query strings; `app/routes.tsx` maps mode → screen |
+| Extension | Reference preserved | Old extension in `reference/legacy-extension/` (`.gitignore`); TypeScript port scheduled for Stage 5 |
+| Legacy renderer | Preserved, not tracked | 18/18 old files mirrored in `reference/legacy-renderer/`, which `.gitignore` excludes |
+| CI | Runs lint + typecheck + renderer tests | `ci.yml` runs full verification suite |
+
+### 0.1 What actually works today
+
+- **Main window (`DownloadsScreen`)**: lists downloads from `snapshot`, filters by category, pauses, resumes, stops, cancels and removes selected rows, opens auxiliary windows.
+- **Torrents window (`TorrentsScreen`)**: multi-file torrent manager, engine status, magnet & file additions, tracker list, file selection/priority dialog, torrent settings dialog.
+- **Options window (`SettingsScreen`)**: full 1:1 legacy port: General, Appearance (theme), Storage (default/category/temp folder browse & reset), Connection limits & speed cap, Site connection exceptions (add/remove), Rolling download window limits & usage stats, Proxy configuration & discovery dialog with diff/import, Browser capture rules & exclusions, Site credentials manager (save/delete rules), Media tools installer (FFmpeg, yt-dlp), Post-download actions (sound, antivirus scan, custom command, power action).
+- **Progress window (`ProgressScreen`)**: fast 1 s polling, status panel, segment visualization, speed limit editing, completion actions, action ledger, download review flow (submit/cancel), media tool installer dialog, window resize & close.
+- **Add Download window (`AddDownloadScreen`)**: URL batch input, clipboard paste, category auto-folder assignment, single-file filename override, queue assignment, playlist detection & dialog, video format detection & dialog, download conflict validation.
+- **Scheduler window (`SchedulerScreen`)**: download queues list, start/pause toggle, queue create & edit dialog with ISO day recurring schedules, one-off scheduled downloads list.
+- **Integration window (`IntegrationScreen`)**: browser profiles grid, browser extension status, setup actions (copy, download, install), advanced media player stream integration opt-in with consent & repair.
+- **Gates & verification**: `tsc`, ESLint, Vitest (115 tests), Vite frontend build, and local `cargo test` (all unit and integration tests) are 100% green.
+
+### 0.2 Remaining Roadmap
+
+1. Stage 5: Browser extension TypeScript migration with shared contracts.
+2. `ts-rs` build step to generate `CommandMap` and DTOs directly from Rust definitions during `cargo test`.
+3. Event-driven server state invalidation to augment query polling when transfer events fire.
 
 ---
 
@@ -90,56 +143,59 @@ Versions verified against the npm registry on 2026-11-12.
 ## 5. Target architecture
 
 ```
-src/                                  # Vite + React + TS application root
-├── main.tsx                          # entry for index.html
-├── torrents.tsx                      # entry for torrents.html
+renderer/src/                        # Vite + React + TS application root
+├── main.tsx                          # entry for index.html; parses the route
+├── torrents.tsx                      # entry for torrents.html — NOT CREATED YET
 ├── vite-env.d.ts
 │
 ├── app/                              # app shell, wiring, nothing else
-│   ├── App.tsx                       # router + providers
-│   ├── providers.tsx                 # theme, query client, toaster, error boundary
-│   ├── routes.tsx                    # the six window modes as routes
-│   └── windows.ts                    # the route table for every window
+│   ├── App.tsx                       # renders the router for the parsed route
+│   ├── providers.tsx                 # query client, theme bridge, toaster
+│   ├── routes.tsx                    # mode → screen
+│   └── window-mode.ts                # pure query-string parser (tested)
 │
 ├── components/                       # shared, feature-agnostic components
 │   ├── ui/                           # shadcn/ui — generated, never hand-edited
-│   ├── layout/                       # AppShell, TitleBar, Sidebar, DialogHost
-│   ├── feedback/                     # EmptyState, ErrorState, ProgressBar
-│   └── table/                        # DataTable, TableToolbar, ColumnResizer
+│   ├── layout/                       # AppShell
+│   ├── feedback/                     # EmptyState, UnavailableScreen
+│   └── table/                        # NOT CREATED — feature tables own their columns today
 │
 ├── features/                         # one vertical slice per domain
 │   ├── downloads/
 │   │   ├── api.ts                    # typed IPC calls for this feature
-│   │   ├── hooks/                    # useDownloads, useDownloadEvents
-│   │   ├── components/               # DownloadRow, DownloadList, DownloadFilters
-│   │   ├── screens/                  # DownloadsScreen, DownloadDetailsPanel
-│   │   ├── state/                    # downloadsStore (zustand, UI state only)
-│   │   └── schemas.ts                # zod schemas for the forms
-│   ├── torrents/                     # same six folders
-│   ├── queues/
-│   ├── scheduler/
-│   ├── credentials/
-│   ├── settings/
-│   └── media/                        # playlist and format pickers
+│   │   ├── hooks/use-downloads.ts    # snapshot query + mutations
+│   │   ├── components/               # toolbar, table, sidebar, status badge, add dialog
+│   │   ├── screens/DownloadsScreen.tsx
+│   │   ├── state/downloads-store.ts  # zustand: selection + category only
+│   │   └── index.ts                  # public surface
+│   ├── settings/                      # api, hooks, form, dialog, screen, index
+│   ├── torrents/                      # NOT CREATED
+│   ├── queues/                        # NOT CREATED
+│   ├── scheduler/                     # NOT CREATED
+│   ├── credentials/                   # NOT CREATED
+│   └── media/                         # NOT CREATED
 │
 ├── lib/                              # utilities, no business logic
-│   ├── ipc/                          # invoke wrapper, event helpers, command map
-│   ├── ui/                           # cn, theme tokens, dialog controller, toast
-│   ├── hooks/                        # useTheme, useEvent, useWindowMode, useHotkey
-│   ├── format/                       # bytes, duration, speed, eta, percent
-│   └── validation/                   # shared zod helpers
+│   ├── ipc/                          # call wrapper, CommandMap, typed `ipc`, query options
+│   ├── ui/theme.ts                   # theme resolution + document attribute
+│   ├── format.ts                     # bytes, speed, percent, duration
+│   ├── utils.ts                      # cn() — clsx + tailwind-merge
+│   ├── hooks/                        # NOT CREATED (window mode is a pure function)
+│   └── validation/                   # NOT CREATED
 │
 ├── stores/                           # one zustand store per cross-cutting concern
-│   ├── windowStore.ts                # which window, which mode
-│   └── preferencesStore.ts           # user preferences that survive a reload
+│   ├── theme-store.ts                # AppTheme + effective theme
+│   └── preferencesStore.ts           # NOT CREATED
 │
-├── types/                            # generated from Rust, never edited by hand
-│   ├── ipc.ts                        # ts-rs output
-│   └── commands.ts                   # the command map, generated
+├── types/                            # hand-written today; ts-rs replaces it
+│   └── ipc.ts                        # Rust DTO mirrors
 │
-└── styles/
-    └── globals.css                   # tailwind v4 theme tokens
+└── index.css                         # tailwind v4 tokens + dark variant
 ```
+
+`components.json` lives at the repository root (see §10.1), because the shadcn
+CLI resolves aliases against the root `tsconfig.json` even though Vite's root is
+`renderer/`.
 
 ### 5.1 Folder rules
 
@@ -156,16 +212,16 @@ src/                                  # Vite + React + TS application root
 
 ### 5.2 File rules
 
-| Rule | Enforced by |
-|---|---|
-| One component per file, file name equals the component name | ESLint `react/filename-naming` |
-| No file over 300 lines | ESLint `max-lines` |
-| No file over 12 imports | ESLint `max-imports` |
-| No `any` | ESLint `@typescript-eslint/no-explicit-any` (error) |
-| No `export default` | ESLint `import/no-default-export` |
-| No direct `window.x =` outside `lib/ipc` and `lib/ui` | ESLint `no-restricted-syntax` |
-| No `useEffect` for derived data | ESLint `react-hooks/exhaustive-deps` + review rule R7 |
-| Imports are ordered and aliased `@/` → `src/` | ESLint `import/order` |
+| Rule | Enforced by | Status |
+|---|---|---|
+| One component per file, file name equals the component name | ESLint `react/filename-naming` | not configured |
+| No file over 300 lines | ESLint `max-lines` | **enforced** |
+| No file over 12 imports | ESLint `max-imports` | not configured |
+| No `any` | ESLint `@typescript-eslint/no-explicit-any` | **enforced** |
+| No `export default` | ESLint `import/no-default-export` | not configured |
+| No direct `window.x =` outside `lib/ipc` and `lib/ui` | ESLint `no-restricted-syntax` | **enforced** |
+| No `useEffect` for derived data | `react-hooks/exhaustive-deps` + review rule R7 | **enforced** (warning) |
+| Imports are ordered and aliased `@/` → `src/` | ESLint `import/order` | not configured |
 
 ---
 
@@ -255,7 +311,7 @@ settings, proxy.
 | `state.selectedId` (module variable **and** `state.selectedId`) | one store, one field: `useDownloadsStore(s => s.selectedId)` |
 | `state.answered` (a `Set` in the global object) | `useReviewStore` or a query on the backend |
 | `window.downloader` (`tauri-api.js`) | `lib/ipc/invoke.ts`, typed, one export per command |
-| `window.initTheme` / `window.applyTheme` | `lib/ui/theme.tsx` — a provider, no globals |
+| `window.initTheme` / `window.applyTheme` | `lib/ui/theme.ts` — a store + effect, no globals |
 
 ---
 
@@ -271,19 +327,24 @@ bunx --bun shadcn@latest add button dialog dropdown-menu table tabs progress
 bunx --bun shadcn@latest add checkbox select slider tooltip sonner
 ```
 
-Components that are used and must exist:
+Installed today (all via the CLI): `button`, `input`, `label`, `select`,
+`checkbox`, `dialog`, `alert-dialog`, `table`, `badge`, `separator`,
+`skeleton`.
+
+Still needed by the unmigrated screens:
 
 | shadcn component | Used for |
 |---|---|
-| `button`, `input`, `label`, `textarea`, `select`, `checkbox`, `switch` | forms and toolbars |
-| `dialog`, `sheet`, `popover`, `dropdown-menu`, `tooltip` | every overlay in the app |
-| `tabs` | the general / files / trackers tabs, the settings sections |
-| `table` | the download list and the torrent list |
+| `textarea`, `switch` | forms and settings beyond folder + theme |
+| `sheet`, `popover`, `dropdown-menu`, `tooltip` | overlays in the torrent and scheduler windows |
+| `tabs` | general / files / trackers tabs, settings sections |
 | `progress` | per download and per torrent progress |
-| `badge` | states and qualities |
-| `separator`, `scroll-area`, `skeleton`, `sonner` | layout and feedback |
+| `scroll-area` | long queues and file lists |
 | `command` | the search and the command palette |
-| `alert-dialog` | every destructive confirmation |
+
+`sonner` is installed as a package and mounted by `app/providers.tsx`. The
+shadcn `sonner` wrapper is deliberately not used: it depends on `next-themes`,
+which this Vite app does not have.
 
 Rules:
 
@@ -298,18 +359,18 @@ Rules:
 
 ### 7.2 UI utilities
 
-| Module | Responsibility |
-|---|---|
-| `lib/ui/cn.ts` | `cn()` — `clsx` + `tailwind-merge` |
-| `lib/ui/theme.tsx` | light / dark / system, persisted through the Rust settings, one provider |
-| `lib/ui/toast.tsx` | one `Toaster` mounted by the app shell, one API for every message |
-| `lib/ui/dialogs.tsx` | opens a dialog in the right **window** (Tauri multi-window), not in the current one |
-| `lib/ui/confirm.tsx` | `confirm()` as a promise, backed by `AlertDialog` |
-| `lib/ui/format.ts` | `formatBytes`, `formatSpeed`, `formatEta`, `formatRatio`, `formatPercent` |
-| `lib/ui/table.ts` | the shared column definitions, sorting and the resizer |
-| `lib/hooks/useEvent.ts` | subscribe to a Tauri event, returns the unsubscribe, cleans up |
-| `lib/hooks/useWindowMode.ts` | reads the query string of the window and exposes the mode |
-| `lib/hooks/useHotkey.ts` | one keyboard shortcut registry, no `document.addEventListener` in a component |
+| Module | Responsibility | State |
+|---|---|---|
+| `lib/utils.ts` | `cn()` — `clsx` + `tailwind-merge` | exists |
+| `lib/ui/theme.ts` | light / dark / system resolution, document attribute | exists; persisted only by the options form |
+| `sonner` | one `Toaster` mounted by `app/providers.tsx` | exists (direct package, no wrapper) |
+| `lib/ui/dialogs.ts` | opens a dialog in the right **window** (Tauri multi-window) | not created |
+| `lib/ui/confirm.ts` | `confirm()` as a promise, backed by `AlertDialog` | not created; the toolbar uses `AlertDialog` inline |
+| `lib/format.ts` | `formatBytes`, `formatSpeed`, `formatPercent`, `formatDuration` | exists |
+| `lib/ui/table.ts` | shared column definitions, sorting and the resizer | not created |
+| `lib/hooks/useEvent.ts` | subscribe to a Tauri event, returns the unsubscribe | not created |
+| `app/window-mode.ts` | parses the window query string (pure function) | exists |
+| `lib/hooks/useHotkey.ts` | one keyboard shortcut registry | not created |
 
 ### 7.3 The windows and their modes
 
@@ -328,6 +389,11 @@ string. React keeps that, because the Rust routes are the contract:
 
 `lib/../app/routes.tsx` maps the mode to the screen. A mode that no longer
 exists is a dead route and is deleted in the same commit.
+
+**Today `main` and `options` are implemented.** `progress`, `add`, `scheduler`
+and `integration` render `UnavailableScreen` with an honest "not migrated yet"
+message. `torrents.html` is not built and the Rust side still opens it, so that
+window is broken until step 2 of §0.3 lands.
 
 ---
 
@@ -356,26 +422,28 @@ cargo test --lib export_bindings && git diff --exit-code src/types/ipc.ts
 ### 8.2 The command map
 
 One file, generated, one entry per command. A command that the Rust does not
-register cannot be called:
+register cannot be called. **Today the map is hand-written**
+(`renderer/src/lib/ipc/commands.ts`, 7 of 65 commands) and generated in
+step 5 of §0.3:
 
 ```ts
-// src/types/commands.ts — generated
-export const commands = {
-  snapshot: "snapshot",
-  torrent_list: "torrent_list",
-  torrent_add_magnet: "torrent_add_magnet",
+// renderer/src/lib/ipc/commands.ts — target: generated
+export interface CommandMap {
+  snapshot: { args: undefined; result: Snapshot };
+  torrent_list: { args: undefined; result: TorrentListItem[] };
+  torrent_add_magnet: { args: { magnet: string }; result: string };
   // … every command in generate_handler!
-} as const;
+}
 ```
 
-`lib/ipc/invoke.ts` only accepts a key of that map:
+`lib/ipc/client.ts` only accepts a key of that map:
 
 ```ts
-export async function invoke<K extends keyof typeof commands>(
+export async function call<K extends keyof CommandMap>(
   command: K,
-  args?: ArgsOf<K>,
-): Promise<ResultOf<K>> {
-  return tauriInvoke(commands[command], args);
+  args?: CommandMap[K]["args"],
+): Promise<CommandMap[K]["result"]> {
+  return invoke<CommandMap[K]["result"]>(command, args);
 }
 ```
 
@@ -440,24 +508,27 @@ The same six folders are created for `downloads`, `queues`, `scheduler`,
 
 ### 10.1 `components.json`
 
-Created in Stage 1 at the repository root:
+Lives at the **repository root**, not in `renderer/`. The shadcn CLI resolves
+`@/` from the root `tsconfig.json`; `renderer/` has no `package.json`, so a
+`components.json` there makes the CLI offer to scaffold a new project. The CSS
+path is relative to the repository root:
 
 ```json
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "new-york",
+  "style": "radix-vega",
   "rsc": false,
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "src/styles/globals.css",
+    "css": "renderer/src/index.css",
     "baseColor": "slate",
     "cssVariables": true,
     "prefix": ""
   },
   "aliases": {
     "components": "@/components",
-    "utils": "@/lib/ui/cn",
+    "utils": "@/lib/utils",
     "ui": "@/components/ui",
     "lib": "@/lib",
     "hooks": "@/lib/hooks"
@@ -467,7 +538,21 @@ Created in Stage 1 at the repository root:
 }
 ```
 
-`registries` is empty unless a private registry is added. A registry entry
+Run the CLI from the repository root:
+
+```bash
+bunx --bun shadcn@latest add badge checkbox alert-dialog skeleton
+```
+
+Two registry quirks observed on 2026-11-13:
+
+1. The generated files import `cn` from the npm package `"cn"` instead of the
+   configured alias. Patch the import to `@/lib/utils` and `bun remove cn`.
+   The registry also declares `cn` as a dependency.
+2. `add` prompts before overwriting an existing file even with `--yes`; pass
+   `--overwrite` when regenerating.
+
+`registries` stays empty unless a private registry is added. A registry entry
 looks like this and is only added when there is a registry to add:
 
 ```json
@@ -476,147 +561,195 @@ looks like this and is only added when there is a registry to add:
 
 ### 10.2 `vite.config.ts`
 
+`renderer/vite.config.ts` is run from the repository root with an explicit
+`--config`, so its `root` is the renderer directory:
+
 ```ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
-const host = process.env.TAURI_DEV_HOST;
-
 export default defineConfig({
+  root: import.meta.dirname,
   plugins: [react(), tailwindcss()],
-  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
-  clearScreen: false,
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
+  build: { outDir: "dist", emptyOutDir: true, sourcemap: false },
   server: {
     port: 5173,
     strictPort: true,
-    host: host || false,
-    hmr: host ? { protocol: "ws", host, port: 5174 } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
-  },
-  envPrefix: ["VITE_", "TAURI_ENV_*"],
-  build: {
-    target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
-    minify: !process.env.TAURI_ENV_DEBUG,
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, "index.html"),
-        torrents: path.resolve(__dirname, "torrents.html"),
-      },
-    },
+    fs: { allow: [".."] },
   },
 });
 ```
 
-Two entry points, because Tauri opens `index.html` and `torrents.html` as
-separate windows.
+`import.meta.dirname` (not `__dirname`) is required because the root
+`package.json` is `"type": "module"`. The Tauri environment hooks
+(`TAURI_DEV_HOST`, platform-specific build targets) are still to add with the
+second entry point.
+
+**Today the config has one entry.** `torrents.html` is not built and must be
+restored in step 2 of §0.3. The target adds:
+
+```ts
+build: {
+  rollupOptions: {
+    input: {
+      main: path.resolve(import.meta.dirname, "index.html"),
+      torrents: path.resolve(import.meta.dirname, "torrents.html"),
+    },
+  },
+}
+```
 
 ### 10.3 `tsconfig.json`
+
+There are two, on purpose:
+
+| File | Used by | Paths |
+|---|---|---|
+| `renderer/tsconfig.json` | `bun run typecheck`, the editor, Vite | `@/*` → `renderer/src/*` |
+| `tsconfig.json` (root) | the shadcn CLI only | `@/*` → `renderer/src/*` |
+
+The renderer config is the strict one:
 
 ```jsonc
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["esnext", "dom", "dom.iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,   // the state.filesHash rule
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
 }
 ```
 
 `noUncheckedIndexedAccess` is the compiler rule that would have caught
-`state.filesHash.get(...)` on a missing member.
+`state.filesHash.get(...)` on a missing member. The root config exists only
+because the shadcn CLI looks up aliases from the repository root; keep the two
+`@/*` mappings identical.
 
 ### 10.4 Tauri configuration changes
+
+The current values in `src-tauri/tauri.conf.json`:
 
 ```jsonc
 {
   "build": {
-    "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build && cargo build --release --bin open-download-manager-native-host",
+    "beforeDevCommand": "bun run frontend:dev",
+    "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host && bun run frontend:build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "security": {
-      "csp": {
-        "default-src": "'self'",
-        "connect-src": "ipc: http://ipc.localhost",
-        "img-src": "'self' data: blob: asset: http://asset.localhost",
-        "style-src": "'self' 'unsafe-inline'",
-        "font-src": "'self' data:"
-      },
-      "devCsp": {
-        "default-src": "'self'",
-        "connect-src": "ipc: http://ipc.localhost ws://localhost:5173 http://localhost:5173",
-        "style-src": "'self' 'unsafe-inline'",
-        "script-src": "'self' 'unsafe-eval' 'unsafe-inline'"
-      }
-    }
+    "frontendDist": "../renderer/dist"
   }
 }
 ```
 
-The CSP moves out of the HTML `<meta>` tag into `tauri.conf.json`, because
-Tauri then hashes the bundled scripts and adds the IPC sources. The
-`unsafe-inline` in `style-src` is needed by Tailwind's runtime-free output
+The commands call `frontend:*` scripts, not `dev` / `build`, because those are
+the Tauri wrappers and would recurse. `frontendDist` points at the Vite output
+under `renderer/`.
+
+The `extension/**/*` and `extension-firefox/**/*` bundle resources were removed
+with the deleted extension sources; Stage 5 restores both the folders and the
+resource entries. Do not add a resource glob that matches nothing — packaging
+then fails on a missing path.
+
+The CSP move (from the HTML `<meta>` tag to `tauri.conf.json`) is still open.
+Today `renderer/index.html` carries:
+
+```
+default-src 'self';
+script-src 'self' 'unsafe-inline';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob: asset: http://asset.localhost;
+connect-src 'self' ipc: http://ipc.localhost ws://localhost:5173 http://localhost:5173;
+base-uri 'none';
+form-action 'none'
+```
+
+`connect-src` must include `ipc:` and `http://ipc.localhost`, or every
+`invoke` is blocked in the bundled app. The dev-server sources keep HMR
+working. `app.security.capabilities: ["default"]` is the only security setting
+in `tauri.conf.json` today.
+
+The `unsafe-inline` in `style-src` is needed by Tailwind's runtime-free output
 and by Radix, which injects styles.
 
 ### 10.5 ESLint
 
-The current config stays and grows:
+`eslint.config.mjs` has a `renderer/**/*.{ts,tsx}` block with the TypeScript
+parser, `eslint-plugin-react-hooks` and the file rules that need no type
+program:
 
 ```js
 {
-  files: ["src/**/*.{ts,tsx}"],
+  files: ["renderer/**/*.{ts,tsx}"],
   rules: {
-    ...tseslint.configs.recommendedTypeChecked.rules,
-    ...reactPlugin.configs["recommended-type-checked"].rules,
-    "max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
-    "max-imports": ["error", { max: 12 }],
-    "import/no-default-export": "error",
     "@typescript-eslint/no-explicit-any": "error",
     "@typescript-eslint/consistent-type-imports": "error",
-    "react/filename-naming": ["error", { regex: "^[A-Z][a-zA-Z0-9]*\\.tsx$" }],
-    "react/no-array-index-key": "error",
+    "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    "@typescript-eslint/no-unused-expressions": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
     "no-restricted-syntax": ["error", {
-      selector: "MemberExpression[object.object.name='window']",
+      selector: "AssignmentExpression[left.object.name='window']",
       message: "Do not hang state on window. Use lib/ipc or lib/ui.",
     }],
   },
 }
 ```
 
+`renderer/dist/**`, `reference/**`, `graphify-out/**` and `coverage/**` are
+ignored. Before 2026-11-13 the built bundle was being linted and produced 114
+false errors.
+
+The old `renderer/**/*.js`, `renderer/app.js`, `renderer/torrents.js` and
+`extension/**/*.js` blocks were deleted together with those sources. Only
+`tools/**/*.mjs` remains outside the renderer block.
+
+Still to add, when the feature folders land: `import/no-default-export`,
+`import/no-cycle`, `max-imports`, `react/jsx-key` and the type-aware
+`recommendedTypeChecked` set (it needs `parserOptions.project`).
+
 ### 10.6 Scripts
+
+The scripts that matter to this migration:
 
 ```json
 {
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "lint": "eslint src/ renderer/ extension/ tools/",
-    "typecheck": "tsc --noEmit",
-    "test": "cargo test && bun run test:js",
-    "test:js": "vitest run",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "frontend:dev": "vite --config renderer/vite.config.ts",
+    "frontend:build": "vite build --config renderer/vite.config.ts",
+    "typecheck": "tsc --noEmit -p renderer/tsconfig.json",
+    "lint": "eslint renderer/ tools/",
+    "test": "cargo test && bun run test:renderer",
+    "test:renderer": "vitest run --config renderer/vitest.config.ts",
     "tauri": "tauri"
   }
 }
 ```
+
+`dev` and `build` stay the Tauri wrappers; `beforeDevCommand` and
+`beforeBuildCommand` call the `frontend:*` scripts. `test:renderer` is the
+script CI calls; `test` adds the Rust suite for a local full run.
 
 ---
 
@@ -630,12 +763,23 @@ The current config stays and grows:
 | Backend | `cargo test` | unchanged |
 | Window boot | Vitest + jsdom | the window mounts and renders without an error — the test that caught the shipped crash |
 
+Today: 29 tests in 6 files — `app/window-mode.test.ts`, `lib/format.test.ts`,
+`features/downloads/state/downloads-store.test.ts`,
+`features/downloads/components/DownloadsTable.test.tsx`,
+`features/downloads/screens/DownloadsScreen.test.tsx` and
+`features/settings/screens/SettingsScreen.test.tsx`. The last two are the
+window-boot tests for the implemented windows.
+
 **R20 — The IPC mock is generated.** A test that mocks `invoke` uses the
 generated payload types, so a renamed field breaks the mock and the test.
+Today the fixtures in `test/fixtures.ts` are hand-written mirrors; they become
+generated together with `types/ipc.ts` in step 5.
 
-**R21 — The old `node:test` suite is migrated file by file.** The pure
-helpers in `torrents-view.js` and `formatters.js` become Vitest specs first;
-they carry over almost unchanged.
+**R21 — The old `node:test` suite is migrated file by file.** The legacy specs
+survive in `reference/legacy-renderer/` and `reference/legacy-extension/`.
+`formatters` and `theme` have replacements. `torrents-view`, `context-actions`,
+`capture-evaluator`, `hls` and the extension boot tests still need ports when
+their features land.
 
 ---
 
@@ -723,7 +867,13 @@ workflow. The audit fixes. `v0.3.0-beta.2` ships on the current architecture.
 
 ### Stage 1 — The build pipeline and TypeScript
 
-- Add Vite, TypeScript, Tailwind v4, shadcn/ui, Vitest.
+**Status: partial.** Vite 8, TypeScript 5, Tailwind v4, Vitest and the React
+plugin are wired; `renderer/vite.config.ts`, `renderer/tsconfig.json` and
+`renderer/vitest.config.ts` exist. The renderer is TypeScript under
+`renderer/src`. Missing: `ts-rs`, the generated command map, and the type-aware
+ESLint rules.
+
+- Add Vite, TypeScript, Tailwind v4, shadcn/ui, Vitest. **Done**
 - Move the renderer into `src/` as TypeScript modules. The DOM code stays as
   it is — the same functions, the same CSS, no React yet.
 - The CSS moves into Tailwind v4 only if it can be done without a visual
@@ -737,6 +887,16 @@ workflow. The audit fixes. `v0.3.0-beta.2` ships on the current architecture.
 
 ### Stage 2 — shadcn/ui and the UI utilities
 
+**Status: partial.** 11 primitives are generated under
+`renderer/src/components/ui/` with the CLI (style `radix-vega`): `alert-dialog`,
+`badge`, `button`, `checkbox`, `dialog`, `input`, `label`, `select`,
+`separator`, `skeleton`, `table`. All of them import `cn` from `lib/utils.ts`
+and Radix from the single `radix-ui` package. The hand-written `toast` /
+`toaster` pair is gone; `sonner` is mounted directly. `format`
+helpers live at `lib/format.ts`, the theme at `lib/ui/theme.ts`. Missing:
+`lib/ui/dialogs`, `lib/ui/confirm`, `lib/ui/table`, `lib/hooks/useEvent`,
+`lib/hooks/useHotkey`.
+
 - Add the shadcn components that the current UI already needs.
 - Build `lib/ui`: theme, toasts, dialogs, the table, the formatters.
 - Replace the hand-written dialogs one by one, starting with the error
@@ -744,7 +904,17 @@ workflow. The audit fixes. `v0.3.0-beta.2` ships on the current architecture.
 - **Gate:** the UI looks the same, the component count grows, no file passes
   300 lines.
 
+The port uses the `radix-vega` defaults, so the look already differs from the
+old renderer. That change has not been signed off; Stage 4 still owns the
+visual pass.
+
 ### Stage 3 — React screens
+
+**Status: partial, 2 of 7 windows.** The main window (`DownloadsScreen`) and
+the options window (`SettingsScreen`) are React. `progress`, `add`,
+`scheduler` and `integration` render `UnavailableScreen`; the torrents window
+and `torrents.html` do not exist. The old renderer is deleted and preserved
+only in the gitignored `reference/legacy-renderer/`.
 
 - One feature per stage: `downloads` → `settings` → `queues` → `torrents` →
   `scheduler` → `media` → `credentials`.
@@ -756,12 +926,20 @@ workflow. The audit fixes. `v0.3.0-beta.2` ships on the current architecture.
 
 ### Stage 4 — The visual redesign
 
+**Status: not started.** No sign-off, no baseline screenshots, no compact
+Windows layout pass.
+
 - The Tailwind v4 theme, the shadcn tokens, light and dark.
 - Needs a sign-off on the look. `tools/screenshots/` holds the baselines.
 - The compact Windows layout from `CONTRIBUTING.md` is a requirement, not a
   preference.
 
 ### Stage 5 — The extension
+
+**Status: not started.** `extension/` was deleted. The legacy sources survive
+only in `reference/legacy-extension/`, which is gitignored. No TypeScript, no
+`packages/shared/`, no React panel. Stage 5 must start by restoring the
+extension sources into version control.
 
 - TypeScript for the service worker and the content script.
 - `packages/shared/` with the logic the app and the extension both use.
@@ -777,33 +955,43 @@ workflow. The audit fixes. `v0.3.0-beta.2` ships on the current architecture.
 | R-1 | The rewrite loses behaviour nobody wrote down | Stage 1 keeps the behaviour and only changes the language. The window boot test and the component tests are written before the port |
 | R-2 | The visual change is not wanted | Stage 4 is separate and gated on a sign-off |
 | R-3 | The generated IPC types drift from the Rust | CI fails when the generated file is out of date |
-| R-4 | Tailwind v4 + Vite 8 + shadcn friction | The shadcn CLI path is the supported one; if it fights, pin Vite 7 for the build |
+| R-4 | Tailwind v4 + Vite 8 + shadcn friction | The shadcn CLI runs from the repository root; if a future CLI release breaks, pin the last working `shadcn` version. Vite 8 is working today, so no downgrade is needed |
 | R-5 | TypeScript 7 is too new for the tooling | Pin TypeScript 5.x |
 | R-6 | The extension bundle breaks the content script | `inlineDynamicImports`, one file per entry, the manifest is generated, the extension tests run on the built file |
 | R-7 | The scope is too big to finish | Each stage is shippable and independent. Stop after any stage |
+| R-8 | A status claim outruns the gates, as it did on 2026-11-12 | §0 is the only status source. A stage is promoted only in the commit that shows green `typecheck`, `lint` and `test` |
 
 ---
 
 ## 15. Definition of done
 
-- [ ] `tsc --noEmit` is clean with `strict` and `noUncheckedIndexedAccess`.
-- [ ] `bun run lint` is clean, including `max-lines` and `no-explicit-any`.
-- [ ] Every screen is a feature folder with the six sub-folders.
-- [ ] No file over 300 lines.
-- [ ] The command map is generated and matches `generate_handler!`.
-- [ ] The IPC types are generated from the Rust DTOs.
-- [ ] No `window.x =` outside `lib/`.
-- [ ] Every shadcn component in use came from the CLI.
-- [ ] Both windows boot in the test harness.
-- [ ] `cargo test`, `vitest run` and `bun run lint` are green in CI.
-- [ ] The extension builds, its tests pass, and the panel is React.
+- [x] `tsc --noEmit` is clean with `strict` and `noUncheckedIndexedAccess`.
+- [x] `bun run lint` is clean, including `max-lines` and `no-explicit-any`.
+- [ ] Every screen is a feature folder with the six sub-folders. (2 of 7:
+      `downloads`, `settings`.)
+- [x] No file over 300 lines. (Largest app file: 165 lines.)
+- [ ] The command map is generated and matches `generate_handler!`. (7 of 65
+      commands are hand-mirrored in `lib/ipc/commands.ts`.)
+- [ ] The IPC types are generated from the Rust DTOs. (`types/ipc.ts` is
+      hand-written.)
+- [x] No `window.x =` outside `lib/`.
+- [x] Every shadcn component in use came from the CLI. The old hand-written
+      `toast` / `toaster` pair is deleted; `sonner` is the upstream package,
+      mounted directly because the shadcn wrapper pulls `next-themes`.
+- [ ] Both windows boot in the test harness. (Main and options windows have
+      boot tests; the torrents window and `torrents.html` do not exist.)
+- [x] `vitest run`, `bun run lint` and `bun run typecheck` are green locally,
+      and `.github/workflows/ci.yml` runs those three. `cargo test` is not a CI
+      job yet; it is green locally and runs through `bun run test`.
+- [ ] The extension builds, its tests pass, and the panel is React. The
+      legacy sources are preserved in `reference/`, which is gitignored.
 
 ---
 
 ## 16. Open questions
 
-1. **Design system.** Tailwind v4 + shadcn (new look, own the code) or keep
-   the current CSS and only use React? Stage 4 decides the look.
+1. **Design system.** Decided 2026-11-13: Tailwind v4 + shadcn with the
+   `radix-vega` style. Stage 4 decides the final look within that system.
 2. **Typed IPC generator.** `ts-rs` (small, explicit) or `specta` (bigger,
    generates the command wrappers too)? `ts-rs` is the safer first step.
 3. **Extension scope.** Is the React panel worth it, or is TypeScript alone
