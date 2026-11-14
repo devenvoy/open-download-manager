@@ -1,16 +1,5 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { ClassicDialog } from "@/components/feedback";
 import { type AdvancedIntegrationCapability } from "@/types/ipc";
 import { advancedStateKind } from "../model/browser-view";
 
@@ -24,13 +13,6 @@ export interface AdvancedIntegrationSectionProps {
   onRepair: () => void;
 }
 
-const TONE: Record<string, string> = {
-  active: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:text-emerald-400",
-  degraded: "bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-400",
-  unsupported: "bg-muted text-muted-foreground",
-  disabled: "bg-muted text-muted-foreground",
-};
-
 export function AdvancedIntegrationSection({
   capability,
   enabling,
@@ -40,6 +22,7 @@ export function AdvancedIntegrationSection({
   onDisable,
   onRepair,
 }: AdvancedIntegrationSectionProps) {
+  const [showConfirm, setShowConfirm] = useState(false);
   const state = capability?.state;
   const kind = advancedStateKind(state);
   const availability = capability?.availability;
@@ -69,99 +52,114 @@ export function AdvancedIntegrationSection({
     availability?.status === "unsupported" || kind === "unsupported";
 
   return (
-    <section className="space-y-3 rounded-md border border-border p-3">
-      <header className="flex items-start justify-between gap-3">
+    <section
+      className="advanced-integration-section"
+      id="advanced-integration-section"
+    >
+      <div className="advanced-integration-heading">
         <div>
-          <h3 className="text-sm font-semibold">
+          <h3 id="advanced-integration-title">
             Enhanced Media Integration (Opt-in)
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="field-help">
             Deep player stream detection for media requests. A bounded
             non-destructive health check runs automatically, with instant
             rollback if conflicts occur.
           </p>
         </div>
-        <Badge variant="outline" className={TONE[kind]}>
-          {badgeLabel}
-        </Badge>
-      </header>
-
-      {message ? (
-        <p
-          role="status"
-          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm"
+        <span
+          className={`advanced-integration-badge ${kind}`}
+          id="advanced-integration-badge"
         >
-          {message}
-        </p>
-      ) : null}
+          {badgeLabel}
+        </span>
+      </div>
 
-      {kind === "active" ? (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabling}
-            onClick={onDisable}
-          >
-            Disable
-          </Button>
+      {message && (
+        <div
+          className="advanced-integration-banner"
+          id="advanced-integration-banner"
+        >
+          <p id="advanced-integration-message" role="status">
+            {message}
+          </p>
         </div>
-      ) : kind === "degraded" ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={repairing} onClick={onRepair}>
-            Repair &amp; Verify
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabling}
-            onClick={onDisable}
-          >
-            Disable
-          </Button>
-        </div>
-      ) : (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" disabled={unavailable || enabling}>
-              Enable Enhanced Mode…
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Enable Enhanced Media Integration?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This installs an opt-in platform adapter to observe player
-                streams. Only selected and approved media requests are
-                captured; unrelated web browsing traffic is never collected or
-                persisted. A non-destructive health verification check runs
-                automatically.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onEnable}>Enable</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       )}
 
-      {unavailable && availability?.status === "unsupported" ? (
-        <p className="text-xs text-muted-foreground">{availability.reason}</p>
-      ) : null}
+      <div
+        className="advanced-integration-controls"
+        id="advanced-integration-controls"
+      >
+        {kind === "active" ? (
+          <>
+            <button
+              type="button"
+              className="button secondary"
+              id="advanced-repair-button"
+              disabled={repairing}
+              onClick={onRepair}
+            >
+              {repairing ? "Verifying…" : "Repair & Verify"}
+            </button>
+            <button
+              type="button"
+              className="button secondary"
+              id="advanced-disable-button"
+              disabled={disabling}
+              onClick={onDisable}
+            >
+              {disabling ? "Disabling…" : "Disable"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="button"
+            id="advanced-enable-button"
+            disabled={enabling || unavailable}
+            onClick={() => setShowConfirm(true)}
+          >
+            {enabling ? "Enabling…" : "Enable Enhanced Mode…"}
+          </button>
+        )}
+      </div>
 
-      {capability?.lastHealthCheck ? (
-        <p className="text-xs text-muted-foreground">
-          Last health check{" "}
-          {new Date(capability.lastHealthCheck.checkedAt * 1000).toLocaleString()}:
-          {" "}
-          {capability.lastHealthCheck.success ? "passed" : "failed"}
-          {capability.lastHealthCheck.conflictDetected
-            ? " (conflict detected, rolled back)"
-            : ""}
-          .
-        </p>
-      ) : null}
+      <ClassicDialog
+        className="torrent-dialog"
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title="Enable Enhanced Media Integration"
+      >
+        <div className="dialog-body">
+          <p>
+            Enhanced Media Integration uses deep stream detection to capture
+            protected audio and video streams across supported players.
+          </p>
+          <p className="field-help">
+            It runs a quick self-test and automatically rolls back if any
+            conflict or performance degradation is detected.
+          </p>
+        </div>
+        <div className="dialog-footer">
+          <button
+            type="button"
+            className="button"
+            onClick={() => setShowConfirm(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => {
+              setShowConfirm(false);
+              onEnable();
+            }}
+          >
+            Enable
+          </button>
+        </div>
+      </ClassicDialog>
     </section>
   );
 }

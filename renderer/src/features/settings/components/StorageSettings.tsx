@@ -1,25 +1,6 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { type DownloadCategory } from "@/types/ipc";
 import { settingsApi } from "../api";
 import { type SettingsDraft } from "../model/settings-draft";
-
-const CATEGORIES: ReadonlyArray<{ value: DownloadCategory; label: string }> = [
-  { value: "Archives", label: "Compressed / Archives" },
-  { value: "Documents", label: "Documents" },
-  { value: "Audio", label: "Music / Audio" },
-  { value: "Programs", label: "Programs" },
-  { value: "Video", label: "Video" },
-  { value: "Other", label: "Other" },
-];
 
 export interface StorageSettingsProps {
   draft: SettingsDraft;
@@ -92,114 +73,109 @@ export function StorageSettings({
   }
 
   return (
-    <fieldset className="rounded-md border p-4 space-y-4">
-      <legend className="px-2 text-sm font-semibold">Save to</legend>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="default-directory">Default download folder:</Label>
-        <div className="flex gap-2">
-          <Input
-            id="default-directory"
-            value={draft.defaultDirectory}
-            onChange={(e) => onChange("defaultDirectory", e.target.value)}
-            required
-          />
-          <Button
-            type="button"
-            variant="outline"
-            id="choose-directory"
-            onClick={() => void handleBrowseDefault()}
-          >
-            Browse…
-          </Button>
-        </div>
+    <fieldset>
+      <legend>Save to</legend>
+      <label htmlFor="default-directory">Default download folder:</label>
+      <div className="directory-field">
+        <input
+          id="default-directory"
+          required
+          value={draft.defaultDirectory}
+          onChange={(e) => onChange("defaultDirectory", e.target.value)}
+        />
+        <button
+          className="small-button"
+          id="choose-directory"
+          type="button"
+          onClick={handleBrowseDefault}
+        >
+          Browse…
+        </button>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="options-category-select">
-            Category destination folder:
-          </Label>
-          <Select
-            value={draft.selectedCategory}
-            onValueChange={(val) =>
-              onChange("selectedCategory", val as DownloadCategory)
-            }
-          >
-            <SelectTrigger id="options-category-select" className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            id="category-directory"
-            value={currentCategoryDir}
-            placeholder="Use default download folder"
-            onChange={(e) => handleCategoryDirChange(e.target.value)}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            id="choose-category-directory"
-            onClick={() => void handleBrowseCategory()}
-          >
-            Browse…
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            id="reset-category-directory"
-            title="Reset this category to use the default download folder"
-            onClick={handleResetCategory}
-          >
-            Reset
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Files in this category are automatically saved to this folder.
-        </p>
+      <div className="form-line" style={{ marginTop: 10 }}>
+        <label htmlFor="options-category-select">
+          Category destination folder:
+        </label>
+        <select
+          id="options-category-select"
+          value={draft.selectedCategory}
+          onChange={(e) =>
+            onChange("selectedCategory", e.target.value as DownloadCategory)
+          }
+        >
+          <option value="Archives">Compressed / Archives</option>
+          <option value="Documents">Documents</option>
+          <option value="Audio">Music / Audio</option>
+          <option value="Programs">Programs</option>
+          <option value="Video">Video</option>
+          <option value="Other">Other</option>
+        </select>
       </div>
+      <div className="directory-field">
+        <input
+          id="category-directory"
+          placeholder="Use default download folder"
+          value={currentCategoryDir}
+          onChange={(e) => handleCategoryDirChange(e.target.value)}
+        />
+        <button
+          className="small-button"
+          id="choose-category-directory"
+          type="button"
+          onClick={handleBrowseCategory}
+        >
+          Browse…
+        </button>
+        <button
+          className="small-button"
+          id="reset-category-directory"
+          type="button"
+          title="Reset this category to use the default download folder"
+          onClick={handleResetCategory}
+        >
+          Reset
+        </button>
+      </div>
+      <p className="field-help" id="category-directory-hint">
+        Files in this category are automatically saved to this folder.
+      </p>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="temporary-directory">Temporary parts directory:</Label>
-        <div className="flex gap-2">
-          <Input
-            id="temporary-directory"
-            value={draft.temporaryDirectory}
-            placeholder="Default (same volume / folder as download)"
-            onChange={(e) => onChange("temporaryDirectory", e.target.value)}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            id="choose-temporary-directory"
-            onClick={() => void handleBrowseTemporary()}
-          >
-            Browse…
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            id="reset-temporary-directory"
-            title="Reset to default download location"
-            onClick={handleResetTemporary}
-          >
-            Reset
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Temporary parts are downloaded here before final assembly into the
-          destination folder.
-        </p>
+      <label
+        htmlFor="temporary-directory"
+        style={{ marginTop: 10, display: "block" }}
+      >
+        Temporary parts directory:
+      </label>
+      <div className="directory-field">
+        <input
+          id="temporary-directory"
+          placeholder="Default (same volume / folder as download)"
+          value={draft.temporaryDirectory}
+          onChange={(e) => onChange("temporaryDirectory", e.target.value)}
+        />
+        <button
+          className="small-button"
+          id="choose-temporary-directory"
+          type="button"
+          onClick={handleBrowseTemporary}
+        >
+          Browse…
+        </button>
+        <button
+          className="small-button"
+          id="reset-temporary-directory"
+          type="button"
+          title="Reset to default download location"
+          onClick={handleResetTemporary}
+        >
+          Reset
+        </button>
       </div>
+      <p className="field-help">
+        Temporary parts are downloaded here before final assembly into the
+        destination folder.
+      </p>
     </fieldset>
   );
 }

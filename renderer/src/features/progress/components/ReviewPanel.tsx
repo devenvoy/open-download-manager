@@ -1,16 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { DOWNLOAD_CATEGORIES, type DownloadSummary } from "@/types/ipc";
 import {
   draftFromDownload,
@@ -27,7 +15,7 @@ export interface ReviewPanelProps {
 }
 
 /**
- * The confirmation form the progress window shows while
+ * The confirmation dialog the progress window shows while
  * `download.needsReview` is true.
  */
 export function ReviewPanel({
@@ -65,140 +53,180 @@ export function ReviewPanel({
   }
 
   return (
-    <form className="space-y-4" onSubmit={(event) => submit(event, false)}>
-      <div className="space-y-2">
-        <Label htmlFor="review-url">URL</Label>
-        <Input id="review-url" readOnly value={download.url} />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="review-category">Category</Label>
-        <Select
-          value={draft.category || "auto"}
-          onValueChange={(value) =>
-            patch({
-              category:
-                value === "auto" ? "" : (value as ReviewDraft["category"]),
-            })
-          }
-        >
-          <SelectTrigger id="review-category">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto">Automatic</SelectItem>
-            {DOWNLOAD_CATEGORIES.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="review-filename">Save as</Label>
-        <Input
-          id="review-filename"
-          maxLength={240}
-          value={draft.filename}
-          onChange={(event) => patch({ filename: event.target.value })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="review-directory">Save to</Label>
-        <div className="flex gap-2">
-          <Input
-            id="review-directory"
-            value={draft.directory}
-            onChange={(event) => patch({ directory: event.target.value })}
-          />
-          <Button type="button" variant="outline" onClick={() => void browse()}>
-            Browse…
-          </Button>
+    <dialog id="add-dialog" className="add-dialog" open>
+      <form
+        id="add-form"
+        onSubmit={(event) => submit(event, false)}
+      >
+        <div className="dialog-title">
+          <strong id="add-title">Download File Info</strong>
+          <button
+            type="button"
+            className="close-button"
+            data-close
+            aria-label="Close"
+            onClick={onCancel}
+          >
+            ×
+          </button>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="review-description">Description</Label>
-        <Input
-          id="review-description"
-          maxLength={1_000}
-          value={draft.description}
-          onChange={(event) => patch({ description: event.target.value })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="review-schedule">Start at</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="review-schedule"
-            type="datetime-local"
-            value={draft.scheduledAt}
-            onChange={(event) => patch({ scheduledAt: event.target.value })}
-          />
-          <span className="text-xs text-muted-foreground">Optional</span>
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={draft.authEnabled}
-            onCheckedChange={(checked) =>
-              patch({ authEnabled: checked === true })
-            }
-          />
-          Use basic authentication for this download
-        </label>
-        {draft.authEnabled ? (
-          <div className="flex gap-2">
-            <Input
-              value={draft.authUser}
-              onChange={(event) => patch({ authUser: event.target.value })}
-              placeholder="Username"
-              autoComplete="off"
-              aria-label="Username"
-            />
-            <Input
-              type="password"
-              value={draft.authPass}
-              onChange={(event) => patch({ authPass: event.target.value })}
-              placeholder="Password"
-              autoComplete="off"
-              aria-label="Password"
+        <div className="dialog-body">
+          <div className="form-line address-line">
+            <label htmlFor="download-urls">Address:</label>
+            <textarea
+              id="download-urls"
+              rows={2}
+              readOnly
+              value={download.url}
             />
           </div>
-        ) : null}
-      </div>
 
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+          <div className="form-line">
+            <label htmlFor="download-category">Category:</label>
+            <select
+              id="download-category"
+              value={draft.category}
+              onChange={(e) =>
+                patch({
+                  category: (e.target.value as ReviewDraft["category"]) || "",
+                })
+              }
+            >
+              <option value="">Automatic</option>
+              {DOWNLOAD_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel download
-        </Button>
-        <span className="flex-1" />
-        <Button
-          type="button"
-          variant="outline"
-          disabled={submitting}
-          onClick={(event) => submit(event, true)}
-        >
-          Download Later
-        </Button>
-        <Button type="submit" disabled={submitting}>
-          Start Download
-        </Button>
-      </div>
-    </form>
+          <div className="form-line">
+            <label htmlFor="download-filename">Save As:</label>
+            <input
+              id="download-filename"
+              maxLength={240}
+              value={draft.filename}
+              onChange={(event) => patch({ filename: event.target.value })}
+            />
+          </div>
+
+          <div className="form-line">
+            <label htmlFor="add-directory">Save to:</label>
+            <input
+              id="add-directory"
+              readOnly
+              value={draft.directory}
+            />
+            <button
+              type="button"
+              id="add-browse"
+              className="small-button"
+              onClick={() => void browse()}
+            >
+              …
+            </button>
+          </div>
+
+          <div className="form-line">
+            <label htmlFor="download-description">Description:</label>
+            <input
+              id="download-description"
+              maxLength={1_000}
+              value={draft.description}
+              onChange={(event) => patch({ description: event.target.value })}
+            />
+          </div>
+
+          <div className="form-line schedule-line">
+            <label htmlFor="download-schedule">Start at:</label>
+            <input
+              id="download-schedule"
+              type="datetime-local"
+              value={draft.scheduledAt}
+              onChange={(event) => patch({ scheduledAt: event.target.value })}
+            />
+            <span className="field-help">Optional</span>
+          </div>
+
+          <div className="form-line auth-toggle-line">
+            <label className="checkbox-label" htmlFor="add-auth-enabled">
+              <input
+                id="add-auth-enabled"
+                type="checkbox"
+                checked={draft.authEnabled}
+                onChange={(event) =>
+                  patch({ authEnabled: event.target.checked })
+                }
+              />
+              Use basic authentication for this download
+            </label>
+          </div>
+
+          {draft.authEnabled ? (
+            <div
+              id="add-auth-fields"
+              className="form-line auth-fields"
+              style={{ display: "flex", gap: 8 }}
+            >
+              <input
+                id="add-auth-user"
+                value={draft.authUser}
+                onChange={(event) => patch({ authUser: event.target.value })}
+                placeholder="Username"
+                autoComplete="off"
+                aria-label="Username"
+                style={{ flex: 1 }}
+              />
+              <input
+                id="add-auth-pass"
+                type="password"
+                value={draft.authPass}
+                onChange={(event) => patch({ authPass: event.target.value })}
+                placeholder="Password"
+                autoComplete="off"
+                aria-label="Password"
+                style={{ flex: 1 }}
+              />
+            </div>
+          ) : null}
+
+          {error ? (
+            <p id="add-error" role="alert" className="form-error">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="dialog-footer">
+          <span className="spacer" />
+          <button
+            type="button"
+            className="button"
+            id="add-later"
+            onClick={(event) => submit(event, true)}
+          >
+            Download Later
+          </button>
+          <button
+            type="submit"
+            className="button primary"
+            id="add-submit"
+            disabled={submitting}
+          >
+            Start Download
+          </button>
+          <button
+            type="button"
+            className="button"
+            data-close
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </dialog>
   );
 }

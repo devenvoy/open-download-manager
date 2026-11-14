@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { type MediaToolType } from "@/types/ipc";
 import {
   useInstallMediaTool,
@@ -16,7 +15,7 @@ export function MediaToolsSettings() {
     try {
       await installMutation.mutateAsync(tool);
     } catch {
-      // Handled by react-query / notification
+      // Handled by react-query
     }
   }
 
@@ -32,68 +31,52 @@ export function MediaToolsSettings() {
     const isAvail = item?.isAvailable === true;
 
     return (
-      <div className="flex items-center justify-between py-2 border-b last:border-0">
-        <div className="space-y-0.5">
-          <strong className="text-sm font-medium">{title}</strong>
-          <div>
-            <span
-              id={statusId}
-              className={`text-xs ${
-                isInstalling
-                  ? "text-sky-600 dark:text-sky-400"
-                  : isPending
-                    ? "text-muted-foreground"
-                    : isAvail
-                      ? "text-green-600 dark:text-green-400 font-medium"
-                      : "text-destructive font-medium"
-              }`}
-            >
-              {isInstalling
-                ? "Downloading & installing…"
-                : isPending
-                  ? "Checking…"
-                  : isAvail
-                    ? `Installed (${item?.source || "ready"})`
-                    : "Not installed"}
-            </span>
-          </div>
+      <div className="media-tool-line">
+        <div className="media-tool-meta">
+          <strong>{title}</strong>
+          <span id={statusId} className="field-help">
+            {isInstalling
+              ? "Downloading & installing…"
+              : isPending
+                ? "Checking…"
+                : isAvail
+                  ? `Installed (${item?.source || "ready"})`
+                  : "Not installed"}
+          </span>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
+        <button
+          className="small-button"
           id={btnId}
+          type="button"
           disabled={isInstalling}
           onClick={() => void handleInstall(tool)}
         >
           {isInstalling ? "Installing…" : isAvail ? "Reinstall" : "Install"}
-        </Button>
+        </button>
       </div>
     );
   }
 
   return (
-    <fieldset className="rounded-md border p-4 space-y-3">
-      <legend className="px-2 text-sm font-semibold">Media Tools</legend>
-      <div className="divide-y">
-        {renderToolRow(
-          "FFmpeg",
-          "ffmpeg",
-          "ffmpeg-status",
-          "install-ffmpeg-btn",
-          ffmpegStatus,
-        )}
-        {renderToolRow(
-          "yt-dlp",
-          "yt-dlp",
-          "ytdlp-status",
-          "install-ytdlp-btn",
-          ytdlpStatus,
-        )}
-      </div>
-      <p className="text-xs text-muted-foreground pt-1">
-        Media tools are managed automatically by Open Download Manager to
-        combine video and audio streams.
+    <fieldset>
+      <legend>Media Tools</legend>
+      {renderToolRow(
+        "FFmpeg",
+        "ffmpeg",
+        "ffmpeg-status",
+        "install-ffmpeg-btn",
+        ffmpegStatus,
+      )}
+      {renderToolRow(
+        "yt-dlp",
+        "yt-dlp",
+        "ytdlp-status",
+        "install-ytdlp-btn",
+        ytdlpStatus,
+      )}
+      <p className="field-help">
+        Media tools are managed automatically by Open Download Manager to combine
+        video and audio streams.
       </p>
     </fieldset>
   );

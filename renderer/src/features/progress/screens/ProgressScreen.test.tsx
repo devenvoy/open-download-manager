@@ -108,7 +108,7 @@ describe("ProgressScreen", () => {
     await screen.findByText("50% file.zip");
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Speed Limiter" }));
-    fireEvent.change(screen.getByLabelText("Global speed limit (KB/s)"), {
+    fireEvent.change(screen.getByLabelText(/Global speed limit/i), {
       target: { value: "512" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -139,7 +139,7 @@ describe("ProgressScreen", () => {
     renderWithQuery(<ProgressScreen id="progress-1" />);
 
     await screen.findByText("Download File Info");
-    fireEvent.click(screen.getByRole("button", { name: "Cancel download" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() =>
       expect(actionMock).toHaveBeenCalledWith("progress-1", "remove"),

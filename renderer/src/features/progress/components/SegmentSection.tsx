@@ -1,12 +1,3 @@
-import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
 import { type DownloadSummary } from "@/types/ipc";
 import {
@@ -25,49 +16,49 @@ export function SegmentSection({ download }: { download: DownloadSummary }) {
   if (segments.length === 0) return null;
 
   return (
-    <section className="space-y-3" aria-label="Download connections">
-      <p className="text-xs text-muted-foreground">{segmentCaption(download)}</p>
+    <div id="connection-details">
+      <p className="connection-caption">{segmentCaption(download)}</p>
 
-      <div className="flex flex-wrap gap-1" aria-hidden>
+      <div id="segment-map" className="segment-map" aria-hidden="true">
         {segments.map((segment, index) => {
           const total = Number(segment.total) || 0;
           const value = total
             ? Math.min(100, ((Number(segment.downloaded) || 0) / total) * 100)
             : 0;
           return (
-            <Progress
+            <progress
               key={`${segment.start}-${index}`}
+              max={100}
               value={value}
-              className="h-2 min-w-16 flex-1"
             />
           );
         })}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-10">N.</TableHead>
-            <TableHead>Downloaded</TableHead>
-            <TableHead>Info</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {segments.map((segment, index) => (
-            <TableRow key={`${segment.start}-${index}`}>
-              <TableCell>{segmentLabel(download, index)}</TableCell>
-              <TableCell className="tabular-nums">
-                {formatBytes(Number(segment.downloaded) || 0)}
-              </TableCell>
-              <TableCell>{segmentStatus(segment, status)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="connections-scroll">
+        <table className="connections-table">
+          <thead>
+            <tr>
+              <th>N.</th>
+              <th>Downloaded</th>
+              <th>Info</th>
+            </tr>
+          </thead>
+          <tbody id="segment-bars">
+            {segments.map((segment, index) => (
+              <tr key={`${segment.start}-${index}`}>
+                <td>{segmentLabel(download, index)}</td>
+                <td>{formatBytes(Number(segment.downloaded) || 0)}</td>
+                <td>{segmentStatus(segment, status)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p id="segment-note" className="field-help">
         {segmentNote(download, segments.length)}
       </p>
-    </section>
+    </div>
   );
 }

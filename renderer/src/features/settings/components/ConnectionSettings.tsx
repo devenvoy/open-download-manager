@@ -1,8 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   cleanHostPattern,
   type SettingsDraft,
@@ -28,7 +24,9 @@ export function ConnectionSettings({
   function handleAddOverride() {
     const cleaned = cleanHostPattern(newHost);
     if (!cleaned) {
-      onError("Please enter a valid host pattern (e.g. example.com or *.domain.com)");
+      onError(
+        "Please enter a valid host pattern (e.g. example.com or *.domain.com)",
+      );
       return;
     }
     const conns = Math.max(1, Math.min(32, Number(newConnections) || 1));
@@ -46,206 +44,176 @@ export function ConnectionSettings({
   }
 
   return (
-    <div className="space-y-6">
-      <fieldset className="rounded-md border p-4 space-y-4">
-        <legend className="px-2 text-sm font-semibold">Connection</legend>
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="max-concurrent">
+    <>
+      <fieldset>
+        <legend>Connection</legend>
+        <div className="form-line">
+          <label htmlFor="max-concurrent">
             Maximum simultaneous downloads:
-          </Label>
-          <Input
-            id="max-concurrent"
+          </label>
+          <input
             type="number"
+            id="max-concurrent"
             min={1}
             max={16}
-            className="w-24 text-right"
+            required
             value={draft.maxConcurrent}
             onChange={(e) =>
-              onChange("maxConcurrent", Math.max(1, Number(e.target.value) || 1))
-            }
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-4">
-            <Label htmlFor="connections">Maximum connections per file:</Label>
-            <Input
-              id="connections"
-              type="number"
-              min={1}
-              max={32}
-              className="w-24 text-right"
-              value={draft.connections}
-              onChange={(e) =>
-                onChange("connections", Math.max(1, Number(e.target.value) || 1))
-              }
-              required
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Multiple connections require server support for byte ranges.
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="speed-limit">
-            Speed limit (KB/s, 0 = unlimited):
-          </Label>
-          <Input
-            id="speed-limit"
-            type="number"
-            min={0}
-            max={1048576}
-            className="w-32 text-right"
-            value={draft.speedLimitKbps}
-            onChange={(e) =>
               onChange(
-                "speedLimitKbps",
-                Math.max(0, Number(e.target.value) || 0),
+                "maxConcurrent",
+                Math.max(1, Number(e.target.value) || 1),
               )
             }
+          />
+        </div>
+        <div className="form-line">
+          <label htmlFor="connections">Maximum connections per file:</label>
+          <input
+            type="number"
+            id="connections"
+            min={1}
+            max={32}
             required
+            value={draft.connections}
+            onChange={(e) =>
+              onChange(
+                "connections",
+                Math.max(1, Number(e.target.value) || 1),
+              )
+            }
+          />
+        </div>
+        <p className="field-help">
+          Multiple connections require server support for byte ranges.
+        </p>
+        <div className="form-line">
+          <label htmlFor="speed-limit">
+            Speed limit (KB/s, 0 = unlimited):
+          </label>
+          <input
+            type="number"
+            id="speed-limit"
+            min={0}
+            max={1048576}
+            required
+            value={draft.speedLimitKbps}
+            onChange={(e) =>
+              onChange("speedLimitKbps", Number(e.target.value) || 0)
+            }
           />
         </div>
       </fieldset>
 
-      <fieldset className="rounded-md border p-4 space-y-3">
-        <legend className="px-2 text-sm font-semibold">
-          Site Connection Exceptions
-        </legend>
-        <p className="text-xs text-muted-foreground">
+      <fieldset>
+        <legend>Site Connection Exceptions</legend>
+        <p className="field-help">
           Configure per-domain connection limits (exact host or *.domain.com).
           Tip: Use 1 connection for servers that do not support resume.
         </p>
-        <div className="flex gap-2 items-center">
-          <Input
+        <div className="form-line site-override-inputs">
+          <input
+            type="text"
             id="new-override-host"
             placeholder="example.com or *.domain.com"
             value={newHost}
             onChange={(e) => setNewHost(e.target.value)}
           />
-          <Input
-            id="new-override-connections"
+          <input
             type="number"
+            id="new-override-connections"
             min={1}
             max={32}
-            className="w-20 text-right"
             value={newConnections}
+            title="Connections"
             onChange={(e) =>
-              setNewConnections(Math.max(1, Number(e.target.value) || 1))
+              setNewConnections(Number(e.target.value) || 1)
             }
           />
-          <Button
+          <button
             type="button"
-            variant="outline"
             id="add-override-button"
+            className="small-button"
             onClick={handleAddOverride}
           >
             Add Exception
-          </Button>
+          </button>
         </div>
-
-        <div id="site-overrides-list" className="space-y-1.5 pt-2">
-          {draft.connectionOverrides.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">
-              No site exceptions configured.
-            </p>
-          ) : (
-            draft.connectionOverrides.map((override, index) => (
-              <div
-                key={`${override.hostPattern}-${index}`}
-                className="flex items-center justify-between rounded border px-3 py-1.5 text-xs"
+        <div id="site-overrides-list" className="site-overrides-list">
+          {draft.connectionOverrides.map((item, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "3px 0",
+              }}
+            >
+              <span>
+                <strong>{item.hostPattern}</strong>: {item.connections}{" "}
+                connection(s)
+              </span>
+              <button
+                type="button"
+                className="small-button"
+                onClick={() => handleRemoveOverride(idx)}
               >
-                <span className="font-mono">{override.hostPattern}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground">
-                    {override.connections} connection
-                    {override.connections === 1 ? "" : "s"}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="remove-override-button h-6 px-2 text-destructive"
-                    data-index={index}
-                    onClick={() => handleRemoveOverride(index)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
       </fieldset>
 
-      <fieldset className="rounded-md border p-4 space-y-3">
-        <legend className="px-2 text-sm font-semibold">
-          Rolling Download Limits
-        </legend>
-        <div className="flex items-center gap-2">
-          <Checkbox
+      <fieldset>
+        <legend>Rolling Download Limits</legend>
+        <label className="checkbox-label" htmlFor="window-limit-enabled">
+          <input
+            type="checkbox"
             id="window-limit-enabled"
             checked={draft.windowLimitEnabled}
-            onCheckedChange={(checked) =>
-              onChange("windowLimitEnabled", checked === true)
-            }
+            onChange={(e) => onChange("windowLimitEnabled", e.target.checked)}
           />
-          <Label
-            htmlFor="window-limit-enabled"
-            className="text-sm font-normal cursor-pointer"
-          >
-            Limit download volume over rolling time window
-          </Label>
-        </div>
-
+          Limit download volume over rolling time window
+        </label>
         {draft.windowLimitEnabled && (
-          <div id="window-limit-fields" className="space-y-3 pl-6 pt-1">
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="window-limit-max-mb">Max data volume (MB):</Label>
-              <Input
-                id="window-limit-max-mb"
+          <div id="window-limit-fields" className="window-limit-fields">
+            <div className="form-line">
+              <label htmlFor="window-limit-max-mb">Max data volume (MB):</label>
+              <input
                 type="number"
+                id="window-limit-max-mb"
                 min={1}
                 placeholder="2048"
-                className="w-32 text-right"
                 value={draft.windowLimitMaxMb}
                 onChange={(e) =>
                   onChange(
                     "windowLimitMaxMb",
-                    Math.max(1, Number(e.target.value) || 1),
+                    Number(e.target.value) || 0,
                   )
                 }
               />
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="window-limit-hours">Time window (hours):</Label>
-              <Input
-                id="window-limit-hours"
+            <div className="form-line">
+              <label htmlFor="window-limit-hours">Time window (hours):</label>
+              <input
                 type="number"
+                id="window-limit-hours"
                 min={1}
                 max={8760}
                 placeholder="12"
-                className="w-32 text-right"
                 value={draft.windowLimitHours}
                 onChange={(e) =>
                   onChange(
                     "windowLimitHours",
-                    Math.max(1, Number(e.target.value) || 1),
+                    Number(e.target.value) || 0,
                   )
                 }
               />
             </div>
-            {draft.windowLimitUsageText && (
-              <div
-                id="window-limit-status-line"
-                className="text-xs text-muted-foreground"
-              >
-                <span id="window-limit-status">{draft.windowLimitUsageText}</span>
-              </div>
-            )}
           </div>
         )}
       </fieldset>
-    </div>
+    </>
   );
 }

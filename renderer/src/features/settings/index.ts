@@ -1,5 +1,4 @@
 export { SettingsScreen } from "./screens/SettingsScreen";
-export { SettingsDialog } from "./components/SettingsDialog";
 export { SettingsPanel } from "./components/SettingsPanel";
 export {
   useSettings,

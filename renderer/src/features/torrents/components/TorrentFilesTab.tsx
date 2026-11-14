@@ -1,12 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import { formatBytes } from "@/lib/format";
 import { type TorrentFileItem } from "@/types/ipc";
-import { fileProgressPercent } from "../model/torrent-view";
 
 export interface TorrentFilesTabProps {
   files: TorrentFileItem[];
+  loading: boolean;
   selection: Set<number> | null;
   dirty: boolean;
   applying: boolean;
@@ -17,6 +14,7 @@ export interface TorrentFilesTabProps {
 
 export function TorrentFilesTab({
   files,
+  loading,
   selection,
   dirty,
   applying,
@@ -24,56 +22,79 @@ export function TorrentFilesTab({
   onSetAll,
   onApply,
 }: TorrentFilesTabProps) {
-  const isIncluded = (file: TorrentFileItem) =>
-    selection ? selection.has(file.index) : file.included;
+  if (loading) {
+    return (
+      <div id="torrent-tab-files" className="torrent-tab-panel" role="tabpanel">
+        <p className="torrent-files-hint">Reading files…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" onClick={() => onSetAll(true)}>
-          Select all
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => onSetAll(false)}>
-          Select none
-        </Button>
-        <Button size="sm" onClick={onApply} disabled={applying || !dirty}>
-          Apply selection
-        </Button>
-        {dirty ? (
-          <span className="text-xs text-muted-foreground">
-            Changes are not saved yet.
-          </span>
-        ) : null}
+    <div id="torrent-tab-files" className="torrent-tab-panel" role="tabpanel">
+      <p id="torrent-files-hint" className="torrent-files-hint">
+        Tick the files you want. Only the ticked files are downloaded and shared.
+      </p>
+      <div id="torrent-files-toolbar" className="torrent-files-toolbar">
+        <div className="torrent-files-actions">
+          <button
+            type="button"
+            id="torrent-files-all"
+            className="small-button"
+            onClick={() => onSetAll(true)}
+          >
+            Tick all
+          </button>
+          <button
+            type="button"
+            id="torrent-files-none"
+            className="small-button"
+            onClick={() => onSetAll(false)}
+          >
+            Tick none
+          </button>
+        </div>
+        <button
+          type="button"
+          id="torrent-files-apply"
+          className="small-button primary"
+          disabled={!dirty || applying}
+          onClick={onApply}
+        >
+          Save selection
+        </button>
       </div>
-
-      <ul className="divide-y divide-border rounded-md border border-border">
-        {files.map((file) => (
-          <li key={file.index} className="flex items-center gap-3 px-3 py-2">
-            <Checkbox
-              checked={isIncluded(file)}
-              onCheckedChange={() => onToggle(file.index)}
-              aria-label={`Include ${file.name}`}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm" title={file.name}>
-                {file.name}
-              </p>
-              <div className="mt-1 flex items-center gap-2">
-                <Progress
-                  value={fileProgressPercent(file)}
-                  className="h-1.5 w-32"
-                />
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {fileProgressPercent(file).toFixed(0)}%
+      <div id="torrent-file-list" className="torrent-file-list">
+        {files.map((file) => {
+          const included =
+            selection !== null ? selection.has(file.index) : file.included;
+          const filePercent =
+            file.length > 0 ? (file.progressBytes / file.length) * 100 : 0;
+          return (
+            <label key={file.index} className="torrent-file-row">
+              <input
+                type="checkbox"
+                checked={included}
+                onChange={() => onToggle(file.index)}
+              />
+              <div className="torrent-file-main">
+                <span className="torrent-file-name" title={file.name}>
+                  {file.name}
                 </span>
+                <progress
+                  className="torrent-file-progress"
+                  max={100}
+                  value={filePercent}
+                />
               </div>
-            </div>
-            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-              {formatBytes(file.length)}
-            </span>
-          </li>
-        ))}
-      </ul>
+              <div className="torrent-file-meta">
+                <span>{formatBytes(file.length)}</span>
+                <span>{filePercent.toFixed(1)}%</span>
+              </div>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }

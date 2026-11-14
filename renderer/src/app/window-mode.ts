@@ -13,12 +13,13 @@ export type WindowMode =
   | "scheduler"
   | "integration";
 
-export interface WindowRoute {
-  mode: WindowMode;
-  downloadId?: string;
-  paste?: boolean;
-  scheduledAt?: string;
-}
+export type WindowRoute =
+  | { mode: "main" }
+  | { mode: "options" }
+  | { mode: "progress"; downloadId: string }
+  | { mode: "integration" }
+  | { mode: "scheduler" }
+  | { mode: "add"; paste: boolean; scheduledAt?: string };
 
 export function readWindowRoute(search: string): WindowRoute {
   const params = new URLSearchParams(search);

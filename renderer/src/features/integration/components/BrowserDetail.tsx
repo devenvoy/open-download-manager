@@ -1,8 +1,5 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { useCallback, useState } from "react";
+import { useTimeout } from "@/lib/hooks/use-timeout";
 import { type BrowserStatus } from "@/types/ipc";
 import {
   automaticSetupCopy,
@@ -29,6 +26,9 @@ export function BrowserDetail({
   onSetup,
 }: BrowserDetailProps) {
   const [copied, setCopied] = useState(false);
+  const resetCopied = useCallback(() => setCopied(false), []);
+  useTimeout(resetCopied, copied ? 2_000 : null);
+
   const status = browserStatus(browser);
   const action = primaryAction(browser);
   const storeAction = needsStoreFallback(browser);
@@ -36,97 +36,110 @@ export function BrowserDetail({
   async function copyPath() {
     await onSetup("copy");
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_000);
   }
 
   return (
-    <section className="space-y-4">
-      <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+    <section className="browser-detail" id="browser-detail">
+      <button
+        className="browser-back"
+        id="browser-back"
+        type="button"
+        onClick={onBack}
+      >
         ‹ All browsers
-      </Button>
+      </button>
 
-      <header className="flex items-center gap-3">
-        <BrowserIcon browser={browser} className="size-11" />
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold">{browser.name}</h2>
-          <p className="text-sm text-muted-foreground">{status.label}</p>
+      <div className="browser-detail-heading">
+        <BrowserIcon browser={browser} />
+        <div>
+          <h2 id="browser-detail-name">{browser.name}</h2>
+          <p
+            id="browser-detail-status"
+            className={`browser-detail-status ${status.tone}`}
+          >
+            {status.label}
+          </p>
         </div>
-      </header>
+      </div>
 
-      <p className="text-sm text-muted-foreground">{browserSummary(browser)}</p>
+      <p id="browser-detail-summary">{browserSummary(browser)}</p>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
+      <div className="browser-actions">
+        <button
+          className="button primary"
+          id="browser-primary-action"
           type="button"
           disabled={busy || !browser.installed}
           onClick={() => onSetup(action)}
         >
           {primaryActionLabel(browser, action)}
-        </Button>
-        {storeAction ? (
-          <Button
+        </button>
+        {storeAction && (
+          <button
+            className="button"
+            id="browser-store-action"
             type="button"
-            variant="outline"
             disabled={busy || !browser.installed}
             onClick={() => onSetup("store")}
           >
             Install from Web Store
-          </Button>
-        ) : null}
-        {!browser.storeUrl ? (
-          <Button
+          </button>
+        )}
+        {!browser.storeUrl && (
+          <button
+            className="button"
+            id="browser-download-action"
             type="button"
-            variant="outline"
             disabled={busy || !browser.installed}
             onClick={() => onSetup("download")}
           >
             Download extension
-          </Button>
-        ) : null}
+          </button>
+        )}
       </div>
 
-      <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+      <ol className="browser-steps" id="browser-steps">
         {setupSteps(browser).map((step) => (
           <li key={step}>{step}</li>
         ))}
       </ol>
 
-      {!browser.storeUrl ? (
+      {!browser.storeUrl && (
         <>
-          <Separator />
-          <div className="space-y-2">
-            <Label htmlFor="extension-path">Extension folder</Label>
-            <div className="flex gap-2">
-              <Input
-                id="extension-path"
-                readOnly
-                value={browser.extensionPath}
-                aria-label="Extension folder"
-              />
-              <Button type="button" variant="outline" onClick={() => void copyPath()}>
-                {copied ? "Copied" : "Copy path"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => onSetup("folder")}
-              >
-                Show folder
-              </Button>
-            </div>
+          <label className="extension-path-label" htmlFor="extension-path">
+            Extension folder
+          </label>
+          <div className="extension-path-row">
+            <input
+              id="extension-path"
+              readOnly
+              aria-label="Extension folder"
+              value={browser.extensionPath ?? ""}
+            />
+            <button
+              className="button"
+              id="copy-extension-path"
+              type="button"
+              onClick={() => void copyPath()}
+            >
+              {copied ? "Copied" : "Copy path"}
+            </button>
+            <button
+              className="button"
+              id="show-extension-folder"
+              type="button"
+              onClick={() => onSetup("reveal")}
+            >
+              Show folder
+            </button>
           </div>
-
-          <details className="rounded-md border border-border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">
-              Why isn&apos;t setup completely automatic?
-            </summary>
-            <p className="mt-2 text-muted-foreground">
-              {automaticSetupCopy(browser)}
-            </p>
-          </details>
         </>
-      ) : null}
+      )}
+
+      <details className="automatic-setup-note">
+        <summary>Why isn't setup completely automatic?</summary>
+        <p id="automatic-setup-copy">{automaticSetupCopy(browser)}</p>
+      </details>
     </section>
   );
 }

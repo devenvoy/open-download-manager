@@ -1,11 +1,18 @@
-import { useMemo, useState } from "react";
-import { formatBytes, formatDate, formatSpeed, formatTimeLeft } from "@/lib/format";
+import { useCallback, useMemo, useState } from "react";
+import { formatDate, formatSpeed, formatTimeLeft } from "@/lib/format";
 import {
   type DownloadActionKind,
   type DownloadSummary,
 } from "@/types/ipc";
+import {
+  getSizeText,
+  getStatusLabel,
+  sortDownloads,
+  type SortField,
+} from "../model/download-table-helpers";
 
 export interface DownloadsTableProps {
+  searchRef?: React.RefObject<HTMLInputElement | null>;
   downloads: DownloadSummary[];
   selectedIds: string[];
   onToggle: (id: string) => void;
@@ -18,49 +25,8 @@ export interface DownloadsTableProps {
   onOpenFolder?: (id: string) => void;
 }
 
-type SortField = "filename" | "total" | "status" | "createdAt";
-
-function getStatusLabel(d: DownloadSummary): string {
-  const percent =
-    d.total && d.total > 0
-      ? (Number(d.downloaded) / Number(d.total)) * 100
-      : null;
-
-  switch (d.status) {
-    case "complete":
-      return "Complete";
-    case "downloading":
-      return percent !== null ? `${percent.toFixed(2)}%` : "Receiving data…";
-    case "probing":
-      return "Connecting…";
-    case "assembling":
-      return "Finalizing…";
-    case "queued":
-      return "Queued";
-    case "scheduled":
-      return "Scheduled";
-    case "paused":
-      return "Stopped";
-    case "cancelled":
-      return "Cancelled";
-    case "error":
-      return "Error";
-    default:
-      return d.status;
-  }
-}
-
-function getSizeText(d: DownloadSummary): string {
-  if (d.status === "complete") {
-    return formatBytes(d.total ?? d.downloaded);
-  }
-  if (d.total && d.total > 0) {
-    return `${formatBytes(d.downloaded)} / ${formatBytes(d.total)}`;
-  }
-  return formatBytes(d.downloaded);
-}
-
 export function DownloadsTable({
+  searchRef,
   downloads,
   selectedIds,
   onToggle,
@@ -73,14 +39,16 @@ export function DownloadsTable({
   const [ascending, setAscending] = useState(false);
   const [search, setSearch] = useState("");
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setAscending(!ascending);
-    } else {
-      setSortField(field);
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((current) => {
+      if (current === field) {
+        setAscending((asc) => !asc);
+        return current;
+      }
       setAscending(true);
-    }
-  };
+      return field;
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let result = downloads;
@@ -92,27 +60,54 @@ export function DownloadsTable({
           d.url.toLowerCase().includes(q),
       );
     }
-    return [...result].sort((a, b) => {
-      let cmp = 0;
-      if (sortField === "filename") {
-        cmp = a.filename.localeCompare(b.filename);
-      } else if (sortField === "total") {
-        cmp = Number(a.total || 0) - Number(b.total || 0);
-      } else if (sortField === "status") {
-        cmp = a.status.localeCompare(b.status);
-      } else if (sortField === "createdAt") {
-        cmp =
-          new Date(a.createdAt || 0).getTime() -
-          new Date(b.createdAt || 0).getTime();
-      }
-      return ascending ? cmp : -cmp;
-    });
+    return sortDownloads(result, sortField, ascending);
   }, [downloads, search, sortField, ascending]);
 
   const firstSelected = selectedIds[0];
   const canOpen =
     firstSelected &&
     downloads.find((d) => d.id === firstSelected)?.status === "complete";
+
+  const handleTableKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!filtered.length) return;
+      const currentId = selectedIds[0];
+      const index = filtered.findIndex((d) => d.id === currentId);
+
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
+        e.preventDefault();
+        const nextIndex =
+          e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? filtered.length - 1
+              : Math.max(
+                  0,
+                  Math.min(
+                    filtered.length - 1,
+                    index + (e.key === "ArrowDown" ? 1 : -1),
+                  ),
+                );
+        const nextItem = filtered[nextIndex];
+        if (nextItem) {
+          if (onSelectRow) {
+            onSelectRow(nextItem.id, {
+              additive: false,
+              range: e.shiftKey,
+              toggle: false,
+            });
+          } else {
+            onToggle(nextItem.id);
+          }
+        }
+      } else if (e.key === "Enter" && currentId) {
+        onOpenProperties?.(currentId);
+      } else if (e.key === "Delete" && currentId) {
+        onAction(currentId, "remove");
+      }
+    },
+    [filtered, selectedIds, onSelectRow, onToggle, onOpenProperties, onAction],
+  );
 
   return (
     <>
@@ -121,6 +116,7 @@ export function DownloadsTable({
         id="table-scroll"
         tabIndex={0}
         aria-label="Downloads"
+        onKeyDown={handleTableKeyDown}
       >
         <table className="downloads-table" aria-label="Downloads">
           <colgroup>
@@ -210,6 +206,17 @@ export function DownloadsTable({
                   onDoubleClick={() => onOpenProperties?.(d.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    if (!isSelected) {
+                      if (onSelectRow) {
+                        onSelectRow(d.id, {
+                          additive: false,
+                          range: false,
+                          toggle: false,
+                        });
+                      } else {
+                        onToggle(d.id);
+                      }
+                    }
                     onOpenProperties?.(d.id);
                   }}
                 >
@@ -252,6 +259,7 @@ export function DownloadsTable({
       <div className="list-search">
         <label htmlFor="search">Find:</label>
         <input
+          ref={searchRef}
           id="search"
           type="search"
           aria-label="Search downloads"

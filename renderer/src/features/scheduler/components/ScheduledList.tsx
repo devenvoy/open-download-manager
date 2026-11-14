@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { type DownloadSummary } from "@/types/ipc";
 import { formatWhen } from "../model/queue-view";
 
@@ -24,47 +23,68 @@ export function ScheduledList({
   );
 
   return (
-    <div className="space-y-4">
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Scheduled downloads</h2>
-        {sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No scheduled downloads.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {sorted.map((download) => (
-              <li
+    <>
+      <fieldset>
+        <legend>Scheduled downloads</legend>
+        <div id="scheduled-list" className="scheduled-list">
+          {sorted.length === 0 ? (
+            <p className="field-help" style={{ padding: "8px 0" }}>
+              No scheduled downloads.
+            </p>
+          ) : (
+            sorted.map((download) => (
+              <div
                 key={download.id}
-                className="flex items-center gap-3 px-3 py-2 text-sm"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "5px 4px",
+                  borderBottom: "1px solid var(--border-color, #e5e5e5)",
+                }}
               >
-                <span className="min-w-0 flex-1 truncate" title={download.filename}>
+                <span title={download.filename} style={{ fontWeight: 500 }}>
                   {download.filename}
                 </span>
-                <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                <time style={{ color: "#666", fontSize: "11px" }}>
                   {formatWhen(download.scheduledAt)}
                 </time>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Scheduled downloads start at the chosen local time while this app is
-          running.
-        </p>
-      </section>
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={onAdd}>
+              </div>
+            ))
+          )}
+        </div>
+      </fieldset>
+      <p className="field-help">
+        Scheduled downloads start at the chosen local time while this app is
+        running.
+      </p>
+      <div className="scheduler-actions">
+        <button
+          className="button"
+          id="schedule-new"
+          type="button"
+          onClick={onAdd}
+        >
           Add scheduled download…
-        </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={onStartDefault}>
+        </button>
+        <button
+          className="button"
+          id="scheduler-start"
+          type="button"
+          disabled={busy}
+          onClick={onStartDefault}
+        >
           Start Default Queue
-        </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={onStopDefault}>
+        </button>
+        <button
+          className="button"
+          id="scheduler-stop"
+          type="button"
+          disabled={busy}
+          onClick={onStopDefault}
+        >
           Stop Default Queue
-        </Button>
+        </button>
       </div>
-    </div>
+    </>
   );
 }

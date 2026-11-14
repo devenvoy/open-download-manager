@@ -1,46 +1,18 @@
-import { useEffect } from "react";
 import { WindowRouter } from "@/app/routes";
-import { type WindowRoute } from "@/app/window-mode";
+import { type WindowMode, type WindowRoute } from "@/app/window-mode";
+import { useDocumentTitle } from "@/lib/hooks/use-document-title";
 
-/** The application root. The window's query string decides the screen and body class. */
+const ROUTE_TITLES: Record<WindowMode, string> = {
+  main: "Open Download Manager",
+  options: "Options",
+  progress: "Download progress",
+  add: "Download File Info",
+  scheduler: "Scheduler",
+  integration: "Browser integration",
+};
+
+/** The application root. Declaratively sets the window title and renders the route. */
 export function App({ route }: { route: WindowRoute }) {
-  useEffect(() => {
-    const body = document.body;
-    body.classList.remove(
-      "progress-window",
-      "integration-window",
-      "options-window",
-      "add-window",
-      "scheduler-window",
-      "torrents-window",
-    );
-
-    switch (route.mode) {
-      case "options":
-        body.classList.add("options-window");
-        document.title = "Options";
-        break;
-      case "progress":
-        body.classList.add("progress-window");
-        document.title = "Download progress";
-        break;
-      case "add":
-        body.classList.add("add-window");
-        document.title = "Download File Info";
-        break;
-      case "scheduler":
-        body.classList.add("scheduler-window");
-        document.title = "Scheduler";
-        break;
-      case "integration":
-        body.classList.add("integration-window");
-        document.title = "Browser integration";
-        break;
-      default:
-        document.title = "Open Download Manager";
-        break;
-    }
-  }, [route.mode]);
-
+  useDocumentTitle(ROUTE_TITLES[route.mode]);
   return <WindowRouter route={route} />;
 }

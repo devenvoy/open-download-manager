@@ -1,5 +1,4 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { useInstallMediaTool } from "../api";
 import { errorKind, errorTitle } from "../model/progress-view";
 
@@ -14,6 +13,7 @@ export interface ErrorCardProps {
  * is a media tool, an expired link, or a plain retry.
  */
 export function ErrorCard({ error, busy, onRetry }: ErrorCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const kind = errorKind(error);
   const install = useInstallMediaTool();
   const tool = kind === "ffmpeg" ? "ffmpeg" : kind === "yt-dlp" ? "yt-dlp" : null;
@@ -29,42 +29,60 @@ export function ErrorCard({ error, busy, onRetry }: ErrorCardProps) {
   }
 
   return (
-    <section className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="border-destructive/40 text-destructive">
-          ⚠ Error
-        </Badge>
-        <strong className="text-sm">{errorTitle(kind)}</strong>
+    <div id="detail-error-card" className="detail-error-card">
+      <div className="detail-error-header">
+        <span className="detail-error-badge">⚠️ Error</span>
+        <strong id="detail-error-title">{errorTitle(kind)}</strong>
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p id="detail-error-summary" className="detail-error-summary">
         {error || "Download failed or was interrupted."}
       </p>
-      <details className="text-sm">
-        <summary className="cursor-pointer text-muted-foreground">
-          View full details…
-        </summary>
-        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs">
+      <div className="detail-error-actions">
+        <button
+          type="button"
+          className="button small-button"
+          id="detail-error-view-btn"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Hide details" : "View full details…"}
+        </button>
+        <button
+          type="button"
+          className="button small-button primary"
+          id="detail-error-retry-btn"
+          disabled={busy || install.isPending}
+          onClick={() => {
+            if (tool) {
+              void installAndRetry();
+            } else {
+              onRetry();
+            }
+          }}
+        >
+          {install.isPending
+            ? `Installing ${tool}…`
+            : tool
+              ? `Install ${tool} & Fix`
+              : "Retry download"}
+        </button>
+      </div>
+      {expanded && (
+        <pre
+          style={{
+            marginTop: 8,
+            maxHeight: 120,
+            overflow: "auto",
+            fontSize: 10,
+            background: "rgba(0,0,0,0.05)",
+            padding: 6,
+            borderRadius: 2,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+          }}
+        >
           {error || "No additional details were recorded."}
         </pre>
-      </details>
-      <div className="flex flex-wrap gap-2">
-        {tool ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy || install.isPending}
-            onClick={() => void installAndRetry()}
-          >
-            {install.isPending
-              ? `Installing ${tool}…`
-              : `Install ${tool} & Fix`}
-          </Button>
-        ) : (
-          <Button type="button" size="sm" disabled={busy} onClick={onRetry}>
-            Retry download
-          </Button>
-        )}
-      </div>
-    </section>
+      )}
+    </div>
   );
 }

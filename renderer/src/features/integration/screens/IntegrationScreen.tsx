@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { EmptyState } from "@/components/feedback/EmptyState";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ipc } from "@/lib/ipc";
 import { snapshotQueryOptions } from "@/lib/ipc/queries";
 import { useHydrateTheme } from "@/stores/theme-store";
@@ -53,6 +51,10 @@ export function IntegrationScreen() {
     );
   }
 
+  function close() {
+    void ipc.closeAuxiliaryWindow();
+  }
+
   return (
     <dialog id="integration-dialog" className="integration-dialog" open>
       <div className="dialog-title">
@@ -60,25 +62,21 @@ export function IntegrationScreen() {
         <button
           type="button"
           className="close-button"
-          onClick={() => void ipc.closeAuxiliaryWindow()}
+          onClick={close}
           aria-label="Close"
         >
           ×
         </button>
       </div>
 
-      <div className="dialog-body" style={{ padding: 12 }}>
+      <div className="dialog-body browser-integration-body">
         {info.isPending ? (
-          <div className="space-y-2" aria-label="Loading browsers">
-            {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
+          <div style={{ padding: 16 }}>Loading browsers…</div>
         ) : info.isError ? (
-          <EmptyState
-            title="Could not read the browser integration"
-            description={info.error instanceof Error ? info.error.message : undefined}
-          />
+          <div style={{ padding: 16 }}>
+            Could not read the browser integration:{" "}
+            {info.error instanceof Error ? info.error.message : "Error"}
+          </div>
         ) : current ? (
           <BrowserDetail
             browser={current}
@@ -87,16 +85,27 @@ export function IntegrationScreen() {
             onSetup={runSetup}
           />
         ) : (
-          <div className="space-y-2">
-            <div>
-              <h2 className="text-sm font-semibold">Choose your browser</h2>
-              <p className="text-xs text-muted-foreground">
-                Open Download Manager detects the extension separately in every
-                installed browser profile.
-              </p>
+          <>
+            <div className="integration-heading">
+              <div>
+                <h2>Choose your browser</h2>
+                <p>
+                  Open Download Manager detects the extension separately in
+                  every installed browser profile.
+                </p>
+              </div>
+              <button
+                className="button"
+                id="browser-refresh"
+                type="button"
+                disabled={info.isFetching}
+                onClick={() => void info.refetch()}
+              >
+                Refresh
+              </button>
             </div>
             <BrowserGrid browsers={browsers} onSelect={setSelected} />
-          </div>
+          </>
         )}
 
         <AdvancedIntegrationSection
@@ -111,21 +120,17 @@ export function IntegrationScreen() {
       </div>
 
       <div className="dialog-footer">
-        <span role="status" className="text-xs text-muted-foreground" style={{ marginRight: "auto" }}>
+        <span
+          id="browser-connection-summary"
+          role="status"
+        >
           {connectionSummary(info.data)}
         </span>
         <button
           type="button"
           className="button"
-          disabled={info.isFetching}
-          onClick={() => void info.refetch()}
-        >
-          Refresh
-        </button>
-        <button
-          type="button"
-          className="button"
-          onClick={() => void ipc.closeAuxiliaryWindow()}
+          data-close
+          onClick={close}
         >
           Close
         </button>

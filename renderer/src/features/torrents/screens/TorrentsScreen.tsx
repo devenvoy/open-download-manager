@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { snapshotQueryOptions } from "@/lib/ipc/queries";
 import { useHydrateTheme } from "@/stores/theme-store";
@@ -13,15 +13,14 @@ import {
 } from "../hooks/use-torrents";
 import { summarize } from "../model/torrent-view";
 import { useTorrentsStore } from "../state/torrents-store";
+import { AddTorrentDialog } from "../components/AddTorrentDialog";
 import { TorrentDetails } from "../components/TorrentDetails";
 import { TorrentEngineBanner } from "../components/TorrentEngineBanner";
 import { TorrentList } from "../components/TorrentList";
+import { TorrentRemoveDialog } from "../components/TorrentRemoveDialog";
 import { TorrentReviewPanel } from "../components/TorrentReviewPanel";
 import { TorrentSettingsDialog } from "../components/TorrentSettingsDialog";
-import {
-  TorrentToolbar,
-  type AddTorrentOptionsInput,
-} from "../components/TorrentToolbar";
+import { TorrentToolbar } from "../components/TorrentToolbar";
 
 /** The standalone Torrents window (`torrents.html`). */
 export function TorrentsScreen() {
@@ -30,6 +29,10 @@ export function TorrentsScreen() {
   const settings = useTorrentSettings();
   const [review, setReview] = usePendingReview();
   const actions = useTorrentActions();
+
+  const [addMode, setAddMode] = useState<"magnet" | "file" | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const selectedId = useTorrentsStore((state) => state.selectedId);
   const select = useTorrentsStore((state) => state.select);
@@ -41,8 +44,7 @@ export function TorrentsScreen() {
   const answered = useTorrentsStore((state) => state.answeredReviews);
   const markReviewAnswered = useTorrentsStore((state) => state.markReviewAnswered);
 
-  // The torrent window needs the app theme, which lives in the manager
-  // settings. One snapshot read is enough; this window does not poll it.
+  // The torrent window needs the app theme, which lives in the manager settings.
   const snapshot = useQuery({
     ...snapshotQueryOptions,
     refetchInterval: false,
@@ -88,72 +90,56 @@ export function TorrentsScreen() {
     (selection.size !== includedFiles.size ||
       [...selection].some((index) => !includedFiles.has(index)));
 
-  function handleAction(kind: "pause" | "resume" | "recheck" | "forget" | "delete") {
-    if (!selected) return;
-    actions.action.mutate(
-      { id: selected.id, action: kind },
-      {
-        onSuccess: () => {
-          if (kind === "forget" || kind === "delete") select(null);
+  const handleAction = useCallback(
+    (kind: "pause" | "resume" | "recheck" | "forget" | "delete") => {
+      if (!selected) return;
+      actions.action.mutate(
+        { id: selected.id, action: kind },
+        {
+          onSuccess: () => {
+            if (kind === "forget" || kind === "delete") select(null);
+          },
         },
-      },
-    );
-  }
+      );
+    },
+    [selected, actions.action, select],
+  );
 
-  function handleApplyFiles() {
+  const handleApplyFiles = useCallback(() => {
     if (!selected) return;
     const included = [...(selection ?? includedFiles)].sort((a, b) => a - b);
     actions.setFiles.mutate(
       { id: selected.id, included },
       { onSuccess: () => setFileSelection(null) },
     );
-  }
+  }, [selected, selection, includedFiles, actions.setFiles, setFileSelection]);
 
-  function handleAddMagnet(magnet: string, options: AddTorrentOptionsInput) {
-    actions.addMagnet.mutate({
-      magnet,
-      options: {
-        outputFolder: options.outputFolder,
-        startPaused: options.startPaused,
-        review: options.review,
-      },
-    });
-  }
-
-  function handleAddFile(path: string, options: AddTorrentOptionsInput) {
-    actions.addFile.mutate({
-      path,
-      options: {
-        outputFolder: options.outputFolder,
-        startPaused: options.startPaused,
-        review: options.review,
-      },
-    });
-  }
-
-  function handleConfirmReview(included: number[], startPaused: boolean) {
-    if (!review) return;
-    markReviewAnswered(review.infoHash);
-    actions.setFiles.mutate(
-      { id: review.id, included },
-      {
-        onSuccess: () => {
-          actions.action.mutate({
-            id: review.id,
-            action: startPaused ? "pause" : "resume",
-          });
-          setReview(null);
+  const handleConfirmReview = useCallback(
+    (included: number[], startPaused: boolean) => {
+      if (!review) return;
+      markReviewAnswered(review.infoHash);
+      actions.setFiles.mutate(
+        { id: review.id, included },
+        {
+          onSuccess: () => {
+            actions.action.mutate({
+              id: review.id,
+              action: startPaused ? "pause" : "resume",
+            });
+            setReview(null);
+          },
         },
-      },
-    );
-  }
+      );
+    },
+    [review, markReviewAnswered, actions.setFiles, actions.action, setReview],
+  );
 
-  function handleCancelReview() {
+  const handleCancelReview = useCallback(() => {
     if (!review) return;
     markReviewAnswered(review.infoHash);
     actions.action.mutate({ id: review.id, action: "forget" });
     setReview(null);
-  }
+  }, [review, markReviewAnswered, actions.action, setReview]);
 
   const busy =
     actions.action.isPending ||
@@ -167,18 +153,10 @@ export function TorrentsScreen() {
         summary={summary}
         selected={selected}
         busy={busy}
+        onOpenAdd={(mode) => setAddMode(mode)}
+        onOpenRemove={() => setRemoveOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
         onAction={handleAction}
-        onAddMagnet={handleAddMagnet}
-        onAddFile={handleAddFile}
-        settingsButton={
-          settings.data ? (
-            <TorrentSettingsDialog
-              settings={settings.data}
-              saving={actions.saveSettings.isPending}
-              onSave={(next) => actions.saveSettings.mutate(next)}
-            />
-          ) : null
-        }
       />
 
       {status.data ? (
@@ -261,13 +239,42 @@ export function TorrentsScreen() {
             <div id="torrent-detail-empty" className="torrent-detail-empty">
               <strong>Select a torrent</strong>
               <span>
-                Choose a torrent in the list to see its progress, files, and
-                trackers.
+                Choose a torrent in the list to see its progress, files, and trackers.
               </span>
             </div>
           )}
         </section>
       </div>
+
+      {addMode && (
+        <AddTorrentDialog
+          initialMode={addMode}
+          onAddMagnet={(magnet, opts) => actions.addMagnet.mutate({ magnet, options: opts })}
+          onAddFile={(path, opts) => actions.addFile.mutate({ path, options: opts })}
+          onClose={() => setAddMode(null)}
+          pending={busy}
+        />
+      )}
+
+      {removeOpen && selected && (
+        <TorrentRemoveDialog
+          torrent={selected}
+          disabled={busy}
+          onAction={handleAction}
+          onClose={() => setRemoveOpen(false)}
+        />
+      )}
+
+      {settingsOpen && settings.data && (
+        <TorrentSettingsDialog
+          settings={settings.data}
+          saving={actions.saveSettings.isPending}
+          onSave={(next) => actions.saveSettings.mutate(next)}
+          onRestart={() => actions.restartEngine.mutate()}
+          restarting={actions.restartEngine.isPending}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

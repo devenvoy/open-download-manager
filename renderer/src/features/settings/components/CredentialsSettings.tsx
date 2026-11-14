@@ -1,13 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useCredentialRules,
   useDeleteCredentialRule,
@@ -15,7 +6,7 @@ import {
 } from "../hooks/use-settings";
 
 export function CredentialsSettings() {
-  const { data: rules, isPending } = useCredentialRules();
+  const { data: rules } = useCredentialRules();
   const saveMutation = useSaveCredentialRule();
   const deleteMutation = useDeleteCredentialRule();
 
@@ -78,73 +69,87 @@ export function CredentialsSettings() {
     } catch (err) {
       setStatus({
         type: "error",
-        message: `Failed to delete credential rule: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Failed to delete rule: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   }
 
   return (
-    <fieldset id="credentials-fieldset" className="rounded-md border p-4 space-y-4">
-      <legend className="px-2 text-sm font-semibold">
-        Site Logins &amp; Passwords
-      </legend>
-      <p className="text-xs text-muted-foreground">
+    <fieldset id="credentials-fieldset">
+      <legend>Site Logins &amp; Passwords</legend>
+      <p className="field-help">
         Manage saved credentials for protected HTTP and FTP downloads.
-        Longest-prefix matching will automatically select the right
-        credentials without leaking across hosts or out-of-scope paths.
+        Longest-prefix matching will automatically select the right credentials
+        without leaking across hosts or out-of-scope paths.
       </p>
 
-      <div className="credentials-manager space-y-3">
-        <div className="rounded border overflow-x-auto max-h-40">
+      <div className="credentials-manager">
+        <div
+          className="credentials-table-wrapper"
+          style={{
+            maxHeight: 140,
+            overflowY: "auto",
+            border: "1px solid var(--border-color, #ccc)",
+            marginBottom: 8,
+          }}
+        >
           <table
-            className="w-full text-xs text-left border-collapse"
+            className="credentials-table"
             id="credentials-table"
+            style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}
           >
             <thead>
-              <tr className="bg-muted border-b">
-                <th className="p-2 font-medium">Scheme</th>
-                <th className="p-2 font-medium">Host</th>
-                <th className="p-2 font-medium">Port</th>
-                <th className="p-2 font-medium">Path Prefix</th>
-                <th className="p-2 font-medium">User</th>
-                <th className="p-2 font-medium">Password</th>
-                <th className="p-2 font-medium text-right">Action</th>
+              <tr
+                style={{
+                  background: "var(--bg-secondary, #f3f4f6)",
+                  textAlign: "left",
+                }}
+              >
+                <th style={{ padding: 4 }}>Scheme</th>
+                <th style={{ padding: 4 }}>Host</th>
+                <th style={{ padding: 4 }}>Port</th>
+                <th style={{ padding: 4 }}>Path Prefix</th>
+                <th style={{ padding: 4 }}>User</th>
+                <th style={{ padding: 4 }}>Password</th>
+                <th style={{ padding: 4 }}>Action</th>
               </tr>
             </thead>
             <tbody id="credentials-list">
-              {isPending ? (
+              {(rules ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-4 text-center text-muted-foreground">
-                    Loading credentials…
-                  </td>
-                </tr>
-              ) : !rules || rules.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-4 text-center text-muted-foreground">
-                    No stored site credentials.
+                  <td
+                    colSpan={7}
+                    style={{
+                      padding: 8,
+                      textAlign: "center",
+                      color: "var(--muted-text, #666)",
+                    }}
+                  >
+                    No login rules saved.
                   </td>
                 </tr>
               ) : (
-                rules.map((rule) => (
-                  <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="p-2">{rule.scheme}</td>
-                    <td className="p-2 font-mono">{rule.host}</td>
-                    <td className="p-2 font-mono">{rule.port ?? "—"}</td>
-                    <td className="p-2 font-mono">{rule.pathPrefix}</td>
-                    <td className="p-2">{rule.username}</td>
-                    <td className="p-2 font-mono">******</td>
-                    <td className="p-2 text-right">
-                      <Button
+                (rules ?? []).map((r) => (
+                  <tr
+                    key={r.id}
+                    style={{
+                      borderBottom: "1px solid var(--border-color, #eee)",
+                    }}
+                  >
+                    <td style={{ padding: 4 }}>{r.scheme}</td>
+                    <td style={{ padding: 4 }}>{r.host}</td>
+                    <td style={{ padding: 4 }}>{r.port ?? "any"}</td>
+                    <td style={{ padding: 4 }}>{r.pathPrefix}</td>
+                    <td style={{ padding: 4 }}>{r.username}</td>
+                    <td style={{ padding: 4 }}>••••••••</td>
+                    <td style={{ padding: 4 }}>
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="delete-cred-btn h-6 px-2 text-destructive"
-                        data-id={rule.id}
-                        disabled={deleteMutation.isPending}
-                        onClick={() => void handleDelete(rule.id)}
+                        className="small-button"
+                        onClick={() => void handleDelete(r.id)}
                       >
                         Delete
-                      </Button>
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -154,80 +159,84 @@ export function CredentialsSettings() {
         </div>
 
         <div
+          className="credentials-add-form"
           id="credentials-add-form"
-          className="flex flex-wrap items-center gap-2 pt-1"
+          style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}
         >
-          <Select value={scheme} onValueChange={setScheme}>
-            <SelectTrigger id="cred-scheme" className="w-24 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="https">https</SelectItem>
-              <SelectItem value="http">http</SelectItem>
-              <SelectItem value="ftp">ftp</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
+          <select
+            id="cred-scheme"
+            value={scheme}
+            onChange={(e) => setScheme(e.target.value)}
+            style={{ fontSize: 11, padding: 2 }}
+          >
+            <option value="https">https</option>
+            <option value="http">http</option>
+            <option value="ftp">ftp</option>
+          </select>
+          <input
+            type="text"
             id="cred-host"
             placeholder="Host (e.g. site.com)"
             value={host}
-            className="w-36 h-8 text-xs"
             onChange={(e) => setHost(e.target.value)}
+            style={{ fontSize: 11, padding: 2, width: 110 }}
           />
-          <Input
-            id="cred-port"
+          <input
             type="number"
+            id="cred-port"
+            placeholder="Port"
             min={1}
             max={65535}
-            placeholder="Port"
             value={port}
-            className="w-20 h-8 text-xs"
             onChange={(e) => setPort(e.target.value)}
+            style={{ fontSize: 11, padding: 2, width: 50 }}
           />
-          <Input
+          <input
+            type="text"
             id="cred-path"
             placeholder="Path (e.g. /team/)"
             value={path}
-            className="w-28 h-8 text-xs"
             onChange={(e) => setPath(e.target.value)}
+            style={{ fontSize: 11, padding: 2, width: 80 }}
           />
-          <Input
+          <input
+            type="text"
             id="cred-user"
             placeholder="User"
+            autoComplete="off"
             value={user}
-            autoComplete="off"
-            className="w-28 h-8 text-xs"
             onChange={(e) => setUser(e.target.value)}
+            style={{ fontSize: 11, padding: 2, width: 80 }}
           />
-          <Input
-            id="cred-pass"
+          <input
             type="password"
+            id="cred-pass"
             placeholder="Password"
-            value={pass}
             autoComplete="off"
-            className="w-28 h-8 text-xs"
+            value={pass}
             onChange={(e) => setPass(e.target.value)}
+            style={{ fontSize: 11, padding: 2, width: 80 }}
           />
-          <Button
+          <button
             type="button"
+            className="small-button"
             id="cred-save-btn"
-            size="sm"
-            className="h-8 text-xs"
             disabled={saveMutation.isPending}
             onClick={() => void handleAddRule()}
           >
             Add Rule
-          </Button>
+          </button>
         </div>
 
         {status.message && (
           <span
             id="cred-status"
-            className={`block text-xs ${
-              status.type === "success"
-                ? "text-green-600 dark:text-green-400"
-                : "text-destructive"
-            }`}
+            className="field-help"
+            style={{
+              display: "block",
+              marginTop: 4,
+              color: status.type === "error" ? "red" : "green",
+            }}
           >
             {status.message}
           </span>

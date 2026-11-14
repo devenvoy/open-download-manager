@@ -1,71 +1,46 @@
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { type TorrentTrackerStatus } from "@/types/ipc";
 
-export function TorrentTrackersTab({
-  trackers,
-  loading,
-}: {
+export interface TorrentTrackersTabProps {
   trackers: TorrentTrackerStatus[];
   loading: boolean;
-}) {
+}
+
+export function TorrentTrackersTab({ trackers, loading }: TorrentTrackersTabProps) {
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Reading trackers…</p>;
+    return (
+      <div id="torrent-tab-trackers" className="torrent-tab-panel" role="tabpanel">
+        <p className="field-help" style={{ padding: "8px 12px" }}>
+          Loading trackers…
+        </p>
+      </div>
+    );
   }
 
   if (trackers.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        This torrent has no trackers. DHT and peer exchange are used instead.
-      </p>
+      <div id="torrent-tab-trackers" className="torrent-tab-panel" role="tabpanel">
+        <p className="field-help" style={{ padding: "8px 12px" }}>
+          No trackers announced.
+        </p>
+      </div>
     );
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Tracker</TableHead>
-          <TableHead className="w-28">State</TableHead>
-          <TableHead className="w-20 text-right">Seeders</TableHead>
-          <TableHead className="w-20 text-right">Leechers</TableHead>
-          <TableHead className="w-20 text-right">Peers</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {trackers.map((tracker) => (
-          <TableRow key={tracker.url}>
-            <TableCell className="max-w-0">
-              <span className="block truncate" title={tracker.url}>
-                {tracker.url}
-              </span>
-              {tracker.lastError ? (
-                <span className="block truncate text-xs text-destructive">
-                  {tracker.lastError}
-                </span>
-              ) : null}
-            </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {tracker.state.replaceAll("_", " ")}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {tracker.seeders ?? "—"}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {tracker.leechers ?? "—"}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {tracker.peersReturned ?? "—"}
-            </TableCell>
-          </TableRow>
+    <div id="torrent-tab-trackers" className="torrent-tab-panel" role="tabpanel">
+      <ul id="torrent-tracker-list" className="torrent-trackers">
+        {trackers.map((tracker, index) => (
+          <li key={`${tracker.url}-${index}`} className="torrent-tracker-item">
+            <span className="torrent-tracker-url">{tracker.url}</span>
+            <span className="torrent-tracker-status" style={{ marginLeft: 8 }}>
+              {tracker.state}
+            </span>
+            <span className="torrent-tracker-peers" style={{ marginLeft: 8 }}>
+              {tracker.peersReturned ?? 0} peers
+            </span>
+          </li>
         ))}
-      </TableBody>
-    </Table>
+      </ul>
+    </div>
   );
 }

@@ -1,7 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { type DownloadSummary, type Settings } from "@/types/ipc";
 import { statusOf } from "../model/progress-view";
 import { ActionLedger } from "./ActionLedger";
@@ -55,38 +52,55 @@ export function CompletionPanel({
   }
 
   return (
-    <div className="space-y-3">
-      <form className="space-y-3" onSubmit={(event) => void submit(event)}>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
+    <div
+      id="completion-panel"
+      className="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-completion"
+    >
+      <form id="completion-form" onSubmit={(event) => void submit(event)}>
+        <label className="checkbox-label" htmlFor="notify-complete">
+          <input
+            id="notify-complete"
+            type="checkbox"
             checked={notify}
-            onCheckedChange={(checked) => setNotify(checked === true)}
+            onChange={(e) => setNotify(e.target.checked)}
           />
-          Show a notification when a download completes
+          Show a Windows notification when a download completes
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
+        <label className="checkbox-label" htmlFor="reveal-complete">
+          <input
+            id="reveal-complete"
+            type="checkbox"
             checked={reveal}
-            onCheckedChange={(checked) => setReveal(checked === true)}
+            onChange={(e) => setReveal(e.target.checked)}
           />
           Open the download folder on completion
         </label>
-        <p className="text-xs text-muted-foreground">
-          These options apply to all downloads.
-        </p>
-        <div className="flex items-center gap-3">
-          <Button type="submit" variant="outline" disabled={saving}>
+        <p className="field-help">These options apply to all downloads.</p>
+        <div>
+          <button className="button" type="submit" disabled={saving}>
             Apply
-          </Button>
-          {result ? (
-            <span role="status" className="text-xs text-muted-foreground">
+          </button>
+          {result && (
+            <span
+              id="completion-result"
+              role="status"
+              style={{ marginLeft: 8, fontSize: 11 }}
+            >
               {result}
             </span>
-          ) : null}
+          )}
         </div>
       </form>
 
-      <Separator />
+      <hr
+        style={{
+          margin: "12px 0",
+          border: "none",
+          borderTop: "1px solid var(--border-color, #e5e5e5)",
+        }}
+      />
 
       <ActionLedger
         entries={download.actionLedger}
@@ -95,19 +109,25 @@ export function CompletionPanel({
         onRetry={onRetryActions}
       />
 
-      <div className="flex flex-wrap gap-2">
-        <Button
+      <p style={{ marginTop: 12 }}>
+        <button
           type="button"
-          variant="outline"
-          disabled={!completed}
+          className="button"
+          id="detail-open"
           onClick={onOpen}
         >
           Open file
-        </Button>
-        <Button type="button" variant="outline" onClick={onReveal}>
+        </button>
+        <button
+          type="button"
+          className="button"
+          id="detail-folder"
+          onClick={onReveal}
+          style={{ marginLeft: 6 }}
+        >
           Open folder
-        </Button>
-      </div>
+        </button>
+      </p>
     </div>
   );
 }

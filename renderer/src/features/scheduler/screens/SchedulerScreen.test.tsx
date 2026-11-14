@@ -128,8 +128,8 @@ describe("SchedulerScreen", () => {
   it("closes the window on Close button click", async () => {
     renderWithQuery(<SchedulerScreen />);
 
-    const closeBtn = await screen.findByRole("button", { name: "Close" });
-    fireEvent.click(closeBtn);
+    const closeButtons = await screen.findAllByRole("button", { name: "Close" });
+    fireEvent.click(closeButtons[closeButtons.length - 1]!);
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalled();
@@ -141,7 +141,7 @@ describe("SchedulerScreen", () => {
     renderWithQuery(<SchedulerScreen />);
 
     expect(
-      await screen.findByText("Could not load the queues"),
+      await screen.findByText(/Could not load the queues/),
     ).toBeInTheDocument();
   });
 });

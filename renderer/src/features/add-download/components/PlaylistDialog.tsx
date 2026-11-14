@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ClassicDialog } from "@/components/feedback";
 import { formatPlaylistDuration } from "../model/add-form";
 import { usePlaylistInfo } from "../api";
 
@@ -28,8 +19,6 @@ export interface PlaylistDialogProps {
 export function PlaylistDialog({
   open,
   url,
-  category,
-  directory,
   adding,
   onOpenChange,
   onAdd,
@@ -47,12 +36,13 @@ export function PlaylistDialog({
     }
   }, [open, info.data]);
 
-  // A fresh playlist starts with every entry ticked, as in the legacy window.
   useEffect(() => {
     if (entries.length > 0) {
       setSelected(new Set(entries.map((entry) => entry.id)));
     }
   }, [entries]);
+
+  if (!open) return null;
 
   function toggle(id: string) {
     setSelected((current) => {
@@ -76,100 +66,122 @@ export function PlaylistDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>YouTube Playlist</DialogTitle>
-          <DialogDescription>
-            {info.data
-              ? `${info.data.entryCount || entries.length} videos${
-                  info.data.uploader ? ` by ${info.data.uploader}` : ""
-                }`
-              : "Reading the playlist…"}
-          </DialogDescription>
-        </DialogHeader>
-
-        {info.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {info.error instanceof Error
-              ? info.error.message
-              : "Could not read the playlist."}
-          </p>
-        ) : null}
-
-        {entries.length > 0 ? (
-          <>
-            <div className="flex gap-2">
-              <Button
+    <ClassicDialog
+      id="playlist-dialog"
+      className="playlist-dialog"
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="YouTube Playlist"
+      titleId="playlist-title"
+    >
+      <form
+        id="playlist-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <div className="dialog-body playlist-dialog-body">
+          <div className="playlist-header">
+            <div className="playlist-meta">
+              <h3 id="playlist-name">
+                {info.data?.title || "YouTube Playlist"}
+              </h3>
+              {info.data?.uploader && (
+                <p id="playlist-uploader" className="field-help">
+                  by {info.data.uploader}
+                </p>
+              )}
+              <p id="playlist-count" className="field-help">
+                {info.data
+                  ? `${info.data.entryCount || entries.length} videos`
+                  : "Reading playlist…"}
+              </p>
+            </div>
+            <div className="playlist-actions-bar">
+              <button
                 type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setSelected(new Set(entries.map((entry) => entry.id)))}
+                className="button"
+                id="playlist-select-all"
+                onClick={() =>
+                  setSelected(new Set(entries.map((entry) => entry.id)))
+                }
               >
                 Select All
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                size="sm"
-                variant="outline"
+                className="button"
+                id="playlist-deselect-all"
                 onClick={() => setSelected(new Set())}
               >
                 Deselect All
-              </Button>
+              </button>
             </div>
-
-            <ul className="max-h-80 divide-y divide-border overflow-auto rounded-md border border-border">
-              {entries.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-3 px-3 py-2">
-                  <Checkbox
-                    checked={selected.has(entry.id)}
-                    onCheckedChange={() => toggle(entry.id)}
-                    aria-label={`Include ${entry.title}`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm" title={entry.title}>
-                      {entry.title}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {[entry.channel, formatPlaylistDuration(entry.duration)]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </span>
+          </div>
+          <div
+            className="playlist-items-list"
+            id="playlist-items"
+            tabIndex={0}
+            style={{
+              maxHeight: 260,
+              overflowY: "auto",
+              border: "1px solid var(--border-color, #ccc)",
+              padding: 4,
+            }}
+          >
+            {entries.map((entry) => (
+              <label
+                key={entry.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "4px 6px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(entry.id)}
+                  onChange={() => toggle(entry.id)}
+                />
+                <span style={{ flex: 1 }} className="truncate">
+                  {entry.title || entry.url}
+                </span>
+                {entry.duration && (
+                  <span style={{ fontSize: 10, color: "#666" }}>
+                    {formatPlaylistDuration(entry.duration)}
                   </span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : info.isPending ? (
-          <p className="text-sm text-muted-foreground">Reading the playlist…</p>
-        ) : null}
-
-        {category || directory ? (
-          <p className="text-xs text-muted-foreground">
-            {category ? `Category: ${category}. ` : ""}
-            {directory ? `Folder: ${directory}.` : ""}
-          </p>
-        ) : null}
-
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
+                )}
+              </label>
+            ))}
+          </div>
+          {error && (
+            <p className="form-error" id="playlist-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="dialog-footer">
+          <button
             type="button"
+            className="button"
+            data-close
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="button primary"
+            id="playlist-download-btn"
             disabled={adding || entries.length === 0}
-            onClick={submit}
           >
             Download Selected
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </button>
+        </div>
+      </form>
+    </ClassicDialog>
   );
 }

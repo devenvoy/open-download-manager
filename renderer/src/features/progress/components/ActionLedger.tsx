@@ -1,5 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { type ActionLedgerEntry } from "@/types/ipc";
 
 export interface ActionLedgerProps {
@@ -9,18 +7,18 @@ export interface ActionLedgerProps {
   onRetry: () => void;
 }
 
-const TONE: Record<string, string> = {
-  success: "text-emerald-600 dark:text-emerald-400",
-  failed: "text-destructive",
-  cancelled: "text-muted-foreground",
-  skipped: "text-muted-foreground",
+const STATUS_COLOR: Record<string, string> = {
+  success: "#166534",
+  failed: "#991b1b",
+  cancelled: "#4b5563",
+  skipped: "#4b5563",
 };
 
 const ICON: Record<string, string> = {
   success: "✓",
-  failed: "⚠",
-  cancelled: "ℹ",
-  skipped: "ℹ",
+  failed: "⚠️",
+  cancelled: "ℹ️",
+  skipped: "ℹ️",
 };
 
 /** Post-download actions the engine ran, and the manual re-run button. */
@@ -30,47 +28,47 @@ export function ActionLedger({
   retrying,
   onRetry,
 }: ActionLedgerProps) {
-  if (!entries || entries.length === 0) {
-    return (
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold">Post-Download Action History</h3>
-        <p className="text-xs text-muted-foreground">
-          No post-download actions recorded yet.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold">Post-Download Action History</h3>
-      <ul className="divide-y divide-border rounded-md border border-border">
-        {entries.map((entry, index) => (
-          <li
-            key={`${entry.actionKey}-${index}`}
-            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-2 text-xs"
-          >
-            <span className={`font-semibold ${TONE[entry.status] ?? ""}`}>
-              {ICON[entry.status] ?? "ℹ"} {entry.actionType}
-            </span>
-            <Badge variant="outline">{entry.status}</Badge>
-            {entry.message ? (
-              <em className="text-muted-foreground">{entry.message}</em>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      {canRetry ? (
-        <Button
+    <div className="completion-history-section">
+      <strong>Post-Download Action History</strong>
+      <div id="completion-action-history" style={{ marginTop: 6 }}>
+        {!entries || entries.length === 0 ? (
+          <p className="field-help" style={{ margin: "4px 0" }}>
+            No post-download actions recorded yet.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: "4px 0" }}>
+            {entries.map((entry, index) => {
+              const color = STATUS_COLOR[entry.status] ?? "#4b5563";
+              const icon = ICON[entry.status] ?? "ℹ️";
+              return (
+                <li
+                  key={`${entry.actionKey}-${index}`}
+                  style={{ padding: "3px 0", fontSize: "12px" }}
+                >
+                  <span style={{ color, fontWeight: "bold" }}>
+                    {icon} {entry.actionType}
+                  </span>
+                  : <span>{entry.status}</span>
+                  {entry.message ? <> — <em>{entry.message}</em></> : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      {canRetry && (
+        <button
           type="button"
-          size="sm"
-          variant="outline"
+          className="button small-button"
+          id="detail-retry-actions"
+          style={{ marginTop: 6 }}
           disabled={retrying}
           onClick={onRetry}
         >
-          Re-run completion actions
-        </Button>
-      ) : null}
+          {retrying ? "Retrying…" : "Re-run completion actions"}
+        </button>
+      )}
     </div>
   );
 }

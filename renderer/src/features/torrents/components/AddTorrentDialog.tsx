@@ -1,193 +1,198 @@
-import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { torrentsApi } from "../api";
+import { useState } from "react";
+import { ClassicDialog } from "@/components/feedback";
+import { ipc } from "@/lib/ipc";
 
-type Source = "magnet" | "file";
+export interface AddTorrentDialogProps {
+  initialMode: "magnet" | "file";
+  onAddMagnet: (
+    magnet: string,
+    options: { outputFolder?: string; startPaused: boolean; review: boolean },
+  ) => void;
+  onAddFile: (
+    path: string,
+    options: { outputFolder?: string; startPaused: boolean; review: boolean },
+  ) => void;
+  onClose: () => void;
+  pending: boolean;
+}
 
 export function AddTorrentDialog({
+  initialMode,
   onAddMagnet,
   onAddFile,
+  onClose,
   pending,
-}: {
-  onAddMagnet: (magnet: string, options: { outputFolder?: string; startPaused: boolean; review: boolean }) => void;
-  onAddFile: (path: string, options: { outputFolder?: string; startPaused: boolean; review: boolean }) => void;
-  pending: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [source, setSource] = useState<Source>("magnet");
+}: AddTorrentDialogProps) {
+  const [mode, setMode] = useState<"magnet" | "file">(initialMode);
   const [magnet, setMagnet] = useState("");
-  const [path, setPath] = useState("");
-  const [outputFolder, setOutputFolder] = useState("");
-  const [startPaused, setStartPaused] = useState(false);
-  const [review, setReview] = useState(true);
+  const [filePath, setFilePath] = useState("");
+  const [folder, setFolder] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function reset() {
-    setMagnet("");
-    setPath("");
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
-  }
 
-  async function browse() {
-    const picked = await torrentsApi.chooseTorrentFile();
-    if (picked) setPath(picked);
-  }
-
-  async function browseFolder() {
-    const picked = await torrentsApi.chooseDirectory();
-    if (picked) setOutputFolder(picked);
-  }
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
     const options = {
-      ...(outputFolder.trim() ? { outputFolder: outputFolder.trim() } : {}),
-      startPaused,
-      review,
+      outputFolder: folder.trim() || undefined,
+      startPaused: false,
+      review: true,
     };
 
-    if (source === "magnet") {
-      const value = magnet.trim();
-      if (!value.startsWith("magnet:")) {
-        setError("Paste a magnet link that starts with magnet:?");
+    if (mode === "magnet") {
+      const trimmed = magnet.trim();
+      if (!trimmed) {
+        setError("Please enter a magnet link.");
         return;
       }
-      onAddMagnet(value, options);
+      if (!trimmed.toLowerCase().startsWith("magnet:?")) {
+        setError("Invalid magnet link. Must start with magnet:?");
+        return;
+      }
+      onAddMagnet(trimmed, options);
+      onClose();
     } else {
-      if (!path.trim()) {
-        setError("Choose a .torrent file first.");
+      const trimmed = filePath.trim();
+      if (!trimmed) {
+        setError("Please choose a .torrent file.");
         return;
       }
-      onAddFile(path.trim(), options);
+      onAddFile(trimmed, options);
+      onClose();
     }
-
-    reset();
-    setOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>Add torrent</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <form onSubmit={submit} className="space-y-4">
-          <DialogHeader>
-            <DialogTitle>Add torrent</DialogTitle>
-            <DialogDescription>
-              Paste a magnet link or choose a .torrent file. With review on,
-              the engine fetches metadata and asks which files to download
-              before any payload moves.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex gap-2" role="group" aria-label="Torrent source">
-            <Button
+    <ClassicDialog
+      id="torrent-add-dialog"
+      className="torrent-dialog"
+      open
+      onClose={onClose}
+      title={<span>Add Torrent</span>}
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="dialog-body torrent-add-body">
+          <div className="torrent-source-switch">
+            <button
               type="button"
-              variant={source === "magnet" ? "default" : "outline"}
-              onClick={() => setSource("magnet")}
+              id="torrent-source-magnet"
+              className={`torrent-source-button ${mode === "magnet" ? "active-tab" : ""}`}
+              aria-pressed={mode === "magnet"}
+              onClick={() => {
+                setMode("magnet");
+                setError(null);
+              }}
             >
               Magnet link
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              variant={source === "file" ? "default" : "outline"}
-              onClick={() => setSource("file")}
+              id="torrent-source-file"
+              className={`torrent-source-button ${mode === "file" ? "active-tab" : ""}`}
+              aria-pressed={mode === "file"}
+              onClick={() => {
+                setMode("file");
+                setError(null);
+              }}
             >
-              Torrent file
-            </Button>
+              .torrent file
+            </button>
           </div>
 
-          {source === "magnet" ? (
-            <div className="space-y-2">
-              <Label htmlFor="torrent-magnet">Magnet link</Label>
-              <Input
-                id="torrent-magnet"
-                value={magnet}
-                onChange={(event) => setMagnet(event.target.value)}
+          {mode === "magnet" ? (
+            <label id="torrent-magnet-panel" className="torrent-field">
+              <span>Magnet link</span>
+              <textarea
+                id="torrent-magnet-input"
+                rows={3}
+                spellCheck={false}
                 placeholder="magnet:?xt=urn:btih:…"
-                autoFocus
+                value={magnet}
+                onChange={(e) => {
+                  setMagnet(e.target.value);
+                  setError(null);
+                }}
               />
-            </div>
+            </label>
           ) : (
-            <div className="space-y-2">
-              <Label htmlFor="torrent-file">Torrent file</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="torrent-file"
-                  value={path}
-                  onChange={(event) => setPath(event.target.value)}
-                  placeholder="/path/to/file.torrent"
+            <div id="torrent-file-panel" className="torrent-field">
+              <span>Torrent file</span>
+              <div className="torrent-path-row">
+                <input
+                  id="torrent-file-path"
+                  type="text"
+                  readOnly
+                  placeholder="Choose a .torrent file"
+                  value={filePath}
                 />
-                <Button type="button" variant="outline" onClick={browse}>
-                  Browse
-                </Button>
+                <button
+                  type="button"
+                  id="torrent-file-browse"
+                  className="small-button"
+                  onClick={async () => {
+                    const picked = await ipc.chooseFile();
+                    if (picked) setFilePath(picked);
+                  }}
+                >
+                  Browse…
+                </button>
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="torrent-output">Download folder</Label>
-            <div className="flex gap-2">
-              <Input
-                id="torrent-output"
-                value={outputFolder}
-                onChange={(event) => setOutputFolder(event.target.value)}
-                placeholder="Use the torrent settings folder"
+          <div className="torrent-field">
+            <span>Save to</span>
+            <div className="torrent-path-row">
+              <input
+                id="torrent-output-folder"
+                type="text"
+                placeholder="Default torrent folder"
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
               />
-              <Button type="button" variant="outline" onClick={browseFolder}>
-                Browse
-              </Button>
+              <button
+                type="button"
+                id="torrent-output-browse"
+                className="small-button"
+                onClick={async () => {
+                  const picked = await ipc.chooseDirectory();
+                  if (picked) setFolder(picked);
+                }}
+              >
+                Browse…
+              </button>
             </div>
+            <small className="field-help">
+              Leave empty to use the default folder from settings.
+            </small>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="torrent-review"
-              checked={review}
-              onCheckedChange={(checked) => setReview(checked === true)}
-            />
-            <Label htmlFor="torrent-review">Choose files before downloading</Label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="torrent-paused"
-              checked={startPaused}
-              onCheckedChange={(checked) => setStartPaused(checked === true)}
-            />
-            <Label htmlFor="torrent-paused">Add paused</Label>
-          </div>
-
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
+          {error && (
+            <p id="torrent-add-error" className="form-error">
               {error}
             </p>
-          ) : null}
+          )}
+        </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              Add
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="dialog-footer">
+          <button
+            type="button"
+            className="button"
+            data-close="torrent-add-dialog"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            id="torrent-add-confirm"
+            className="button primary"
+            disabled={pending}
+          >
+            Add
+          </button>
+        </div>
+      </form>
+    </ClassicDialog>
   );
 }

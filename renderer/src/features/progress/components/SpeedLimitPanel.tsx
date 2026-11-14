@@ -1,7 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { type Settings } from "@/types/ipc";
 
 export interface SpeedLimitPanelProps {
@@ -34,10 +31,15 @@ export function SpeedLimitPanel({ settings, onApply }: SpeedLimitPanelProps) {
   }
 
   return (
-    <form className="space-y-3" onSubmit={(event) => void submit(event)}>
-      <div className="space-y-2">
-        <Label htmlFor="detail-speed-limit">Global speed limit (KB/s)</Label>
-        <Input
+    <div
+      id="speed-panel"
+      className="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-speed"
+    >
+      <form id="detail-speed-form" onSubmit={(event) => void submit(event)}>
+        <label htmlFor="detail-speed-limit">Global speed limit (KB/s):</label>
+        <input
           id="detail-speed-limit"
           type="number"
           min={0}
@@ -46,25 +48,31 @@ export function SpeedLimitPanel({ settings, onApply }: SpeedLimitPanelProps) {
           value={value}
           onChange={(event) => setValue(event.target.value)}
         />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Applies to all downloads. Enter 0 for unlimited speed.
-      </p>
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="outline" disabled={saving}>
-          Apply
-        </Button>
-        {saved ? (
-          <span role="status" className="text-xs text-muted-foreground">
-            Saved.
-          </span>
-        ) : null}
-      </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
+        <p className="field-help">
+          Applies to all downloads. Enter 0 for unlimited speed.
         </p>
-      ) : null}
-    </form>
+        <div>
+          <button className="button" type="submit" disabled={saving}>
+            Apply
+          </button>
+          {saved && (
+            <span
+              style={{
+                marginLeft: 8,
+                fontSize: 11,
+                color: "var(--text-muted, #666)",
+              }}
+            >
+              Saved.
+            </span>
+          )}
+        </div>
+        {error && (
+          <p id="detail-speed-error" className="form-error">
+            {error}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

@@ -14,9 +14,10 @@ export function StatusPanel({ download, busy, onRetry }: StatusPanelProps) {
   const failed = isErrorStatus(statusOf(download));
 
   return (
-    <div className="space-y-3">
+    <div id="status-panel" role="tabpanel" aria-labelledby="tab-status">
       <p
-        className="break-all text-xs text-muted-foreground"
+        id="transfer-source"
+        className="transfer-source"
         title={download.url}
       >
         {download.url || download.referer || ""}
@@ -26,11 +27,13 @@ export function StatusPanel({ download, busy, onRetry }: StatusPanelProps) {
         <ErrorCard error={download.error} busy={busy} onRetry={onRetry} />
       ) : null}
 
-      <dl className="grid grid-cols-[minmax(9rem,auto)_1fr] gap-x-4 gap-y-1 text-sm">
+      <dl id="details-content" className="details-content">
         {facts.map((fact) => (
-          <div key={fact.label} className="contents">
-            <dt className="text-muted-foreground">{fact.label}</dt>
-            <dd className="break-words">{fact.value}</dd>
+          <div key={fact.label} style={{ display: "contents" }}>
+            <dt>{fact.label}</dt>
+            <dd className={fact.label === "Source" ? "source-address" : undefined}>
+              {fact.value}
+            </dd>
           </div>
         ))}
       </dl>

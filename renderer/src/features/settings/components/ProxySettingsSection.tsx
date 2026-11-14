@@ -1,15 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   type DetectedProxyConfig,
   type ProxyProtocol,
@@ -19,13 +8,6 @@ import { useDetectProxy, useTestProxy } from "../hooks/use-settings";
 import { defaultPortForProtocol } from "../model/proxy-view";
 import { type SettingsDraft } from "../model/settings-draft";
 import { ProxyDiscoveryDialog } from "./ProxyDiscoveryDialog";
-
-const PROTOCOLS: ReadonlyArray<{ value: ProxyProtocol; label: string }> = [
-  { value: "http", label: "HTTP" },
-  { value: "https", label: "HTTPS" },
-  { value: "socks5", label: "SOCKS5" },
-  { value: "direct", label: "Direct (No Proxy)" },
-];
 
 export interface ProxySettingsSectionProps {
   draft: SettingsDraft;
@@ -69,7 +51,9 @@ export function ProxySettingsSection({
 
     setTestStatus({
       type: "testing",
-      message: isDirect ? "Testing direct connection…" : "Testing proxy connection…",
+      message: isDirect
+        ? "Testing direct connection…"
+        : "Testing proxy connection…",
     });
 
     try {
@@ -87,7 +71,9 @@ export function ProxySettingsSection({
 
       setTestStatus({
         type: res.success ? "success" : "error",
-        message: res.message || (res.success ? "Connection successful." : "Connection failed."),
+        message:
+          res.message ||
+          (res.success ? "Connection successful." : "Connection failed."),
       });
     } catch (err) {
       setTestStatus({
@@ -103,182 +89,172 @@ export function ProxySettingsSection({
       setDetectedProxy(config);
       setDiscoveryOpen(true);
     } catch (err) {
-      onError(`Discovery error: ${err instanceof Error ? err.message : String(err)}`);
+      onError(
+        err instanceof Error ? err.message : "Failed to detect system proxy.",
+      );
     }
   }
 
-  function handleImportedProxy(updated: Settings) {
-    const p = updated.proxy || detectedProxy?.importSettings;
+  function handleImportDetected(updatedSettings: Settings) {
+    const p = updatedSettings.proxy;
     if (p) {
-      onChange("proxyEnabled", p.enabled === true);
-      onChange("proxyProtocol", p.protocol || "http");
-      onChange("proxyHost", p.host || "");
-      onChange("proxyPort", p.port || 8080);
-      onChange("proxyUsername", p.username || "");
-      onChange("proxyPassword", "");
-      onChange("proxyResolveDnsRemotely", p.resolveDnsRemotely === true);
-      setTestStatus({ type: "success", message: "Discovered proxy settings applied." });
+      onChange("proxyEnabled", p.enabled);
+      onChange("proxyProtocol", p.protocol);
+      onChange("proxyHost", p.host);
+      onChange("proxyPort", p.port);
+      onChange("proxyUsername", p.username ?? "");
+      onChange("proxyPassword", p.password ?? "");
+      onChange("proxyResolveDnsRemotely", p.resolveDnsRemotely);
     }
+    setDiscoveryOpen(false);
   }
 
   return (
-    <fieldset className="rounded-md border p-4 space-y-4">
-      <legend className="px-2 text-sm font-semibold">Proxy</legend>
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="proxy-enabled"
-            checked={draft.proxyEnabled}
-            onCheckedChange={(c) => {
-              onChange("proxyEnabled", c === true);
-              setTestStatus({ type: "idle", message: "" });
-            }}
-          />
-          <Label htmlFor="proxy-enabled" className="text-sm font-normal cursor-pointer">
-            Use proxy server for downloads
-          </Label>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          id="detect-proxy-button"
-          disabled={detectProxyMutation.isPending}
-          onClick={() => void handleDetectProxy()}
-        >
-          {detectProxyMutation.isPending ? "Detecting…" : "Detect System Proxy…"}
-        </Button>
-      </div>
-
-      <div id="proxy-fields" className={`space-y-3 pl-6 ${!draft.proxyEnabled ? "opacity-50" : ""}`}>
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="proxy-protocol">Protocol:</Label>
-          <Select
-            value={draft.proxyProtocol}
-            disabled={!draft.proxyEnabled}
-            onValueChange={(val) => handleProtocolChange(val as ProxyProtocol)}
-          >
-            <SelectTrigger id="proxy-protocol" className="w-56"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PROTOCOLS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="proxy-host">Proxy server (host):</Label>
-          <Input
-            id="proxy-host"
-            value={draft.proxyHost}
-            disabled={!draft.proxyEnabled || isDirect}
-            placeholder="127.0.0.1 or proxy.example.com"
-            className="w-56"
-            onChange={(e) => {
-              onChange("proxyHost", e.target.value);
-              setTestStatus({ type: "idle", message: "" });
-            }}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="proxy-port">Port:</Label>
-          <Input
-            id="proxy-port"
-            type="number"
-            min={1}
-            max={65535}
-            disabled={!draft.proxyEnabled || isDirect}
-            placeholder="8080"
-            className="w-24 text-right"
-            value={draft.proxyPort}
-            onChange={(e) =>
-              onChange("proxyPort", Math.max(1, Number(e.target.value) || 8080))
-            }
-          />
-        </div>
-
-        {isSocks5 && (
-          <div id="proxy-dns-group" className="flex items-center gap-2 pt-1">
-            <Checkbox
-              id="proxy-resolve-dns-remotely"
-              checked={draft.proxyResolveDnsRemotely}
-              disabled={!draft.proxyEnabled}
-              onCheckedChange={(c) => onChange("proxyResolveDnsRemotely", c === true)}
+    <>
+      <fieldset>
+        <legend>Proxy</legend>
+        <div className="proxy-header-actions">
+          <label className="checkbox-label" htmlFor="proxy-enabled">
+            <input
+              type="checkbox"
+              id="proxy-enabled"
+              checked={draft.proxyEnabled}
+              onChange={(e) => onChange("proxyEnabled", e.target.checked)}
             />
-            <Label htmlFor="proxy-resolve-dns-remotely" className="text-xs font-normal cursor-pointer">
-              Resolve DNS through proxy (Remote DNS)
-            </Label>
+            Use proxy server for downloads
+          </label>
+          <button
+            className="small-button"
+            id="detect-proxy-button"
+            type="button"
+            onClick={() => void handleDetectProxy()}
+          >
+            Detect System Proxy…
+          </button>
+        </div>
+
+        {draft.proxyEnabled && (
+          <div id="proxy-fields" className="proxy-fields">
+            <div className="form-line">
+              <label htmlFor="proxy-protocol">Protocol:</label>
+              <select
+                id="proxy-protocol"
+                value={draft.proxyProtocol}
+                onChange={(e) =>
+                  handleProtocolChange(e.target.value as ProxyProtocol)
+                }
+              >
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+                <option value="direct">Direct (No Proxy)</option>
+              </select>
+            </div>
+
+            {!isDirect && (
+              <>
+                <div className="form-line">
+                  <label htmlFor="proxy-host">Proxy server (host):</label>
+                  <input
+                    type="text"
+                    id="proxy-host"
+                    placeholder="127.0.0.1 or proxy.example.com"
+                    value={draft.proxyHost}
+                    onChange={(e) => onChange("proxyHost", e.target.value)}
+                  />
+                </div>
+                <div className="form-line">
+                  <label htmlFor="proxy-port">Port:</label>
+                  <input
+                    type="number"
+                    id="proxy-port"
+                    min={1}
+                    max={65535}
+                    placeholder="8080"
+                    value={draft.proxyPort}
+                    onChange={(e) =>
+                      onChange("proxyPort", Number(e.target.value) || 0)
+                    }
+                  />
+                </div>
+                {isSocks5 && (
+                  <div
+                    id="proxy-dns-group"
+                    className="form-line proxy-dns-line"
+                  >
+                    <label
+                      className="checkbox-label"
+                      htmlFor="proxy-resolve-dns-remotely"
+                    >
+                      <input
+                        type="checkbox"
+                        id="proxy-resolve-dns-remotely"
+                        checked={draft.proxyResolveDnsRemotely}
+                        onChange={(e) =>
+                          onChange(
+                            "proxyResolveDnsRemotely",
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      Resolve DNS through proxy (Remote DNS)
+                    </label>
+                  </div>
+                )}
+                <div className="form-line">
+                  <label htmlFor="proxy-username">Username (optional):</label>
+                  <input
+                    type="text"
+                    id="proxy-username"
+                    autoComplete="off"
+                    value={draft.proxyUsername}
+                    onChange={(e) => onChange("proxyUsername", e.target.value)}
+                  />
+                </div>
+                <div className="form-line">
+                  <label htmlFor="proxy-password">Password (optional):</label>
+                  <input
+                    type="password"
+                    id="proxy-password"
+                    autoComplete="off"
+                    value={draft.proxyPassword}
+                    onChange={(e) => onChange("proxyPassword", e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="form-line proxy-test-line">
+              <button
+                className="small-button"
+                id="test-proxy-button"
+                type="button"
+                disabled={testStatus.type === "testing"}
+                onClick={() => void handleTestProxy()}
+              >
+                Test Connection
+              </button>
+              <span
+                id="proxy-test-status"
+                className="proxy-test-status"
+                role="status"
+                aria-live="polite"
+              >
+                {testStatus.message}
+              </span>
+            </div>
           </div>
         )}
+      </fieldset>
 
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="proxy-username">Username (optional):</Label>
-          <Input
-            id="proxy-username"
-            value={draft.proxyUsername}
-            disabled={!draft.proxyEnabled || isDirect}
-            className="w-56"
-            autoComplete="off"
-            onChange={(e) => onChange("proxyUsername", e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="proxy-password">Password (optional):</Label>
-          <Input
-            id="proxy-password"
-            type="password"
-            value={draft.proxyPassword}
-            disabled={!draft.proxyEnabled || isDirect}
-            className="w-56"
-            autoComplete="off"
-            onChange={(e) => onChange("proxyPassword", e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center gap-4 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            id="test-proxy-button"
-            disabled={!draft.proxyEnabled || testProxyMutation.isPending}
-            onClick={() => void handleTestProxy()}
-          >
-            Test Connection
-          </Button>
-          <span
-            id="proxy-test-status"
-            className={`text-xs ${
-              testStatus.type === "success"
-                ? "text-green-600 dark:text-green-400"
-                : testStatus.type === "error"
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-            }`}
-            role="status"
-            aria-live="polite"
-          >
-            {testStatus.message}
-          </span>
-        </div>
-      </div>
-
-      <ProxyDiscoveryDialog
-        open={discoveryOpen}
-        onOpenChange={setDiscoveryOpen}
-        detected={detectedProxy}
-        currentProxy={{
-          enabled: draft.proxyEnabled,
-          protocol: draft.proxyProtocol,
-          host: draft.proxyHost,
-          port: draft.proxyPort,
-          username: draft.proxyUsername || null,
-          password: draft.proxyPassword || null,
-          resolveDnsRemotely: draft.proxyResolveDnsRemotely,
-        }}
-        onImport={handleImportedProxy}
-      />
-    </fieldset>
+      {discoveryOpen && detectedProxy && (
+        <ProxyDiscoveryDialog
+          open={discoveryOpen}
+          detected={detectedProxy}
+          onOpenChange={setDiscoveryOpen}
+          onImport={handleImportDetected}
+        />
+      )}
+    </>
   );
 }

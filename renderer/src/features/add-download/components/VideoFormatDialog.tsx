@@ -1,21 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ClassicDialog } from "@/components/feedback";
 import { type YouTubeFormatChoice } from "@/types/ipc";
 import { formatChoiceLabel, formatVideoDuration } from "../model/add-form";
 import { useVideoFormats } from "../api";
@@ -41,65 +25,86 @@ export function VideoFormatDialog({
     if (open) setIndex("0");
   }, [open]);
 
+  if (!open) return null;
+
   function submit() {
     const choice = choices[Number(index)];
     if (choice) onPick(choice);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Choose Quality / Format</DialogTitle>
-          <DialogDescription>
-            {choices[0]?.title || "YouTube video"}
-            {choices[0]?.duration
-              ? ` • ${formatVideoDuration(choices[0].duration)}`
-              : ""}
-          </DialogDescription>
-        </DialogHeader>
-
-        {formats.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {formats.error instanceof Error
-              ? formats.error.message
-              : "No available formats found for this video."}
-          </p>
-        ) : null}
-
-        {formats.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading formats…</p>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="video-format-select">Format</Label>
-            <Select value={index} onValueChange={setIndex}>
-              <SelectTrigger id="video-format-select" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {choices.map((choice, choiceIndex) => (
-                  <SelectItem key={`${choice.youtubeFormat}-${choiceIndex}`} value={String(choiceIndex)}>
-                    {formatChoiceLabel(choice)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <ClassicDialog
+      id="video-formats-dialog"
+      className="video-formats-dialog"
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Choose Quality / Format"
+      titleId="video-formats-title"
+    >
+      <form
+        id="video-formats-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <div className="dialog-body">
+          <div className="playlist-header">
+            <div className="playlist-meta">
+              <h3 id="video-formats-name">
+                {choices[0]?.title || "YouTube Video"}
+              </h3>
+              {choices[0]?.duration ? (
+                <p id="video-formats-details" className="field-help">
+                  Duration: {formatVideoDuration(choices[0].duration)}
+                </p>
+              ) : null}
+            </div>
           </div>
-        )}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
+          {formats.isError && (
+            <p id="video-formats-error" className="error-notice">
+              {formats.error instanceof Error
+                ? formats.error.message
+                : "No available formats found for this video."}
+            </p>
+          )}
+          <div className="form-line">
+            <label htmlFor="video-format-select">Format:</label>
+            <select
+              id="video-format-select"
+              className="full-width"
+              style={{ padding: 6, width: "100%" }}
+              value={index}
+              onChange={(e) => setIndex(e.target.value)}
+            >
+              {choices.map((choice, choiceIndex) => (
+                <option key={choiceIndex} value={String(choiceIndex)}>
+                  {formatChoiceLabel(choice)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="dialog-footer">
+          <span className="spacer" />
+          <button
             type="button"
-            disabled={formats.isPending || choices.length === 0}
-            onClick={submit}
+            className="button"
+            data-close
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="button primary"
+            id="video-formats-apply"
+            disabled={choices.length === 0}
           >
             Select Format
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </button>
+        </div>
+      </form>
+    </ClassicDialog>
   );
 }

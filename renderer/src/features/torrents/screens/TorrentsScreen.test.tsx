@@ -115,9 +115,9 @@ describe("TorrentsScreen", () => {
     );
 
     renderWithQuery(<TorrentsScreen />);
-    await screen.findByText("Torrent support is turned off.");
+    await screen.findByText(/BitTorrent support is disabled in settings/);
 
-    fireEvent.click(screen.getByRole("button", { name: "Enable torrents" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
 
     await waitFor(() =>
       expect(settingsSetMock).toHaveBeenCalledWith(

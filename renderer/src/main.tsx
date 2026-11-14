@@ -3,8 +3,9 @@ import ReactDOM from "react-dom/client";
 import { App } from "@/app/App";
 import { Providers } from "@/app/providers";
 import { readWindowRoute } from "@/app/window-mode";
-import "@/styles.css";
 import "@/index.css";
+import "@/styles.css";
+import "@/torrents.css";
 
 const route = readWindowRoute(window.location.search);
 

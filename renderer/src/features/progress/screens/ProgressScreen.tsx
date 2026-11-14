@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useHydrateTheme } from "@/stores/theme-store";
 import {
   canCancel,
@@ -42,14 +42,62 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
 
   const download =
     snapshot.data?.downloads.find((item) => item.id === id) ?? null;
+  const reviewing = Boolean(download?.needsReview && !review.isSuccess);
 
-  function close() {
+  useEffect(() => {
+    document.body.classList.toggle("review-window", reviewing);
+    return () => {
+      document.body.classList.remove("review-window");
+    };
+  }, [reviewing]);
+
+  useEffect(() => {
+    document.body.classList.toggle("details-collapsed", collapsed);
+    return () => {
+      document.body.classList.remove("details-collapsed");
+    };
+  }, [collapsed]);
+
+  const close = useCallback(() => {
     void progressApi.close();
-  }
+  }, []);
+
+  const submitReview = useCallback(
+    (draft: ReviewDraft, queueOnly: boolean) => {
+      const patch = buildReviewPatch(draft, queueOnly);
+      review.mutate(patch, {
+        onSuccess: () => {
+          if (queueOnly || patch.scheduledAt) close();
+        },
+      });
+    },
+    [review, close],
+  );
+
+  const cancelReview = useCallback(() => {
+    action.mutate("remove", { onSuccess: close });
+  }, [action, close]);
+
+  const applySpeed = useCallback(
+    async (speedLimitKbps: number) => {
+      await updateSettings.mutateAsync({ speedLimitKbps });
+    },
+    [updateSettings],
+  );
+
+  const saveCompletionToggles = useCallback(
+    async (patch: {
+      notifyOnComplete: boolean;
+      revealOnComplete: boolean;
+    }) => {
+      await updateSettings.mutateAsync(patch);
+    },
+    [updateSettings],
+  );
 
   if (snapshot.isPending) {
     return (
-      <dialog id="progress-dialog" className="progress-dialog" open>
+      <dialog id="details-dialog" className="details-dialog" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           Loading download progress…
         </div>
@@ -59,7 +107,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
 
   if (snapshot.isError || !download) {
     return (
-      <dialog id="progress-dialog" className="progress-dialog" open>
+      <dialog id="details-dialog" className="details-dialog" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           {snapshot.isError
             ? `Could not read download: ${snapshot.error instanceof Error ? snapshot.error.message : "Error"}`
@@ -74,44 +122,34 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
     );
   }
 
-  function submitReview(draft: ReviewDraft, queueOnly: boolean) {
-    const patch = buildReviewPatch(draft, queueOnly);
-    review.mutate(patch, {
-      onSuccess: () => {
-        if (queueOnly || patch.scheduledAt) close();
-      },
-    });
-  }
-
-  function cancelReview() {
-    action.mutate("remove", { onSuccess: close });
-  }
-
-  async function applySpeed(speedLimitKbps: number) {
-    await updateSettings.mutateAsync({ speedLimitKbps });
-  }
-
-  async function saveCompletionToggles(patch: {
-    notifyOnComplete: boolean;
-    revealOnComplete: boolean;
-  }) {
-    await updateSettings.mutateAsync(patch);
+  if (reviewing) {
+    return (
+      <ReviewPanel
+        download={download}
+        submitting={review.isPending}
+        onBrowse={() => chooseDirectory.mutateAsync()}
+        onSubmit={submitReview}
+        onCancel={cancelReview}
+      />
+    );
   }
 
   const status = statusOf(download);
   const percent = percentage(download);
-  const reviewing = download.needsReview && !review.isSuccess;
   const settings = snapshot.data?.settings;
 
   return (
-    <dialog id="progress-dialog" className="progress-dialog" open>
+    <dialog
+      id="details-dialog"
+      className={`details-dialog ${status === "completed" ? "is-complete" : ""}`}
+      open
+      aria-labelledby="details-title"
+    >
       <div className="dialog-title">
-        <strong id="detail-title">
-          {reviewing
-            ? "Download File Info"
-            : `${percent !== null ? `${Math.floor(percent)}% ` : ""}${
-                download.filename || "Download status"
-              }`}
+        <strong id="details-title">
+          {`${percent !== null ? `${Math.floor(percent)}% ` : ""}${
+            download.filename || "Download status"
+          }`}
         </strong>
         <button
           type="button"
@@ -125,22 +163,20 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
       </div>
 
       <div className="dialog-body">
-        {reviewing ? (
-          <ReviewPanel
-            download={download}
-            submitting={review.isPending}
-            onBrowse={() => chooseDirectory.mutateAsync()}
-            onSubmit={submitReview}
-            onCancel={cancelReview}
-          />
-        ) : settings ? (
+        {settings ? (
           <>
-            <div className="dialog-tabs" role="tablist">
+            <div
+              className="dialog-tabs"
+              role="tablist"
+              aria-label="Download properties"
+            >
               <button
                 type="button"
+                id="tab-status"
                 role="tab"
                 aria-selected={tab === "status"}
-                className={`dialog-tab ${tab === "status" ? "active" : ""}`}
+                aria-controls="status-panel"
+                className={tab === "status" ? "active-tab" : ""}
                 onClick={() => setTab("status")}
                 onMouseDown={() => setTab("status")}
               >
@@ -148,9 +184,11 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
               </button>
               <button
                 type="button"
+                id="tab-speed"
                 role="tab"
                 aria-selected={tab === "speed"}
-                className={`dialog-tab ${tab === "speed" ? "active" : ""}`}
+                aria-controls="speed-panel"
+                className={tab === "speed" ? "active-tab" : ""}
                 onClick={() => setTab("speed")}
                 onMouseDown={() => setTab("speed")}
               >
@@ -158,9 +196,11 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
               </button>
               <button
                 type="button"
+                id="tab-completion"
                 role="tab"
                 aria-selected={tab === "completion"}
-                className={`dialog-tab ${tab === "completion" ? "active" : ""}`}
+                aria-controls="completion-panel"
+                className={tab === "completion" ? "active-tab" : ""}
                 onClick={() => setTab("completion")}
                 onMouseDown={() => setTab("completion")}
               >
@@ -168,43 +208,41 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
               </button>
             </div>
 
-            <div className="tab-body" style={{ marginTop: 8 }}>
-              {tab === "status" && (
-                <StatusPanel
-                  download={download}
-                  busy={action.isPending}
-                  onRetry={() => action.mutate("retry")}
-                />
-              )}
-              {tab === "speed" && (
-                <SpeedLimitPanel settings={settings} onApply={applySpeed} />
-              )}
-              {tab === "completion" && (
-                <CompletionPanel
-                  download={download}
-                  settings={settings}
-                  retrying={retryActions.isPending}
-                  onSaveToggles={saveCompletionToggles}
-                  onRetryActions={() => retryActions.mutate()}
-                  onOpen={() => action.mutate("open")}
-                  onReveal={() => action.mutate("reveal")}
-                />
-              )}
-            </div>
+            {tab === "status" && (
+              <StatusPanel
+                download={download}
+                busy={action.isPending}
+                onRetry={() => action.mutate("retry")}
+              />
+            )}
+            {tab === "speed" && (
+              <SpeedLimitPanel settings={settings} onApply={applySpeed} />
+            )}
+            {tab === "completion" && (
+              <CompletionPanel
+                download={download}
+                settings={settings}
+                retrying={retryActions.isPending}
+                onSaveToggles={saveCompletionToggles}
+                onRetryActions={() => retryActions.mutate()}
+                onOpen={() => action.mutate("open")}
+                onReveal={() => action.mutate("reveal")}
+              />
+            )}
 
             <progress
               id="detail-progress"
               max={100}
               value={percent ?? 0}
               aria-label="Download progress"
-              style={{ width: "100%", margin: "10px 0" }}
             />
 
-            {status !== "completed" ? (
+            {status !== "completed" && (
               <div className="transfer-buttons">
                 <button
                   type="button"
                   className="button"
+                  id="toggle-details"
                   onClick={() => {
                     const next = !collapsed;
                     setCollapsed(next);
@@ -217,6 +255,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                 <button
                   type="button"
                   className="button"
+                  id="detail-resume"
                   disabled={!canResume(download) || action.isPending}
                   onClick={() =>
                     action.mutate(
@@ -231,6 +270,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                 <button
                   type="button"
                   className="button"
+                  id="detail-stop"
                   disabled={!canPause(download) || action.isPending}
                   onClick={() => action.mutate("pause")}
                 >
@@ -239,28 +279,29 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                 <button
                   type="button"
                   className="button"
+                  id="detail-cancel"
                   disabled={!canCancel(download) || action.isPending}
                   onClick={() => action.mutate("cancel")}
                 >
                   Cancel
                 </button>
               </div>
-            ) : null}
+            )}
 
-            {!collapsed && status !== "failed" ? (
-              <div id="connection-details">
-                <p className="connection-caption">
-                  Start positions and download progress by connections
-                </p>
-                <SegmentSection download={download} />
-              </div>
-            ) : null}
+            {!collapsed && status !== "completed" && (
+              <SegmentSection download={download} />
+            )}
           </>
         ) : null}
       </div>
 
       <div className="dialog-footer">
-        <button type="button" className="button" onClick={close}>
+        <button
+          type="button"
+          className="button"
+          data-close
+          onClick={close}
+        >
           Close
         </button>
       </div>

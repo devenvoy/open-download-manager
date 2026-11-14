@@ -114,7 +114,7 @@ describe("IntegrationScreen", () => {
     renderWithQuery(<IntegrationScreen />);
 
     expect(
-      await screen.findByText("Could not read the browser integration"),
+      await screen.findByText(/Could not read the browser integration/),
     ).toBeInTheDocument();
   });
 });

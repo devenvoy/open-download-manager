@@ -53,17 +53,15 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
     margin: 0;
     overflow: hidden;
     font-family:
-      ui-sans-serif,
-      system-ui,
       -apple-system,
       BlinkMacSystemFont,
       "Segoe UI",
       Roboto,
       "Helvetica Neue",
+      Arial,
       sans-serif;
   }
 

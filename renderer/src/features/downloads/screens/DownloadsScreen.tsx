@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { formatSpeed } from "@/lib/format";
 import { useHydrateTheme } from "@/stores/theme-store";
@@ -18,11 +18,7 @@ import {
   visibleSelection,
 } from "../state/downloads-store";
 
-export interface DownloadsScreenProps {
-  headerActions?: ReactNode;
-}
-
-export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
+export function DownloadsScreen() {
   const { data, isPending } = useDownloads();
   const selectedIds = useDownloadsStore((state) => state.selectedIds);
   const category = useDownloadsStore((state) => state.category);
@@ -33,6 +29,23 @@ export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
   const remove = useRemoveDownloads();
 
   useHydrateTheme(data?.settings.theme);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        void downloadsApi.openAddWindow();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const visible = useMemo(
     () => filterDownloads(data?.downloads ?? [], category),
@@ -47,33 +60,47 @@ export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
     );
   }, [data?.downloads]);
 
-  function handleAction(id: string, kind: DownloadActionKind) {
-    action.mutate({ id, action: kind });
-  }
+  const handleAction = useCallback(
+    (id: string, kind: DownloadActionKind) => {
+      action.mutate({ id, action: kind });
+    },
+    [action],
+  );
 
-  function handleResume() {
-    selectedVisible.forEach((id) => handleAction(id, "resume"));
-  }
+  const handleResume = useCallback(() => {
+    selectedVisible.forEach((id) => {
+      const d = data?.downloads.find((item) => item.id === id);
+      if (d?.needsReview) {
+        void downloadsApi.openProgressWindow(d.id);
+        return;
+      }
+      const kind: DownloadActionKind =
+        d && (d.status === "error" || d.status === "cancelled")
+          ? "retry"
+          : "resume";
+      handleAction(id, kind);
+    });
+  }, [selectedVisible, data?.downloads, handleAction]);
 
-  function handleStop() {
+  const handleStop = useCallback(() => {
     selectedVisible.forEach((id) => handleAction(id, "cancel"));
-  }
+  }, [selectedVisible, handleAction]);
 
-  function handleStopAll() {
+  const handleStopAll = useCallback(() => {
     (data?.downloads ?? [])
       .filter((d) => d.status === "downloading")
       .forEach((d) => handleAction(d.id, "cancel"));
-  }
+  }, [data?.downloads, handleAction]);
 
-  function handleDelete() {
+  const handleDelete = useCallback(() => {
     if (selectedVisible.length > 0) {
       remove.mutate(selectedVisible, { onSuccess: clearSelection });
     }
-  }
+  }, [selectedVisible, remove, clearSelection]);
 
-  function handleDeleteCompleted() {
+  const handleDeleteCompleted = useCallback(() => {
     downloadsApi.removeCompleted();
-  }
+  }, []);
 
   const activeDownloading = (data?.downloads ?? []).some(
     (d) => d.status === "downloading",
@@ -82,29 +109,26 @@ export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
   return (
     <AppShell
       toolbar={
-        <>
-          <DownloadsToolbar
-            selectedIds={selectedVisible}
-            canResume={selectedVisible.length > 0}
-            canStop={selectedVisible.length > 0}
-            canStopAll={activeDownloading}
-            canDelete={selectedVisible.length > 0}
-            canDeleteCompleted={true}
-            onAdd={() => downloadsApi.openAddWindow()}
-            onResume={handleResume}
-            onStop={handleStop}
-            onStopAll={handleStopAll}
-            onDelete={handleDelete}
-            onDeleteCompleted={handleDeleteCompleted}
-            onOpenOptions={() => downloadsApi.openOptionsWindow()}
-            onOpenScheduler={() => downloadsApi.openSchedulerWindow()}
-            onStartQueue={() => downloadsApi.startQueue()}
-            onStopQueue={() => downloadsApi.pauseQueue()}
-            onOpenIntegration={() => downloadsApi.openIntegrationWindow()}
-            onOpenTorrents={() => downloadsApi.openTorrentWindow()}
-          />
-          {headerActions}
-        </>
+        <DownloadsToolbar
+          selectedIds={selectedVisible}
+          canResume={selectedVisible.length > 0}
+          canStop={selectedVisible.length > 0}
+          canStopAll={activeDownloading}
+          canDelete={selectedVisible.length > 0}
+          canDeleteCompleted={true}
+          onAdd={() => downloadsApi.openAddWindow()}
+          onResume={handleResume}
+          onStop={handleStop}
+          onStopAll={handleStopAll}
+          onDelete={handleDelete}
+          onDeleteCompleted={handleDeleteCompleted}
+          onOpenOptions={() => downloadsApi.openOptionsWindow()}
+          onOpenScheduler={() => downloadsApi.openSchedulerWindow()}
+          onStartQueue={() => downloadsApi.startQueue()}
+          onStopQueue={() => downloadsApi.pauseQueue()}
+          onOpenIntegration={() => downloadsApi.openIntegrationWindow()}
+          onOpenTorrents={() => downloadsApi.openTorrentWindow()}
+        />
       }
       sidebar={<CategorySidebar />}
       footer={
@@ -120,6 +144,7 @@ export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
       }
     >
       <DownloadsTable
+        searchRef={searchInputRef}
         downloads={visible}
         selectedIds={selectedVisible}
         onToggle={toggleSelected}
@@ -134,6 +159,7 @@ export function DownloadsScreen({ headerActions }: DownloadsScreenProps = {}) {
         }}
         onAction={handleAction}
         onOpenProperties={(id) => downloadsApi.openProgressWindow(id)}
+        onOpenFolder={(id) => handleAction(id, "reveal")}
       />
     </AppShell>
   );

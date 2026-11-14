@@ -1,261 +1,294 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { useState } from "react";
+import { ClassicDialog } from "@/components/feedback";
+import { ipc } from "@/lib/ipc";
 import { type TorrentSettings } from "@/types/ipc";
-import { validateSettingsInput } from "../model/torrent-view";
-import { torrentsApi } from "../api";
 
 export interface TorrentSettingsDialogProps {
   settings: TorrentSettings;
   saving: boolean;
   onSave: (settings: TorrentSettings) => void;
+  onRestart: () => void;
+  restarting: boolean;
+  onClose: () => void;
 }
 
 export function TorrentSettingsDialog({
   settings,
   saving,
   onSave,
+  onRestart,
+  restarting,
+  onClose,
 }: TorrentSettingsDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<TorrentSettings>(settings);
+  const [draft, setDraft] = useState<TorrentSettings>(() => ({ ...settings }));
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setDraft(settings);
-      setError(null);
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (draft.listenPort < 0 || draft.listenPort > 65535) {
+      setError("Listen port must be between 0 and 65535.");
+      return;
     }
-  }, [open, settings]);
-
-  function patch<K extends keyof TorrentSettings>(key: K, value: TorrentSettings[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  async function browse() {
-    const picked = await torrentsApi.chooseDirectory();
-    if (picked) patch("downloadDirectory", picked);
-  }
-
-  function save() {
-    const problem = validateSettingsInput(draft);
-    if (problem) {
-      setError(problem);
+    if (draft.maxPeersPerTorrent < 1) {
+      setError("Max peers per torrent must be at least 1.");
       return;
     }
     onSave(draft);
-    setOpen(false);
+    onClose();
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">Torrent settings</Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Torrent settings</DialogTitle>
-          <DialogDescription>
-            These settings are stored separately from the download manager.
-            Changing the port or the network toggles needs an engine restart.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <Row
-            id="torrent-enabled"
-            label="Enable torrent support"
-            control={
-              <Switch
-                id="torrent-enabled"
-                checked={draft.enabled}
-                onCheckedChange={(checked) => patch("enabled", checked)}
-              />
-            }
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor="torrent-directory">Download folder</Label>
-            <div className="flex gap-2">
-              <Input
-                id="torrent-directory"
+    <ClassicDialog
+      id="torrent-settings-dialog"
+      className="torrent-dialog torrent-settings-dialog"
+      open
+      onClose={onClose}
+      title={<span>Torrent Settings</span>}
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="dialog-body torrent-settings-body">
+          <p
+            id="torrent-settings-engine-info"
+            className="torrent-settings-engine-info"
+          >
+            Port {draft.listenPort} · DHT {draft.enableDht ? "on" : "off"} · uTP{" "}
+            {draft.enableUtp ? "on" : "off"}
+          </p>
+          <label className="torrent-check">
+            <input
+              id="torrent-setting-enabled"
+              type="checkbox"
+              checked={draft.enabled}
+              onChange={(e) =>
+                setDraft({ ...draft, enabled: e.target.checked })
+              }
+            />
+            <span>Enable BitTorrent support</span>
+          </label>
+          <div className="torrent-field">
+            <span>Default download folder</span>
+            <div className="torrent-path-row">
+              <input
+                id="torrent-setting-directory"
+                type="text"
+                placeholder="Default: Downloads/Torrents"
                 value={draft.downloadDirectory ?? ""}
-                onChange={(event) =>
-                  patch("downloadDirectory", event.target.value || null)
+                onChange={(e) =>
+                  setDraft({ ...draft, downloadDirectory: e.target.value || null })
                 }
-                placeholder="Downloads/Torrents"
               />
-              <Button type="button" variant="outline" onClick={browse}>
-                Browse
-              </Button>
+              <button
+                type="button"
+                id="torrent-setting-directory-browse"
+                className="small-button"
+                onClick={async () => {
+                  const picked = await ipc.chooseDirectory();
+                  if (picked) setDraft({ ...draft, downloadDirectory: picked });
+                }}
+              >
+                Browse…
+              </button>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field
-              id="torrent-port"
-              label="Listen port (0 = random)"
-              value={draft.listenPort}
-              onChange={(value) => patch("listenPort", value)}
-            />
-            <Field
-              id="torrent-peers"
-              label="Max peers per torrent"
-              value={draft.maxPeersPerTorrent}
-              onChange={(value) => patch("maxPeersPerTorrent", value)}
-            />
-            <Field
-              id="torrent-down-limit"
-              label="Download limit (KB/s, 0 = off)"
-              value={draft.downloadLimitKbps}
-              onChange={(value) => patch("downloadLimitKbps", value)}
-            />
-            <Field
-              id="torrent-up-limit"
-              label="Upload limit (KB/s, 0 = off)"
-              value={draft.uploadLimitKbps}
-              onChange={(value) => patch("uploadLimitKbps", value)}
-            />
-            <Field
-              id="torrent-ratio"
-              label="Seed ratio limit (0 = off)"
-              value={draft.seedRatioLimit}
-              step="0.01"
-              onChange={(value) => patch("seedRatioLimit", value)}
-            />
-            <Field
-              id="torrent-seed-time"
-              label="Seed time limit (minutes)"
-              value={draft.seedTimeLimitMinutes}
-              onChange={(value) => patch("seedTimeLimitMinutes", value)}
-            />
+          <div className="torrent-settings-grid">
+            <label className="torrent-field">
+              <span>Listen port</span>
+              <input
+                id="torrent-setting-port"
+                type="number"
+                min="0"
+                max="65535"
+                step="1"
+                value={draft.listenPort}
+                onChange={(e) =>
+                  setDraft({ ...draft, listenPort: Number(e.target.value) || 0 })
+                }
+              />
+              <small className="field-help">0 chooses a free port.</small>
+            </label>
+            <label className="torrent-field">
+              <span>Max peers per torrent</span>
+              <input
+                id="torrent-setting-peers"
+                type="number"
+                min="1"
+                max="2000"
+                step="1"
+                value={draft.maxPeersPerTorrent}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    maxPeersPerTorrent: Number(e.target.value) || 200,
+                  })
+                }
+              />
+              <small className="field-help">
+                Only connected peers can send data. A small number slows a busy
+                torrent down.
+              </small>
+            </label>
+            <label className="torrent-field">
+              <span>Download limit (KB/s)</span>
+              <input
+                id="torrent-setting-download-limit"
+                type="number"
+                min="0"
+                step="1"
+                value={draft.downloadLimitKbps}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    downloadLimitKbps: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <small className="field-help">0 means unlimited.</small>
+            </label>
+            <label className="torrent-field">
+              <span>Upload limit (KB/s)</span>
+              <input
+                id="torrent-setting-upload-limit"
+                type="number"
+                min="0"
+                step="1"
+                value={draft.uploadLimitKbps}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    uploadLimitKbps: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <small className="field-help">0 means unlimited.</small>
+            </label>
+            <label className="torrent-field">
+              <span>Seed ratio limit</span>
+              <input
+                id="torrent-setting-ratio"
+                type="number"
+                min="0"
+                step="0.1"
+                value={draft.seedRatioLimit}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    seedRatioLimit: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <small className="field-help">0 means no ratio limit.</small>
+            </label>
+            <label className="torrent-field">
+              <span>Seed time limit (minutes)</span>
+              <input
+                id="torrent-setting-seed-time"
+                type="number"
+                min="0"
+                step="1"
+                value={draft.seedTimeLimitMinutes}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    seedTimeLimitMinutes: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <small className="field-help">0 means no time limit.</small>
+            </label>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Toggle
-              id="torrent-dht"
-              label="DHT"
-              checked={draft.enableDht}
-              onChange={(value) => patch("enableDht", value)}
-            />
-            <Toggle
-              id="torrent-upnp"
-              label="UPnP port mapping"
-              checked={draft.enableUpnp}
-              onChange={(value) => patch("enableUpnp", value)}
-            />
-            <Toggle
-              id="torrent-utp"
-              label="uTP"
-              checked={draft.enableUtp}
-              onChange={(value) => patch("enableUtp", value)}
-            />
-            <Toggle
-              id="torrent-start-paused"
-              label="Add new torrents paused"
-              checked={draft.startPaused}
-              onChange={(value) => patch("startPaused", value)}
-            />
-            <Toggle
-              id="torrent-notify"
-              label="Notify when a torrent finishes"
-              checked={draft.notifyOnComplete}
-              onChange={(value) => patch("notifyOnComplete", value)}
-            />
+          <div className="torrent-settings-toggles">
+            <label className="torrent-check">
+              <input
+                id="torrent-setting-dht"
+                type="checkbox"
+                checked={draft.enableDht}
+                onChange={(e) =>
+                  setDraft({ ...draft, enableDht: e.target.checked })
+                }
+              />
+              <span>Enable DHT</span>
+            </label>
+            <label className="torrent-check">
+              <input
+                id="torrent-setting-upnp"
+                type="checkbox"
+                checked={draft.enableUpnp}
+                onChange={(e) =>
+                  setDraft({ ...draft, enableUpnp: e.target.checked })
+                }
+              />
+              <span>Enable UPnP port forwarding</span>
+            </label>
+            <label className="torrent-check">
+              <input
+                id="torrent-setting-utp"
+                type="checkbox"
+                checked={draft.enableUtp}
+                onChange={(e) =>
+                  setDraft({ ...draft, enableUtp: e.target.checked })
+                }
+              />
+              <span>Enable uTP</span>
+            </label>
+            <label className="torrent-check">
+              <input
+                id="torrent-setting-start-paused"
+                type="checkbox"
+                checked={draft.startPaused}
+                onChange={(e) =>
+                  setDraft({ ...draft, startPaused: e.target.checked })
+                }
+              />
+              <span>Add new torrents paused</span>
+            </label>
+            <label className="torrent-check">
+              <input
+                id="torrent-setting-notify"
+                type="checkbox"
+                checked={draft.notifyOnComplete}
+                onChange={(e) =>
+                  setDraft({ ...draft, notifyOnComplete: e.target.checked })
+                }
+              />
+              <span>Notify when a torrent completes</span>
+            </label>
           </div>
-
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
+          {error && (
+            <p id="torrent-settings-error" className="form-error">
               {error}
             </p>
-          ) : null}
+          )}
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        <div className="dialog-footer">
+          <button
+            type="button"
+            id="torrent-settings-restart"
+            className="button"
+            disabled={restarting}
+            onClick={onRestart}
+          >
+            Restart engine
+          </button>
+          <span className="torrent-footer-spacer" />
+          <button
+            type="button"
+            className="button"
+            data-close="torrent-settings-dialog"
+            onClick={onClose}
+          >
             Cancel
-          </Button>
-          <Button onClick={save} disabled={saving}>
+          </button>
+          <button
+            type="submit"
+            id="torrent-settings-save"
+            className="button primary"
+            disabled={saving}
+          >
             Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Row({
-  id,
-  label,
-  control,
-}: {
-  id: string;
-  label: string;
-  control: ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id}>{label}</Label>
-      {control}
-    </div>
-  );
-}
-
-function Toggle({
-  id,
-  label,
-  checked,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
-      <Label htmlFor={id} className="font-normal">
-        {label}
-      </Label>
-    </div>
-  );
-}
-
-function Field({
-  id,
-  label,
-  value,
-  step,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  step?: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        min={0}
-        step={step}
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </div>
+          </button>
+        </div>
+      </form>
+    </ClassicDialog>
   );
 }

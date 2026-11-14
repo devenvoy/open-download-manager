@@ -1,5 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { type DownloadQueue } from "@/types/ipc";
 import { canDeleteQueue, queueMeta, queueTitle } from "../model/queue-view";
 
@@ -19,56 +17,44 @@ export function QueueCard({
   onDelete,
 }: QueueCardProps) {
   return (
-    <li className="rounded-md border border-border p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{queueTitle(queue)}</span>
-            <Badge
-              variant="outline"
-              className={
-                queue.running
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-muted text-muted-foreground"
-              }
-            >
-              {queue.running ? "Running" : "Paused"}
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">{queueMeta(queue)}</p>
+    <div className="queue-card">
+      <div className="queue-card-info">
+        <div className="queue-card-header">
+          <span>{queueTitle(queue)}</span>
+          <span className={`queue-badge ${queue.running ? "running" : ""}`}>
+            {queue.running ? "Running" : "Paused"}
+          </span>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onToggle(queue)}
-          >
-            {queue.running ? "Pause" : "Start"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onEdit(queue)}
-          >
-            Edit…
-          </Button>
-          {canDeleteQueue(queue) ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => onDelete(queue)}
-            >
-              Delete
-            </Button>
-          ) : null}
-        </div>
+        <div className="queue-card-meta">{queueMeta(queue)}</div>
       </div>
-    </li>
+      <div className="queue-card-actions">
+        <button
+          type="button"
+          className="small-button"
+          disabled={busy}
+          onClick={() => onToggle(queue)}
+        >
+          {queue.running ? "Pause" : "Start"}
+        </button>
+        <button
+          type="button"
+          className="small-button"
+          disabled={busy}
+          onClick={() => onEdit(queue)}
+        >
+          Edit…
+        </button>
+        {canDeleteQueue(queue) ? (
+          <button
+            type="button"
+            className="small-button"
+            disabled={busy}
+            onClick={() => onDelete(queue)}
+          >
+            Delete
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
