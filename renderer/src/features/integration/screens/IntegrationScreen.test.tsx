@@ -101,8 +101,8 @@ describe("IntegrationScreen", () => {
   it("closes the window on Close button click", async () => {
     renderWithQuery(<IntegrationScreen />);
 
-    const closeBtn = await screen.findByRole("button", { name: "Close" });
-    fireEvent.click(closeBtn);
+    const closeButtons = await screen.findAllByRole("button", { name: "Close" });
+    fireEvent.click(closeButtons[closeButtons.length - 1]!);
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalled();

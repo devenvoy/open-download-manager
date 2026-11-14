@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { type DownloadCategory, type DownloadSummary } from "@/types/ipc";
 
-export type CategoryFilter = DownloadCategory | "all";
+export type CategoryFilter =
+  | DownloadCategory
+  | "all"
+  | "unfinished"
+  | "completed"
+  | "queued";
 
 interface DownloadsState {
   /** UI state only, serialisable (plan R6). */
@@ -27,12 +32,20 @@ export const useDownloadsStore = create<DownloadsState>()((set) => ({
   setCategory: (category) => set({ category }),
 }));
 
-/** Pure selector: the rows a category filter leaves visible. */
+/** Pure selector: the rows a category or status filter leaves visible. */
 export function filterDownloads(
   downloads: DownloadSummary[],
   category: CategoryFilter,
 ): DownloadSummary[] {
   if (category === "all") return downloads;
+  if (category === "unfinished")
+    return downloads.filter((d) => d.status !== "complete");
+  if (category === "completed")
+    return downloads.filter((d) => d.status === "complete");
+  if (category === "queued")
+    return downloads.filter((d) =>
+      ["queued", "scheduled", "paused"].includes(d.status),
+    );
   return downloads.filter((download) => download.category === category);
 }
 

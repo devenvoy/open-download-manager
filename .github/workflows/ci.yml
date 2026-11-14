@@ -33,4 +33,4 @@ jobs:
         run: bun run typecheck
 
       - name: Test
-        run: bun run test:renderer
+        run: bun run test:renderer && bun run test:extension

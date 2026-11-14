@@ -13,8 +13,8 @@ function setup(overrides: Partial<Parameters<typeof DownloadsTable>[0]> = {}) {
     downloads,
     selectedIds: [] as string[],
     onToggle: vi.fn(),
-    onToggleAll: vi.fn(),
     onAction: vi.fn(),
+    onOpenProperties: vi.fn(),
     ...overrides,
   };
   render(<DownloadsTable {...props} />);
@@ -28,54 +28,33 @@ describe("DownloadsTable", () => {
     expect(screen.getByText("file2.mp4")).toBeInTheDocument();
   });
 
-  it("shows the real Rust status labels", () => {
+  it("shows the legacy status labels", () => {
     setup();
-    expect(screen.getByText("Downloading")).toBeInTheDocument();
-    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
   });
 
-  it("pauses an active download", () => {
+  it("toggles row selection on click", () => {
     const props = setup();
-    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
-    expect(props.onAction).toHaveBeenCalledWith("1", "pause");
-  });
-
-  it("resumes a paused download", () => {
-    const props = setup();
-    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect(props.onAction).toHaveBeenCalledWith("2", "resume");
-  });
-
-  it("opens a completed download instead of resuming it", () => {
-    const props = setup({
-      downloads: [makeDownload({ id: "3", filename: "done.zip", status: "complete" })],
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Open" }));
-    expect(props.onAction).toHaveBeenCalledWith("3", "open");
-  });
-
-  it("retries a failed download", () => {
-    const props = setup({
-      downloads: [makeDownload({ id: "4", filename: "bad.zip", status: "error" })],
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(props.onAction).toHaveBeenCalledWith("4", "retry");
-  });
-
-  it("toggles a row selection", () => {
-    const props = setup();
-    fireEvent.click(screen.getByLabelText("Select file1.zip"));
+    fireEvent.click(screen.getByText("file1.zip"));
     expect(props.onToggle).toHaveBeenCalledWith("1");
   });
 
-  it("toggles every visible row", () => {
+  it("opens properties on double click", () => {
     const props = setup();
-    fireEvent.click(screen.getByLabelText("Select all downloads"));
-    expect(props.onToggleAll).toHaveBeenCalledWith(true);
+    fireEvent.doubleClick(screen.getByText("file1.zip"));
+    expect(props.onOpenProperties).toHaveBeenCalledWith("1");
   });
 
-  it("shows an empty state when there are no downloads", () => {
+  it("filters rows using the search box", () => {
+    setup();
+    const searchInput = screen.getByLabelText("Search downloads");
+    fireEvent.change(searchInput, { target: { value: "file2" } });
+    expect(screen.queryByText("file1.zip")).not.toBeInTheDocument();
+    expect(screen.getByText("file2.mp4")).toBeInTheDocument();
+  });
+
+  it("shows the empty state message when no downloads match", () => {
     setup({ downloads: [] });
-    expect(screen.getByText(/no downloads yet/i)).toBeInTheDocument();
+    expect(screen.getByText("No downloads to display.")).toBeInTheDocument();
   });
 });

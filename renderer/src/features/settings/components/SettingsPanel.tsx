@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { type Settings, type SettingsPatch } from "@/types/ipc";
 import {
   buildSettingsPatch,
@@ -43,7 +42,7 @@ export function SettingsPanel({
     setError(null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent, shouldClose = true) {
     e.preventDefault();
     setError(null);
 
@@ -57,7 +56,7 @@ export function SettingsPanel({
       const patch = buildSettingsPatch(draft, settings);
       await onSave(patch);
       toast.success("Settings saved.");
-      if (onClose) onClose();
+      if (shouldClose && onClose) onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save settings.";
       setError(msg);
@@ -66,57 +65,76 @@ export function SettingsPanel({
   }
 
   return (
-    <form id="settings-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
-      <GeneralSettings draft={draft} onChange={handleChange} />
-      <StorageSettings
-        draft={draft}
-        onChange={handleChange}
-        onError={(msg) => setError(msg)}
-      />
-      <ConnectionSettings
-        draft={draft}
-        onChange={handleChange}
-        onError={(msg) => setError(msg)}
-      />
-      <ProxySettingsSection
-        draft={draft}
-        onChange={handleChange}
-        onError={(msg) => setError(msg)}
-      />
-      <CaptureSettings draft={draft} onChange={handleChange} />
-      <CredentialsSettings />
-      <MediaToolsSettings />
-      <CompletionActionsSettings draft={draft} onChange={handleChange} />
-
-      {error && (
-        <p
-          id="settings-error"
-          role="alert"
-          className="rounded border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive font-medium"
+    <form id="settings-form" onSubmit={(e) => void handleSubmit(e, true)}>
+      <div className="dialog-title">
+        <strong id="settings-title">Options</strong>
+        <button
+          type="button"
+          className="close-button"
+          data-close
+          aria-label="Close"
+          onClick={onClose}
         >
-          {error}
-        </p>
-      )}
+          ×
+        </button>
+      </div>
 
-      <div className="dialog-footer flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-background/95 backdrop-blur py-3">
-        {onClose && (
-          <Button
-            type="button"
-            variant="outline"
-            className="button"
-            data-close
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
+      <div className="dialog-body">
+        <GeneralSettings draft={draft} onChange={handleChange} />
+        <StorageSettings
+          draft={draft}
+          onChange={handleChange}
+          onError={(msg) => setError(msg)}
+        />
+        <ConnectionSettings
+          draft={draft}
+          onChange={handleChange}
+          onError={(msg) => setError(msg)}
+        />
+        <ProxySettingsSection
+          draft={draft}
+          onChange={handleChange}
+          onError={(msg) => setError(msg)}
+        />
+        <CaptureSettings draft={draft} onChange={handleChange} />
+        <CredentialsSettings />
+        <MediaToolsSettings />
+        <CompletionActionsSettings draft={draft} onChange={handleChange} />
+
+        {error && (
+          <p id="settings-error" className="form-error" role="alert">
+            {error}
+          </p>
         )}
-        <Button
+      </div>
+
+      <div className="dialog-footer">
+        <button
           type="submit"
+          className="button primary"
+          id="settings-submit"
           disabled={saving}
-          className="button primary min-w-20"
         >
-          {saving ? "Saving…" : "OK"}
-        </Button>
+          OK
+        </button>
+        <button
+          type="button"
+          className="button"
+          id="settings-cancel"
+          data-close
+          onClick={onClose}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="button"
+          id="settings-apply"
+          disabled={saving}
+          onClick={(e) => void handleSubmit(e, false)}
+        >
+          Apply
+        </button>
       </div>
     </form>
   );

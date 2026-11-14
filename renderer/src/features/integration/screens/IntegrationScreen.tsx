@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/feedback/EmptyState";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ipc } from "@/lib/ipc";
 import { snapshotQueryOptions } from "@/lib/ipc/queries";
@@ -55,22 +54,20 @@ export function IntegrationScreen() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <h1 className="text-base font-semibold">Browser integration</h1>
-        <Button
+    <dialog id="integration-dialog" className="integration-dialog" open>
+      <div className="dialog-title">
+        <strong id="integration-title">Browser integration</strong>
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          disabled={info.isFetching}
-          onClick={() => void info.refetch()}
+          className="close-button"
+          onClick={() => void ipc.closeAuxiliaryWindow()}
+          aria-label="Close"
         >
-          Refresh
-        </Button>
-      </header>
+          ×
+        </button>
+      </div>
 
-      <main className="flex-1 space-y-4 overflow-auto p-4">
+      <div className="dialog-body" style={{ padding: 12 }}>
         {info.isPending ? (
           <div className="space-y-2" aria-label="Loading browsers">
             {Array.from({ length: 4 }, (_, index) => (
@@ -111,21 +108,28 @@ export function IntegrationScreen() {
           onDisable={() => advancedActions.disable.mutate()}
           onRepair={() => advancedActions.repair.mutate()}
         />
-      </main>
+      </div>
 
-      <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-3">
-        <span role="status" className="text-xs text-muted-foreground">
+      <div className="dialog-footer">
+        <span role="status" className="text-xs text-muted-foreground" style={{ marginRight: "auto" }}>
           {connectionSummary(info.data)}
         </span>
-        <Button
+        <button
           type="button"
-          variant="outline"
-          className="ml-auto"
+          className="button"
+          disabled={info.isFetching}
+          onClick={() => void info.refetch()}
+        >
+          Refresh
+        </button>
+        <button
+          type="button"
+          className="button"
           onClick={() => void ipc.closeAuxiliaryWindow()}
         >
           Close
-        </Button>
-      </footer>
-    </div>
+        </button>
+      </div>
+    </dialog>
   );
 }

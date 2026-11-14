@@ -34,3 +34,18 @@ export function formatDuration(seconds: number): string {
   if (minutes > 0) return `${minutes}m ${remainder}s`;
   return `${remainder}s`;
 }
+
+/** Format timestamp / date value. */
+export function formatDate(value?: number | string | null): string {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Format time left in seconds. */
+export function formatTimeLeft(seconds?: number | null): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "";
+  return formatDuration(seconds);
+}

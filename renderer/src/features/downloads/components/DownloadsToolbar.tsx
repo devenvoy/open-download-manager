@@ -1,97 +1,194 @@
-import { Moon, Sun } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { useThemeStore } from "@/stores/theme-store";
-import { type DownloadActionKind } from "@/types/ipc";
-import { AddDownloadDialog } from "./AddDownloadDialog";
+import { ToolbarIcon } from "@/components/ui/ToolbarIcon";
 
 export interface DownloadsToolbarProps {
   selectedIds: string[];
-  onAction: (id: string, action: DownloadActionKind) => void;
-  onRemove: (ids: string[]) => void;
-  removing: boolean;
+  canResume?: boolean;
+  canStop?: boolean;
+  canStopAll?: boolean;
+  canDelete?: boolean;
+  canDeleteCompleted?: boolean;
+  onAdd: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onStopAll: () => void;
+  onDelete: () => void;
+  onDeleteCompleted: () => void;
+  onOpenOptions: () => void;
+  onOpenScheduler: () => void;
+  onStartQueue: () => void;
+  onStopQueue: () => void;
+  onOpenIntegration: () => void;
+  onOpenTorrents: () => void;
 }
 
 export function DownloadsToolbar({
   selectedIds,
-  onAction,
-  onRemove,
-  removing,
+  canResume = selectedIds.length > 0,
+  canStop = selectedIds.length > 0,
+  canStopAll = true,
+  canDelete = selectedIds.length > 0,
+  canDeleteCompleted = true,
+  onAdd,
+  onResume,
+  onStop,
+  onStopAll,
+  onDelete,
+  onDeleteCompleted,
+  onOpenOptions,
+  onOpenScheduler,
+  onStartQueue,
+  onStopQueue,
+  onOpenIntegration,
+  onOpenTorrents,
 }: DownloadsToolbarProps) {
-  const effective = useThemeStore((state) => state.effective);
-  const toggleTheme = useThemeStore((state) => state.toggle);
-  const firstSelected = selectedIds[0];
-  const hasSelection = selectedIds.length > 0;
-
   return (
-    <>
-      <AddDownloadDialog />
-      <Button
-        onClick={() => firstSelected && onAction(firstSelected, "resume")}
-        disabled={!firstSelected}
+    <div className="toolbar" role="toolbar" aria-label="Download commands">
+      <button
+        id="new-download"
+        className="tool"
+        data-icon="add"
+        title="Add URL (Ctrl+N)"
+        onClick={onAdd}
+        type="button"
       >
-        Resume
-      </Button>
-      <Button
-        onClick={() => firstSelected && onAction(firstSelected, "pause")}
-        disabled={!firstSelected}
-      >
-        Pause
-      </Button>
-      <Button
-        variant="outline"
-        onClick={() =>
-          selectedIds.forEach((id) => onAction(id, "cancel"))
-        }
-        disabled={!hasSelection}
-      >
-        Stop selected
-      </Button>
+        <ToolbarIcon name="add" />
+        <span>Add URL</span>
+      </button>
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="destructive" disabled={!hasSelection || removing}>
-            Delete selected ({selectedIds.length})
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete the selected downloads?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The transfer records are removed. Files already written to disk
-              stay on disk.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onRemove(selectedIds)}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Separator orientation="vertical" className="mx-1" />
-
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={toggleTheme}
-        aria-label={effective === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      <button
+        id="resume-selected"
+        className="tool"
+        data-icon="resume"
+        disabled={!canResume}
+        onClick={onResume}
+        type="button"
       >
-        {effective === "dark" ? <Sun /> : <Moon />}
-      </Button>
-    </>
+        <ToolbarIcon name="resume" />
+        <span>Resume</span>
+      </button>
+
+      <button
+        id="stop-selected"
+        className="tool"
+        data-icon="stop"
+        disabled={!canStop}
+        onClick={onStop}
+        type="button"
+      >
+        <ToolbarIcon name="stop" />
+        <span>Stop</span>
+      </button>
+
+      <button
+        id="pause-all"
+        className="tool"
+        data-icon="stopall"
+        disabled={!canStopAll}
+        onClick={onStopAll}
+        type="button"
+      >
+        <ToolbarIcon name="stopall" />
+        <span>Stop all</span>
+      </button>
+
+      <span className="tool-divider" />
+
+      <button
+        id="remove-selected"
+        className="tool"
+        data-icon="delete"
+        disabled={!canDelete}
+        onClick={onDelete}
+        type="button"
+      >
+        <ToolbarIcon name="delete" />
+        <span>Delete</span>
+      </button>
+
+      <button
+        id="remove-completed"
+        className="tool wide"
+        data-icon="clear"
+        disabled={!canDeleteCompleted}
+        onClick={onDeleteCompleted}
+        type="button"
+      >
+        <ToolbarIcon name="clear" />
+        <span>Delete Completed</span>
+      </button>
+
+      <span className="tool-divider" />
+
+      <button
+        id="settings-button"
+        className="tool"
+        data-icon="options"
+        onClick={onOpenOptions}
+        type="button"
+      >
+        <ToolbarIcon name="options" />
+        <span>Options</span>
+      </button>
+
+      <button
+        id="scheduler-button"
+        className="tool"
+        data-icon="clock"
+        onClick={onOpenScheduler}
+        type="button"
+      >
+        <ToolbarIcon name="clock" />
+        <span>Scheduler</span>
+      </button>
+
+      <button
+        id="resume-all"
+        className="tool"
+        data-icon="startqueue"
+        onClick={onStartQueue}
+        type="button"
+      >
+        <ToolbarIcon name="startqueue" />
+        <span>Start Queue</span>
+      </button>
+
+      <button
+        id="stop-queue"
+        className="tool"
+        data-icon="stopqueue"
+        onClick={onStopQueue}
+        type="button"
+      >
+        <ToolbarIcon name="stopqueue" />
+        <span>Stop Queue</span>
+      </button>
+
+      <span className="tool-divider" />
+
+      <button
+        id="integration-button"
+        className="tool integration-tool"
+        data-icon="browser"
+        onClick={onOpenIntegration}
+        type="button"
+      >
+        <ToolbarIcon name="browser" />
+        <span>Browser Integration</span>
+      </button>
+
+      <button
+        id="torrents-button"
+        className="tool"
+        data-icon="torrent"
+        title="Torrents (Beta)"
+        onClick={onOpenTorrents}
+        type="button"
+      >
+        <ToolbarIcon name="torrent" />
+        <span>
+          Torrents<i className="beta-tag" title="Beta">β</i>
+        </span>
+      </button>
+    </div>
   );
 }

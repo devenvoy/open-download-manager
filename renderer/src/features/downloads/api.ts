@@ -12,6 +12,15 @@ export const downloadsApi = {
   add: (request: DownloadRequest) => ipc.addDownload(request),
   action: (id: string, action: DownloadActionKind) =>
     ipc.downloadAction(id, action),
+  removeCompleted: () => ipc.removeCompleted(),
+  startQueue: (id = "default") => ipc.startQueue(id),
+  pauseQueue: (id = "default") => ipc.pauseQueue(id),
   chooseDirectory: () => ipc.chooseDirectory(),
   readClipboard: () => ipc.readClipboard(),
+  openAddWindow: () => ipc.openAddWindow(),
+  openOptionsWindow: () => ipc.openOptionsWindow(),
+  openSchedulerWindow: () => ipc.openSchedulerWindow(),
+  openIntegrationWindow: () => ipc.openIntegrationWindow(),
+  openTorrentWindow: () => ipc.openTorrentWindow(),
+  openProgressWindow: (id: string) => ipc.openProgressWindow(id),
 };

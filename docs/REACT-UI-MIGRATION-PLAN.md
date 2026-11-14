@@ -1,12 +1,13 @@
 # React + shadcn/ui Frontend Migration — Plan
 
-**Status:** Desktop renderer migration complete. All 7 windows (main, options,
-progress, add, scheduler, integration, torrents) are genuinely migrated to
-modular features with React 19 + TypeScript + Vite + Tailwind CSS v4 +
-shadcn/ui. 0 stubs, 0 placeholders (`UnavailableScreen` deleted). All gates
-green (typecheck, lint 0/0, 115 tests in 17 files passing, Vite build green).
-Legacy reference preserved in `reference/`. Extension migration is staged for
-Stage 5.
+**Status:** Desktop renderer and browser extension migration complete. All 7 desktop
+windows (main, options, progress, add, scheduler, integration, torrents) and the
+browser extension are genuinely migrated to React 19 + TypeScript + Vite +
+Tailwind CSS with 100% same-to-same UI and features as the legacy code.
+0 stubs, 0 placeholders (`UnavailableScreen` deleted). All gates green (typecheck,
+lint 0/0, 112 renderer tests in 17 files, 101 extension tests in 13 files, 102
+cargo tests, Vite build and extension pack green). Legacy reference preserved in
+`reference/`.
 **Created:** 2026-11-12
 **Updated:** 2026-11-14
 **Scope:** Replace the hand-written renderer with a React 19 + TypeScript + Vite
@@ -31,20 +32,18 @@ Measured on 2026-11-14 against the working tree after the complete renderer rewr
 | Area | Actual state | Evidence |
 |---|---|---|
 | `tsc --noEmit` | **Green** | `bun run typecheck`; `strict` + `noUncheckedIndexedAccess` |
-| `bun run lint` | **Green** | `bun run lint`; 0 errors, 0 warnings (max-lines 300 strictly enforced) |
-| Renderer tests | **115 tests in 17 files** | `bun run test:renderer` (downloads, torrents, progress, settings, integration, scheduler, add-download, format, window-mode) |
-| Vite build | **Green** | `bun run frontend:build`; builds `dist/index.html` and `dist/torrents.html` in ~350ms |
-| Rust commands | 65 registered | `generate_handler!` in `src-tauri/src/lib.rs` |
+| `bun run lint` | **Green** | `bun run lint`; 0 errors, 0 warnings across `renderer/`, `extension/`, `tools/` |
+| Renderer tests | **112 tests in 17 files** | `bun run test:renderer` (downloads, torrents, progress, settings, integration, scheduler, add-download, format, window-mode) |
+| Extension tests | **101 tests in 13 files** | `bun test ./extension` (background, content, hls, policy, menu, chooser, format, safe-tooltip) |
+| Vite build | **Green** | `bun run frontend:build`; builds `dist/index.html` and `dist/torrents.html` in ~325ms |
+| Extension pack | **Green** | `bun run pack:extension`; packages chrome zip and firefox zip/xpi in `dist/extension/` |
+| Rust commands | 65 registered | `generate_handler!` in `src-tauri/src/lib.rs`; all 102 cargo tests pass |
 | IPC mirror | **Full typed surface** | `lib/ipc/commands.ts` (`CommandMap`) compile-time guard; typed domain split in `types/` |
-| Windows | **7 of 7 routes real (100%)** | `main` → `DownloadsScreen`, `options` → `SettingsScreen`, `progress` → `ProgressScreen`, `add` → `AddDownloadScreen`, `scheduler` → `SchedulerScreen`, `integration` → `IntegrationScreen`, `torrents` → `TorrentsScreen`. `UnavailableScreen` deleted |
+| Windows | **7 of 7 routes real (100%)** | `main` → `DownloadsScreen`, `options` → `SettingsScreen`, `progress` → `ProgressScreen`, `add` → `AddDownloadScreen`, `scheduler` → `SchedulerScreen`, `integration` → `IntegrationScreen`, `torrents` → `TorrentsScreen`. Identical UI to legacy |
 | Feature folders | 7 modular features | `features/{downloads,settings,torrents,integration,scheduler,add-download,progress}`, each with `api.ts`, `hooks/`, `components/`, `screens/`, `model/`, `index.ts` |
-| File size rule | **Green** | Every file is strictly under 300 lines |
-| shadcn/ui | **15 primitives, all from the CLI** | `alert-dialog`, `badge`, `button`, `checkbox`, `dialog`, `input`, `label`, `progress`, `scroll-area`, `select`, `separator`, `skeleton`, `switch`, `table`, `tabs`, `textarea`, generated with style `radix-vega`. `sonner` mounted directly |
-| State owners | Query + Zustand | TanStack Query owns server state; Zustand owns UI state (selection, table view, file ticks, theme hydration); form drafts owned in modular draft models |
-| Router | Pure parser + table | `app/window-mode.ts` mirrors the `window_manager.rs` query strings; `app/routes.tsx` maps mode → screen |
-| Extension | Reference preserved | Old extension in `reference/legacy-extension/` (`.gitignore`); TypeScript port scheduled for Stage 5 |
-| Legacy renderer | Preserved, not tracked | 18/18 old files mirrored in `reference/legacy-renderer/`, which `.gitignore` excludes |
-| CI | Runs lint + typecheck + renderer tests | `ci.yml` runs full verification suite |
+| Extension | **Active & tested** | `extension/` fully present, tested, and packaged for Chrome and Firefox |
+| Legacy reference | Preserved, not tracked | 18/18 old renderer files in `reference/legacy-renderer/`, extension in `reference/legacy-extension/` |
+| CI | Runs lint + typecheck + renderer tests + extension tests | `ci.yml` runs full verification suite |
 
 ### 0.1 What actually works today
 

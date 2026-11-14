@@ -66,7 +66,7 @@ describe("AddDownloadScreen", () => {
     renderWithQuery(<AddDownloadScreen paste={false} />);
 
     expect(await screen.findByText("Download File Info")).toBeInTheDocument();
-    expect(screen.getByLabelText("URL")).toBeInTheDocument();
+    expect(screen.getByLabelText(/URL/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Start Download" }),
     ).toBeInTheDocument();

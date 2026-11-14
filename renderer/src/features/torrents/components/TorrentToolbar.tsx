@@ -1,7 +1,4 @@
-import { type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { formatSpeed } from "@/lib/format";
+import { type ReactNode, useState } from "react";
 import { type TorrentListItem } from "@/types/ipc";
 import {
   availableActions,
@@ -37,59 +34,110 @@ export function TorrentToolbar({
   settingsButton,
 }: TorrentToolbarProps) {
   const actions = availableActions(selected);
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   return (
-    <>
+    <div className="torrent-toolbar" role="toolbar" aria-label="Torrent commands">
       <AddTorrentDialog
         onAddMagnet={onAddMagnet}
         onAddFile={onAddFile}
         pending={busy}
       />
 
-      <Button
-        variant="outline"
+      <span className="torrent-tool-divider" />
+
+      <button
+        id="torrent-pause"
+        type="button"
+        className="torrent-tool"
+        title="Pause selected torrent"
         disabled={busy || !actions.pause}
         onClick={() => onAction("pause")}
       >
-        Pause
-      </Button>
-      <Button
-        variant="outline"
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M11 7v18M21 7v18" />
+        </svg>
+        <span>Pause</span>
+      </button>
+
+      <button
+        id="torrent-resume"
+        type="button"
+        className="torrent-tool"
+        title="Resume selected torrent"
         disabled={busy || !actions.resume}
         onClick={() => onAction("resume")}
       >
-        Resume
-      </Button>
-      <Button
-        variant="outline"
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M10 6l16 10-16 10z" />
+        </svg>
+        <span>Resume</span>
+      </button>
+
+      <button
+        id="torrent-recheck"
+        type="button"
+        className="torrent-tool"
+        title="Verify selected torrent data"
         disabled={busy || !actions.recheck}
         onClick={() => onAction("recheck")}
       >
-        Recheck
-      </Button>
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M26 16a10 10 0 1 1-3-7" />
+          <path d="M26 5v6h-6" />
+        </svg>
+        <span>Recheck</span>
+      </button>
+
       {selected ? (
-        <TorrentRemoveDialog
-          torrent={selected}
-          disabled={busy}
-          onAction={onAction}
-        />
+        <>
+          <button
+            id="torrent-remove"
+            type="button"
+            className="torrent-tool"
+            title="Remove selected torrent"
+            disabled={busy}
+            onClick={() => setRemoveOpen(true)}
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M6 8h20M13 8V4h6v4M8 11l2 17h12l2-17M14 14v11M18 14v11" />
+            </svg>
+            <span>Remove</span>
+          </button>
+          {removeOpen && (
+            <TorrentRemoveDialog
+              torrent={selected}
+              disabled={busy}
+              onAction={(act) => {
+                onAction(act);
+                setRemoveOpen(false);
+              }}
+            />
+          )}
+        </>
       ) : (
-        <Button variant="destructive" disabled>
-          Remove
-        </Button>
+        <button
+          id="torrent-remove"
+          type="button"
+          className="torrent-tool"
+          title="Remove selected torrent"
+          disabled
+        >
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M6 8h20M13 8V4h6v4M8 11l2 17h12l2-17M14 14v11M18 14v11" />
+          </svg>
+          <span>Remove</span>
+        </button>
       )}
 
-      <Separator orientation="vertical" className="mx-1" />
+      <span className="torrent-tool-divider" />
 
       {settingsButton}
 
-      <div className="ml-auto flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
-        <span>{summaryText(summary)}</span>
-        <span aria-hidden>·</span>
-        <span>↓ {formatSpeed(summary.downloadSpeed)}</span>
-        <span aria-hidden>·</span>
-        <span>↑ {formatSpeed(summary.uploadSpeed)}</span>
+      <div className="torrent-toolbar-status">
+        <span className="torrent-beta-badge">Beta</span>
+        <span id="torrent-summary">{summaryText(summary)}</span>
       </div>
-    </>
+    </div>
   );
 }

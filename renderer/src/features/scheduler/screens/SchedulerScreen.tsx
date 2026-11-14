@@ -48,21 +48,20 @@ export function SchedulerScreen() {
     actions.toggle.isPending;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <h1 className="text-base font-semibold">Scheduler &amp; Queues</h1>
-        <Button
+    <dialog id="scheduler-dialog" className="scheduler-dialog" open>
+      <div className="dialog-title">
+        <strong id="scheduler-title">Scheduler &amp; Queues</strong>
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto"
+          className="close-button"
           onClick={() => void ipc.closeAuxiliaryWindow()}
+          aria-label="Close"
         >
-          Close
-        </Button>
-      </header>
+          ×
+        </button>
+      </div>
 
-      <main className="flex-1 overflow-auto p-4">
+      <div className="dialog-body" style={{ padding: 12 }}>
         <Tabs defaultValue="queues">
           <TabsList>
             <TabsTrigger value="queues">Download Queues</TabsTrigger>
@@ -125,7 +124,7 @@ export function SchedulerScreen() {
             />
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
 
       <QueueEditDialog
         open={editing !== null}
@@ -193,6 +192,6 @@ export function SchedulerScreen() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </dialog>
   );
 }

@@ -1,8 +1,5 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@/components/feedback/EmptyState";
-import { AppShell } from "@/components/layout/AppShell";
-import { Skeleton } from "@/components/ui/skeleton";
 import { snapshotQueryOptions } from "@/lib/ipc/queries";
 import { useHydrateTheme } from "@/stores/theme-store";
 import {
@@ -165,71 +162,72 @@ export function TorrentsScreen() {
     actions.setFiles.isPending;
 
   return (
-    <AppShell
-      toolbar={
-        <TorrentToolbar
-          summary={summary}
-          selected={selected}
-          busy={busy}
-          onAction={handleAction}
-          onAddMagnet={handleAddMagnet}
-          onAddFile={handleAddFile}
-          settingsButton={
-            settings.data ? (
-              <TorrentSettingsDialog
-                settings={settings.data}
-                saving={actions.saveSettings.isPending}
-                onSave={(next) => actions.saveSettings.mutate(next)}
-              />
-            ) : null
+    <div className="torrent-shell">
+      <TorrentToolbar
+        summary={summary}
+        selected={selected}
+        busy={busy}
+        onAction={handleAction}
+        onAddMagnet={handleAddMagnet}
+        onAddFile={handleAddFile}
+        settingsButton={
+          settings.data ? (
+            <TorrentSettingsDialog
+              settings={settings.data}
+              saving={actions.saveSettings.isPending}
+              onSave={(next) => actions.saveSettings.mutate(next)}
+            />
+          ) : null
+        }
+      />
+
+      {status.data ? (
+        <TorrentEngineBanner
+          status={status.data}
+          onEnable={() =>
+            settings.data &&
+            actions.saveSettings.mutate({ ...settings.data, enabled: true })
           }
+          onRestart={() => actions.restartEngine.mutate()}
+          restarting={actions.restartEngine.isPending}
         />
-      }
-    >
-      <div className="space-y-3">
-        {status.data ? (
-          <TorrentEngineBanner
-            status={status.data}
-            onEnable={() =>
-              settings.data &&
-              actions.saveSettings.mutate({ ...settings.data, enabled: true })
-            }
-            onRestart={() => actions.restartEngine.mutate()}
-            restarting={actions.restartEngine.isPending}
-          />
-        ) : null}
+      ) : null}
 
-        {review ? (
-          <TorrentReviewPanel
-            review={review}
-            files={reviewFilesQuery.data ?? []}
-            loading={reviewFilesQuery.isPending}
-            confirming={actions.setFiles.isPending}
-            onConfirm={handleConfirmReview}
-            onCancel={handleCancelReview}
-          />
-        ) : null}
+      {review ? (
+        <TorrentReviewPanel
+          review={review}
+          files={reviewFilesQuery.data ?? []}
+          loading={reviewFilesQuery.isPending}
+          confirming={actions.setFiles.isPending}
+          onConfirm={handleConfirmReview}
+          onCancel={handleCancelReview}
+        />
+      ) : null}
 
-        <div className="grid min-h-0 gap-3 lg:grid-cols-[1.4fr_1fr]">
-          <div className="min-w-0 overflow-auto rounded-md border border-border">
+      <div className="torrent-main">
+        <section className="torrent-list-pane" aria-label="Torrents">
+          <div className="torrent-list-header">
+            <span>Name</span>
+            <span>Size</span>
+            <span>Status</span>
+          </div>
+          <div
+            id="torrent-list"
+            className="torrent-list"
+            role="listbox"
+            tabIndex={0}
+          >
             {list.isPending ? (
-              <div className="space-y-2 p-3" aria-label="Loading torrents">
-                {Array.from({ length: 5 }, (_, index) => (
-                  <Skeleton key={index} className="h-9 w-full" />
-                ))}
+              <div className="p-3" aria-label="Loading torrents">
+                Loading torrents…
               </div>
-            ) : list.isError ? (
-              <EmptyState
-                title="Could not read the torrent list"
-                description={
-                  list.error instanceof Error ? list.error.message : undefined
-                }
-              />
             ) : torrents.length === 0 ? (
-              <EmptyState
-                title="No torrents yet"
-                description="Add a magnet link or a .torrent file to start."
-              />
+              <div id="torrent-empty" className="torrent-empty">
+                <strong>No torrents yet</strong>
+                <span>
+                  Add a magnet link or open a .torrent file to start downloading.
+                </span>
+              </div>
             ) : (
               <TorrentList
                 torrents={torrents}
@@ -238,7 +236,9 @@ export function TorrentsScreen() {
               />
             )}
           </div>
+        </section>
 
+        <section className="torrent-detail-pane" aria-label="Torrent details">
           {selected ? (
             <TorrentDetails
               torrent={selected}
@@ -258,12 +258,16 @@ export function TorrentsScreen() {
               onApplyFiles={handleApplyFiles}
             />
           ) : (
-            <div className="flex items-center justify-center rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-              Select a torrent to see its details.
+            <div id="torrent-detail-empty" className="torrent-detail-empty">
+              <strong>Select a torrent</strong>
+              <span>
+                Choose a torrent in the list to see its progress, files, and
+                trackers.
+              </span>
             </div>
           )}
-        </div>
+        </section>
       </div>
-    </AppShell>
+    </div>
   );
 }

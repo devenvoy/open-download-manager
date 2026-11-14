@@ -171,32 +171,24 @@ export function AddDownloadScreen({ paste, scheduledAt }: AddDownloadScreenProps
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <h1 className="text-base font-semibold">Download File Info</h1>
-      </header>
-
-      <main className="flex-1 overflow-auto p-4">
-        <div className="mx-auto w-full max-w-2xl">
-          <AddDownloadForm
-            values={values}
-            error={error}
-            saving={submit.isPending}
-            showPlaylistBanner={showPlaylistBanner}
-            showVideoBanner={showVideoBanner}
-            videoLabel={videoLabel}
-            queueOptions={queues.data ?? [{ id: "default", name: "Default Queue" }]}
-            onPatch={patch}
-            onUrlsChange={(text) => patch({ urlsText: text })}
-            onChooseDirectory={() => void chooseDirectory()}
-            onPaste={() => void pasteClipboard()}
-            onOpenPlaylist={() => setPlaylistOpen(true)}
-            onOpenFormats={() => setFormatOpen(true)}
-            onSubmit={handleSubmit}
-            onCancel={() => void ipc.closeAuxiliaryWindow()}
-          />
-        </div>
-      </main>
+    <dialog id="add-dialog" className="add-dialog" open>
+      <AddDownloadForm
+        values={values}
+        error={error}
+        saving={submit.isPending}
+        showPlaylistBanner={showPlaylistBanner}
+        showVideoBanner={showVideoBanner}
+        videoLabel={videoLabel}
+        queueOptions={queues.data ?? [{ id: "default", name: "Default Queue" }]}
+        onPatch={patch}
+        onUrlsChange={(text) => patch({ urlsText: text })}
+        onChooseDirectory={() => void chooseDirectory()}
+        onPaste={() => void pasteClipboard()}
+        onOpenPlaylist={() => setPlaylistOpen(true)}
+        onOpenFormats={() => setFormatOpen(true)}
+        onSubmit={handleSubmit}
+        onCancel={() => void ipc.closeAuxiliaryWindow()}
+      />
 
       <PlaylistDialog
         open={playlistOpen}
@@ -214,6 +206,6 @@ export function AddDownloadScreen({ paste, scheduledAt }: AddDownloadScreenProps
         onOpenChange={setFormatOpen}
         onPick={handleFormat}
       />
-    </div>
+    </dialog>
   );
 }

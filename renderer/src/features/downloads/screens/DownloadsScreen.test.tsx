@@ -17,6 +17,11 @@ vi.mock("@/lib/ipc", () => ({
     updateSettings: vi.fn(),
     removeCompleted: vi.fn(),
     openProgressWindow: vi.fn(),
+    openOptionsWindow: vi.fn(),
+    openAddWindow: vi.fn(),
+    openSchedulerWindow: vi.fn(),
+    openIntegrationWindow: vi.fn(),
+    openTorrentWindow: vi.fn(),
     closeAuxiliaryWindow: vi.fn(),
     chooseDirectory: vi.fn(),
     readClipboard: vi.fn(),
@@ -61,11 +66,8 @@ describe("DownloadsScreen", () => {
     renderWithQuery(<DownloadsScreen />);
     await screen.findByText("file1.zip");
 
-    fireEvent.click(screen.getByLabelText("Select file1.zip"));
-    fireEvent.click(
-      screen.getByRole("button", { name: /delete selected \(1\)/i }),
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByText("file1.zip"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
       expect(actionMock).toHaveBeenCalledWith("1", "remove"),
@@ -73,13 +75,8 @@ describe("DownloadsScreen", () => {
     expect(actionMock).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the error state when the snapshot fails", async () => {
-    snapshotMock.mockRejectedValue(new Error("ipc offline"));
+  it("displays status bar counts", async () => {
     renderWithQuery(<DownloadsScreen />);
-
-    expect(
-      await screen.findByText("Could not load downloads"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("ipc offline")).toBeInTheDocument();
+    expect(await screen.findByText("2 downloads")).toBeInTheDocument();
   });
 });

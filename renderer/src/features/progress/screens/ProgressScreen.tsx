@@ -1,17 +1,10 @@
 import { useState } from "react";
-import { EmptyState } from "@/components/feedback/EmptyState";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHydrateTheme } from "@/stores/theme-store";
 import {
   canCancel,
   canPause,
   canResume,
   percentage,
-  statusLabel,
   statusOf,
 } from "../model/progress-view";
 import { buildReviewPatch, type ReviewDraft } from "../model/review-form";
@@ -34,7 +27,6 @@ export interface ProgressScreenProps {
   id: string;
 }
 
-/** The `?progress=<id>` window: details for one download, or its review form. */
 export function ProgressScreen({ id }: ProgressScreenProps) {
   const snapshot = useProgressSnapshot();
   useHydrateTheme(snapshot.data?.settings.theme);
@@ -48,7 +40,8 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
   const [tab, setTab] = useState("status");
   const [collapsed, setCollapsed] = useState(false);
 
-  const download = snapshot.data?.downloads.find((item) => item.id === id) ?? null;
+  const download =
+    snapshot.data?.downloads.find((item) => item.id === id) ?? null;
 
   function close() {
     void progressApi.close();
@@ -56,33 +49,28 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
 
   if (snapshot.isPending) {
     return (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-6 w-2/3" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-10 w-full" />
-      </div>
+      <dialog id="progress-dialog" className="progress-dialog" open>
+        <div className="dialog-body" style={{ padding: 20 }}>
+          Loading download progress…
+        </div>
+      </dialog>
     );
   }
 
-  if (snapshot.isError) {
+  if (snapshot.isError || !download) {
     return (
-      <EmptyState
-        title="Could not read the download"
-        description={
-          snapshot.error instanceof Error ? snapshot.error.message : undefined
-        }
-        action={<Button onClick={close}>Close</Button>}
-      />
-    );
-  }
-
-  if (!download) {
-    return (
-      <EmptyState
-        title="This download is no longer in the list"
-        description="It may have been removed or completed in another window."
-        action={<Button onClick={close}>Close</Button>}
-      />
+      <dialog id="progress-dialog" className="progress-dialog" open>
+        <div className="dialog-body" style={{ padding: 20 }}>
+          {snapshot.isError
+            ? `Could not read download: ${snapshot.error instanceof Error ? snapshot.error.message : "Error"}`
+            : "This download is no longer in the list."}
+        </div>
+        <div className="dialog-footer">
+          <button type="button" className="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </dialog>
     );
   }
 
@@ -116,23 +104,27 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
   const settings = snapshot.data?.settings;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <h1 className="min-w-0 flex-1 truncate text-base font-semibold">
+    <dialog id="progress-dialog" className="progress-dialog" open>
+      <div className="dialog-title">
+        <strong id="detail-title">
           {reviewing
             ? "Download File Info"
             : `${percent !== null ? `${Math.floor(percent)}% ` : ""}${
                 download.filename || "Download status"
               }`}
-        </h1>
-        {!reviewing ? (
-          <Badge variant="outline" className="shrink-0">
-            {statusLabel(status)}
-          </Badge>
-        ) : null}
-      </header>
+        </strong>
+        <button
+          type="button"
+          className="close-button"
+          data-close
+          aria-label="Close"
+          onClick={close}
+        >
+          ×
+        </button>
+      </div>
 
-      <main className="flex-1 space-y-4 overflow-auto p-4">
+      <div className="dialog-body">
         {reviewing ? (
           <ReviewPanel
             download={download}
@@ -143,26 +135,51 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
           />
         ) : settings ? (
           <>
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList>
-                <TabsTrigger value="status">Download status</TabsTrigger>
-                <TabsTrigger value="speed">Speed Limiter</TabsTrigger>
-                <TabsTrigger value="completion">Options on completion</TabsTrigger>
-              </TabsList>
+            <div className="dialog-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "status"}
+                className={`dialog-tab ${tab === "status" ? "active" : ""}`}
+                onClick={() => setTab("status")}
+                onMouseDown={() => setTab("status")}
+              >
+                Download status
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "speed"}
+                className={`dialog-tab ${tab === "speed" ? "active" : ""}`}
+                onClick={() => setTab("speed")}
+                onMouseDown={() => setTab("speed")}
+              >
+                Speed Limiter
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "completion"}
+                className={`dialog-tab ${tab === "completion" ? "active" : ""}`}
+                onClick={() => setTab("completion")}
+                onMouseDown={() => setTab("completion")}
+              >
+                Options on completion
+              </button>
+            </div>
 
-              <TabsContent value="status" className="pt-3">
+            <div className="tab-body" style={{ marginTop: 8 }}>
+              {tab === "status" && (
                 <StatusPanel
                   download={download}
                   busy={action.isPending}
                   onRetry={() => action.mutate("retry")}
                 />
-              </TabsContent>
-
-              <TabsContent value="speed" className="pt-3">
+              )}
+              {tab === "speed" && (
                 <SpeedLimitPanel settings={settings} onApply={applySpeed} />
-              </TabsContent>
-
-              <TabsContent value="completion" className="pt-3">
+              )}
+              {tab === "completion" && (
                 <CompletionPanel
                   download={download}
                   settings={settings}
@@ -172,31 +189,22 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                   onOpen={() => action.mutate("open")}
                   onReveal={() => action.mutate("reveal")}
                 />
-              </TabsContent>
-            </Tabs>
+              )}
+            </div>
 
-            {percent === null &&
-            (status === "downloading" || status === "connecting") ? (
-              <div
-                role="progressbar"
-                aria-label="Download progress"
-                className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-              >
-                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
-              </div>
-            ) : (
-              <Progress
-                value={percent ?? 0}
-                aria-label="Download progress"
-              />
-            )}
+            <progress
+              id="detail-progress"
+              max={100}
+              value={percent ?? 0}
+              aria-label="Download progress"
+              style={{ width: "100%", margin: "10px 0" }}
+            />
 
             {status !== "completed" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
+              <div className="transfer-buttons">
+                <button
                   type="button"
-                  size="sm"
-                  variant="outline"
+                  className="button"
                   onClick={() => {
                     const next = !collapsed;
                     setCollapsed(next);
@@ -204,11 +212,11 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                   }}
                 >
                   {collapsed ? ">> Show details" : "<< Hide details"}
-                </Button>
-                <span className="flex-1" />
-                <Button
+                </button>
+                <span className="spacer" />
+                <button
                   type="button"
-                  size="sm"
+                  className="button"
                   disabled={!canResume(download) || action.isPending}
                   onClick={() =>
                     action.mutate(
@@ -219,38 +227,43 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
                   }
                 >
                   Resume
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  size="sm"
+                  className="button"
                   disabled={!canPause(download) || action.isPending}
                   onClick={() => action.mutate("pause")}
                 >
                   Pause
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  size="sm"
+                  className="button"
                   disabled={!canCancel(download) || action.isPending}
                   onClick={() => action.mutate("cancel")}
                 >
                   Cancel
-                </Button>
+                </button>
               </div>
             ) : null}
 
             {!collapsed && status !== "failed" ? (
-              <SegmentSection download={download} />
+              <div id="connection-details">
+                <p className="connection-caption">
+                  Start positions and download progress by connections
+                </p>
+                <SegmentSection download={download} />
+              </div>
             ) : null}
           </>
         ) : null}
-      </main>
+      </div>
 
-      <footer className="flex shrink-0 justify-end border-t border-border px-4 py-3">
-        <Button type="button" variant="outline" onClick={close}>
+      <div className="dialog-footer">
+        <button type="button" className="button" onClick={close}>
           Close
-        </Button>
-      </footer>
-    </div>
+        </button>
+      </div>
+    </dialog>
   );
 }

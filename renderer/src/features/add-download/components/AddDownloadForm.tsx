@@ -1,17 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-import { DOWNLOAD_CATEGORIES } from "@/types/ipc";
+import { DOWNLOAD_CATEGORIES, type DownloadCategory } from "@/types/ipc";
 import { type AddFormValues } from "../model/add-form";
 
 export interface AddDownloadFormProps {
@@ -51,202 +38,229 @@ export function AddDownloadForm({
 }: AddDownloadFormProps) {
   return (
     <form
-      className="space-y-4"
+      id="add-form"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(false);
       }}
     >
-      <div className="space-y-2">
-        <Label htmlFor="download-urls">URL</Label>
-        <Textarea
-          id="download-urls"
-          rows={3}
-          required
-          spellCheck={false}
-          value={values.urlsText}
-          onChange={(event) => onUrlsChange(event.target.value)}
-          placeholder="https://example.com/file.zip"
-        />
-        <p className="text-xs text-muted-foreground">
-          Enter one URL per line for a batch download.
-        </p>
+      <div className="dialog-title">
+        <strong id="add-title">Download File Info</strong>
       </div>
 
-      {showPlaylistBanner ? (
-        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          <span className="flex-1">YouTube playlist detected!</span>
-          <Button type="button" size="sm" variant="outline" onClick={onOpenPlaylist}>
-            Select Videos…
-          </Button>
+      <div className="dialog-body">
+        <div className="form-line address-line">
+          <label htmlFor="download-urls">URL:</label>
+          <textarea
+            id="download-urls"
+            rows={2}
+            required
+            spellCheck={false}
+            value={values.urlsText}
+            onChange={(e) => onUrlsChange(e.target.value)}
+            placeholder="https://example.com/file.zip"
+          />
         </div>
-      ) : null}
+        <p className="field-help address-help">
+          Enter one URL per line for a batch download.
+        </p>
 
-      {showVideoBanner ? (
-        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          <span className="flex-1">
-            {videoLabel ?? "YouTube video detected!"}
-          </span>
-          <Button type="button" size="sm" variant="outline" onClick={onOpenFormats}>
-            Choose Quality / Format…
-          </Button>
-        </div>
-      ) : null}
+        {showPlaylistBanner && (
+          <div id="playlist-banner" className="banner-notice">
+            <span>YouTube playlist detected!</span>
+            <button
+              type="button"
+              className="button"
+              id="playlist-banner-btn"
+              onClick={onOpenPlaylist}
+            >
+              Select Videos…
+            </button>
+          </div>
+        )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="download-category">Category</Label>
-          <Select
-            value={values.category || "auto"}
-            onValueChange={(value) =>
+        {showVideoBanner && (
+          <div id="video-banner" className="banner-notice">
+            <span>{videoLabel || "YouTube video detected!"}</span>
+            <button
+              type="button"
+              className="button"
+              id="video-banner-btn"
+              onClick={onOpenFormats}
+            >
+              Choose Quality / Format…
+            </button>
+          </div>
+        )}
+
+        <div className="form-line">
+          <label htmlFor="download-category">Category:</label>
+          <select
+            id="download-category"
+            value={values.category}
+            onChange={(e) =>
               onPatch({
-                category: value === "auto" ? "" : (value as AddFormValues["category"]),
+                category: (e.target.value as DownloadCategory) || "",
               })
             }
           >
-            <SelectTrigger id="download-category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Automatic</SelectItem>
-              {DOWNLOAD_CATEGORIES.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <option value="">Automatic</option>
+            {DOWNLOAD_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="download-queue">Queue</Label>
-          <Select
-            value={values.queueId || "default"}
-            onValueChange={(value) => onPatch({ queueId: value })}
+        <div className="form-line">
+          <label htmlFor="download-queue">Queue:</label>
+          <select
+            id="download-queue"
+            value={values.queueId}
+            onChange={(e) => onPatch({ queueId: e.target.value })}
           >
-            <SelectTrigger id="download-queue">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {queueOptions.map((queue) => (
-                <SelectItem key={queue.id} value={queue.id}>
-                  {queue.name}
-                  {queue.id === "default" ? " (Default)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {queueOptions.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.name}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="download-filename">Save as</Label>
-        <Input
-          id="download-filename"
-          maxLength={240}
-          value={values.filename}
-          onChange={(event) => onPatch({ filename: event.target.value })}
-          placeholder="Original file name (optional)"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="add-directory">Save to</Label>
-        <div className="flex gap-2">
-          <Input
-            id="add-directory"
-            value={values.directory}
-            onChange={(event) => onPatch({ directory: event.target.value })}
-            placeholder="Default download folder"
+        <div className="form-line">
+          <label htmlFor="download-filename">Save As:</label>
+          <input
+            id="download-filename"
+            placeholder="Original file name (optional)"
+            maxLength={240}
+            value={values.filename}
+            onChange={(e) => onPatch({ filename: e.target.value })}
           />
-          <Button type="button" variant="outline" onClick={onChooseDirectory}>
-            Browse…
-          </Button>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="download-description">Description</Label>
-        <Input
-          id="download-description"
-          maxLength={1000}
-          value={values.description}
-          onChange={(event) => onPatch({ description: event.target.value })}
-        />
-      </div>
+        <div className="form-line">
+          <label htmlFor="add-directory">Save to:</label>
+          <input
+            id="add-directory"
+            readOnly
+            value={values.directory}
+            onChange={(e) => onPatch({ directory: e.target.value })}
+          />
+          <button
+            type="button"
+            id="add-browse"
+            className="small-button"
+            aria-label="Choose download folder"
+            onClick={onChooseDirectory}
+          >
+            …
+          </button>
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="download-schedule">Start at</Label>
-        <div className="flex items-center gap-2">
-          <Input
+        <div className="form-line">
+          <label htmlFor="download-description">Description:</label>
+          <input
+            id="download-description"
+            maxLength={1000}
+            value={values.description}
+            onChange={(e) => onPatch({ description: e.target.value })}
+          />
+        </div>
+
+        <div className="form-line schedule-line">
+          <label htmlFor="download-schedule">Start at:</label>
+          <input
             id="download-schedule"
             type="datetime-local"
             value={values.scheduledAt}
-            onChange={(event) => onPatch({ scheduledAt: event.target.value })}
+            onChange={(e) => onPatch({ scheduledAt: e.target.value })}
           />
-          <span className="text-xs text-muted-foreground">Optional</span>
+          <span className="field-help">Optional</span>
         </div>
-      </div>
 
-      <Separator />
+        <div className="form-line auth-toggle-line">
+          <label className="checkbox-label" htmlFor="add-auth-enabled">
+            <input
+              type="checkbox"
+              id="add-auth-enabled"
+              checked={values.authEnabled}
+              onChange={(e) => onPatch({ authEnabled: e.target.checked })}
+            />
+            Use basic authentication for this download
+          </label>
+        </div>
 
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 text-sm" htmlFor="add-auth-enabled">
-          <Checkbox
-            id="add-auth-enabled"
-            checked={values.authEnabled}
-            onCheckedChange={(checked) =>
-              onPatch({ authEnabled: checked === true })
-            }
-          />
-          Use basic authentication for this download
-        </label>
-        {values.authEnabled ? (
-          <div className="flex gap-2">
-            <Input
-              value={values.authUser}
-              onChange={(event) => onPatch({ authUser: event.target.value })}
+        {values.authEnabled && (
+          <div
+            id="add-auth-fields"
+            className="form-line auth-fields"
+            style={{ display: "flex", gap: "8px" }}
+          >
+            <input
+              type="text"
+              id="add-auth-user"
               placeholder="Username"
               autoComplete="off"
-              aria-label="Username"
+              style={{ flex: 1 }}
+              value={values.authUser}
+              onChange={(e) => onPatch({ authUser: e.target.value })}
             />
-            <Input
+            <input
               type="password"
-              value={values.authPass}
-              onChange={(event) => onPatch({ authPass: event.target.value })}
+              id="add-auth-pass"
               placeholder="Password"
               autoComplete="off"
-              aria-label="Password"
+              style={{ flex: 1 }}
+              value={values.authPass}
+              onChange={(e) => onPatch({ authPass: e.target.value })}
             />
           </div>
-        ) : null}
+        )}
+
+        {error && (
+          <p className="form-error" id="add-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
 
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onPaste}>
-          Paste
-        </Button>
-        <span className="flex-1" />
-        <Button
+      <div className="dialog-footer">
+        <button
           type="button"
-          variant="outline"
+          className="button"
+          id="paste-button"
+          onClick={onPaste}
+        >
+          Paste
+        </button>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="button"
+          id="add-later"
+          data-queue-only="true"
           disabled={saving}
           onClick={() => onSubmit(true)}
         >
           Download Later
-        </Button>
-        <Button type="submit" disabled={saving}>
+        </button>
+        <button
+          type="submit"
+          className="button primary"
+          id="add-submit"
+          disabled={saving}
+        >
           Start Download
-        </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        </button>
+        <button
+          type="button"
+          className="button"
+          data-close
+          onClick={onCancel}
+        >
           Cancel
-        </Button>
+        </button>
       </div>
     </form>
   );

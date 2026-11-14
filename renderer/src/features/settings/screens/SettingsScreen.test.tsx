@@ -74,7 +74,7 @@ describe("SettingsScreen", () => {
     renderWithQuery(<SettingsScreen />);
 
     expect(
-      await screen.findByText("Could not load settings"),
+      await screen.findByText(/Could not load settings/),
     ).toBeInTheDocument();
   });
 
