@@ -31,18 +31,6 @@ jobs:
             arch: arm64
           - target: x86_64-apple-darwin
             arch: x64
-    env:
-      # Add these repository secrets to sign and notarize the app. Without
-      # them the build falls back to an ad-hoc signature, which keeps macOS
-      # from reporting the app as damaged.
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,17 +47,35 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build Tauri macOS Release (${{ matrix.arch }})
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           # Strip build-machine paths (usernames, cargo registry folders) from
           # the binary and keep the compiler from leaking them into strings.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
-          if [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+          if [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_CERTIFICATE" ]; then
             # A Developer ID identity is provided: Tauri signs and notarizes.
             bun tauri build --target ${{ matrix.target }} --bundles dmg,app
           else
             # No certificate yet: sign the whole bundle ad-hoc. Without this
             # macOS reports a browser-downloaded app as damaged instead of
             # offering "Open Anyway" in Privacy & Security.
+            # Clean empty env vars so Tauri doesn't attempt keychain import.
+            unset APPLE_CERTIFICATE
+            unset APPLE_CERTIFICATE_PASSWORD
+            unset APPLE_SIGNING_IDENTITY
+            unset APPLE_API_ISSUER
+            unset APPLE_API_KEY
+            unset APPLE_ID
+            unset APPLE_PASSWORD
+            unset APPLE_TEAM_ID
             bun tauri build --target ${{ matrix.target }} --bundles dmg,app \
               --config '{"bundle":{"macOS":{"signingIdentity":"-"}}}'
           fi
@@ -140,7 +146,7 @@ jobs:
       # Import the code signing certificate so Windows does not show the
       # "Windows protected your PC" SmartScreen warning.
       - name: Import Windows certificate
-        if: env.WINDOWS_CERTIFICATE != ''
+        if: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -153,6 +159,7 @@ jobs:
           Import-PfxCertificate -FilePath certificate/certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText)
 
       - name: Build Tauri Windows Release (${{ matrix.arch }})
+        shell: bash
         run: |
           # Strip build-machine paths from the binary.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
