@@ -61,20 +61,13 @@ jobs:
           # the binary and keep the compiler from leaking them into strings.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
 
-          # Pre-compile native messaging host for the target architecture
-          cargo build --release --target ${{ matrix.target }} --bin open-download-manager-native-host
-
           if [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_CERTIFICATE" ]; then
-            # Sign the nested subcomponent so Tauri's bundle codesign succeeds
+            # Pre-compile and sign the nested subcomponent so Developer ID signing succeeds
+            cargo build --release --target ${{ matrix.target }} --bin open-download-manager-native-host
             codesign -s "$APPLE_SIGNING_IDENTITY" --force target/${{ matrix.target }}/release/open-download-manager-native-host
             # A Developer ID identity is provided: Tauri signs and notarizes.
             bun tauri build --target ${{ matrix.target }} --bundles dmg,app
           else
-            # Pre-sign the nested subcomponent ad-hoc so Tauri's bundle codesign succeeds
-            codesign -s - --force target/${{ matrix.target }}/release/open-download-manager-native-host
-            # No certificate yet: sign the whole bundle ad-hoc. Without this
-            # macOS reports a browser-downloaded app as damaged instead of
-            # offering "Open Anyway" in Privacy & Security.
             # Clean empty env vars so Tauri doesn't attempt keychain import.
             unset APPLE_CERTIFICATE
             unset APPLE_CERTIFICATE_PASSWORD
@@ -84,8 +77,18 @@ jobs:
             unset APPLE_ID
             unset APPLE_PASSWORD
             unset APPLE_TEAM_ID
-            bun tauri build --target ${{ matrix.target }} --bundles dmg,app \
-              --config '{"bundle":{"macOS":{"signingIdentity":"-"}}}'
+
+            # Build the .app bundle with --no-sign to avoid codesign errors on subcomponents
+            bun tauri build --target ${{ matrix.target }} --bundles app --no-sign
+
+            # Ad-hoc sign the entire .app bundle recursively (--deep signs all nested binaries and frameworks)
+            codesign -s - --force --deep target/${{ matrix.target }}/release/bundle/macos/"Open Download Manager.app"
+
+            # Create the DMG installer with the signed app bundle
+            mkdir -p target/${{ matrix.target }}/release/bundle/dmg
+            hdiutil create -volname "Open Download Manager" \
+              -srcfolder target/${{ matrix.target }}/release/bundle/macos/"Open Download Manager.app" \
+              -ov -format UDZO target/${{ matrix.target }}/release/bundle/dmg/"Open Download Manager.dmg"
           fi
 
       - name: Package macOS Assets
