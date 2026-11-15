@@ -60,10 +60,18 @@ jobs:
           # Strip build-machine paths (usernames, cargo registry folders) from
           # the binary and keep the compiler from leaking them into strings.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
+
+          # Pre-compile native messaging host for the target architecture
+          cargo build --release --target ${{ matrix.target }} --bin open-download-manager-native-host
+
           if [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_CERTIFICATE" ]; then
+            # Sign the nested subcomponent so Tauri's bundle codesign succeeds
+            codesign -s "$APPLE_SIGNING_IDENTITY" --force target/${{ matrix.target }}/release/open-download-manager-native-host
             # A Developer ID identity is provided: Tauri signs and notarizes.
             bun tauri build --target ${{ matrix.target }} --bundles dmg,app
           else
+            # Pre-sign the nested subcomponent ad-hoc so Tauri's bundle codesign succeeds
+            codesign -s - --force target/${{ matrix.target }}/release/open-download-manager-native-host
             # No certificate yet: sign the whole bundle ad-hoc. Without this
             # macOS reports a browser-downloaded app as damaged instead of
             # offering "Open Anyway" in Privacy & Security.
@@ -163,6 +171,7 @@ jobs:
         run: |
           # Strip build-machine paths from the binary.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
+          cargo build --release --target ${{ matrix.target }} --bin open-download-manager-native-host
           bun tauri build --target ${{ matrix.target }} --bundles nsis
 
       - name: Package Windows Assets
@@ -217,6 +226,7 @@ jobs:
           # non-executable stack make the binary harder to exploit.
           export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build"
           export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-z,relro,-z,now -C link-arg=-Wl,-z,noexecstack"
+          cargo build --release --bin open-download-manager-native-host
           bun tauri build --bundles deb,appimage
 
       - name: Package Linux Assets

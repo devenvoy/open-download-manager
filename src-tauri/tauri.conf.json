@@ -12,7 +12,7 @@
   },
   "build": {
     "beforeDevCommand": "bun run frontend:dev",
-    "beforeBuildCommand": "cargo build --release --bin open-download-manager-native-host && bun run frontend:build",
+    "beforeBuildCommand": "bun run frontend:build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../renderer/dist"
   },
