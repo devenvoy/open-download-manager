@@ -1,6 +1,6 @@
 [package]
 name = "open-download-manager"
-version = "0.3.0-beta.2"
+version = "0.3.0"
 description = "Open Download Manager desktop application"
 authors = ["Open Download Manager contributors"]
 license = "MIT"

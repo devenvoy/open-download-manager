@@ -3,10 +3,6 @@
  *
  * The types live in domain modules; this file is the barrel the rest of the
  * app imports from. `Snapshot` stays here because it aggregates every domain.
- *
- * These are hand-written today. `ts-rs` replaces them in step 5 of
- * docs/REACT-UI-MIGRATION-PLAN.md §0.3; until then, every field must be
- * checked against the Rust struct before it is used.
  */
 
 import { type DownloadSummary } from "./download";

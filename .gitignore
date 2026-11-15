@@ -29,7 +29,7 @@ build/browser-setup-helper.exe
 graphify-out/
 # reference/ holds local reference material and is not tracked.
 # vendor/ holds the vendored rustTorrent submodule, which provides the
-# optional `torrent` engine source (see docs/TORRENT-PLAN.md Phase 0).
+# optional `torrent` engine source.
 # Nothing else in vendor/ is tracked.
 /reference/
 /vendor/*

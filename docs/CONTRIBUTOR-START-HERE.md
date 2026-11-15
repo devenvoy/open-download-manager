@@ -8,16 +8,11 @@ Welcome to **Open Download Manager**! We welcome bug reports, feature suggestion
 
 Open Download Manager is built modern, modular, and fast:
 - **Desktop Runtime & Backend**: Rust with [Tauri v2](https://tauri.app) (`src-tauri/`).
-- **UI / Frontend**: Clean, responsive HTML5, CSS3, and JavaScript (`renderer/`).
+- **UI / Frontend**: React 19, TypeScript, Vite, Tailwind CSS, and shadcn/ui (`renderer/`).
 - **Browser Extensions**: WebExtensions (Manifest V3 for Chromium, Manifest V2 for Firefox) in `extension/`.
 - **Native Messaging Host**: Rust binary (`src-tauri/src/bin/native_host.rs`) providing high-speed IPC between browsers and the desktop manager.
 
-The frontend is moving to React, TypeScript, Vite, Tailwind CSS and shadcn/ui.
-The plan, the target folder structure, the state management rules and the
-stage gates are in [REACT-UI-MIGRATION-PLAN.md](./REACT-UI-MIGRATION-PLAN.md).
-Read it before touching the renderer: every rule in it exists because the
-audit in [RUNTIME-CRASH-AUDIT.md](./RUNTIME-CRASH-AUDIT.md) found the same
-defect class in eight places.
+The frontend is structured into modular feature slices under `renderer/src/features/`, with typed IPC seams and strict ESLint file limits (all files under 300 lines).
 
 ---
 

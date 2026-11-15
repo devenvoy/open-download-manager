@@ -16,10 +16,8 @@ export default [
 			"coverage/**",
 		],
 	},
-	// The React renderer: TypeScript, JSX, the file rules from
-	// docs/REACT-UI-MIGRATION-PLAN.md §5.2 and §10.5. The type-aware rules
-	// arrive with the generated IPC types; the parser-only rules below catch
-	// the classes that do not need a program.
+	// The React renderer: TypeScript, JSX, and strict modular feature rules.
+	// Catches undeclared state access, missing props, and enforces the 300-line limit.
 	{
 		files: ["renderer/**/*.{ts,tsx}"],
 		languageOptions: {

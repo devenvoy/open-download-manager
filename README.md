@@ -79,20 +79,17 @@
 
 ---
 
-> **🚧 Beta channel** — the BitTorrent engine and the reworked browser
-> integration are still in beta. The `v0.3.0-beta.1` build was **withdrawn**
-> because the Torrents window crashed on startup. A fixed beta follows as
-> `v0.3.0-beta.2`. Download links below point to the current stable release,
-> `v0.2.0`.
-
 ## ⚡ Key Features
 
 - **🚀 Multi-Threaded Acceleration**: Dynamic file segment splitting with up to 32 concurrent chunks, active throughput re-balancing, and zero-byte thread recovery.
-- **🎬 YouTube SABR & Adaptive Streaming**: Native parser for YouTube SABR / `videoplayback` streams with seamless automatic fallback to `yt-dlp` and paired audio/video muxing.
+- **⚛️ Modern React 19 Architecture**: High-performance, modular desktop interface built with React 19, TypeScript, Vite, Tailwind CSS, and shadcn/ui.
+- **📁 Full Asset Icon Pack**: Bundled catalog of 70+ native SVG file-type icons across downloads and torrents.
+- **🎬 YouTube SABR & Adaptive Streaming**: Native parser for YouTube SABR / `videoplayback` streams with seamless automatic fallback to `yt-dlp` and paired audio/video muxing with full subtitle language tags.
+- **🍎 QuickTime & Native Player Ready**: Automatic AAC (192k) audio and `mov_text` subtitle transcoding for seamless macOS and Windows media playback.
 - **🧩 Native Browser Extensions**: Full integration for **Google Chrome, Microsoft Edge, Brave, Opera, Vivaldi** (Manifest V3), and **Mozilla Firefox** (Manifest V2).
 - **🎥 In-Page Video Grabber**: Floating on-page video download bar with format selection (1080p, 4K, 60fps, audio-only) and keyboard accessibility.
 - **🔄 Robust Pause & Resume**: Reliable transfer resumption across network dropouts, validating `ETag` and `Last-Modified` timestamps.
-- **🧲 Built-in BitTorrent Engine**: Embedded torrent client (rustTorrent) with magnet and file support, DHT, upload/download limits and a review step before a torrent starts (Beta channel).
+- **🧲 Built-in BitTorrent Client**: Embedded torrent engine (rustTorrent) supporting magnet links, `.torrent` files, multi-file partition (Downloaded vs. Available to Download), DHT, peer tracker reporting, and ratio stats.
 - **🎨 Dark & Light Theming**: Ergonomic IDM-inspired layout with system theme detection and high-contrast dark mode.
 - **🌐 Comprehensive Proxy Support**: HTTP, HTTPS, and SOCKS5 proxy support with reachability testing and 1-click system proxy auto-import.
 - **⏱️ Queues & Scheduling**: Named download queues, cron-style recurring schedules, and post-download power actions (sleep, shutdown).
@@ -110,8 +107,8 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 <br>
 
 1. Download the `.dmg` package matching your Mac:
-   - **Apple Silicon (M1 / M2 / M3 / M4)**: [`open-download-manager_0.2.0_mac_arm64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_mac_arm64.dmg)
-   - **Intel 64-bit**: [`open-download-manager_0.2.0_mac_x64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_mac_x64.dmg)
+   - **Apple Silicon (M1 / M2 / M3 / M4)**: [`open-download-manager_0.3.0_mac_arm64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0/open-download-manager_0.3.0_mac_arm64.dmg)
+   - **Intel 64-bit**: [`open-download-manager_0.3.0_mac_x64.dmg`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0/open-download-manager_0.3.0_mac_x64.dmg)
 2. Open the `.dmg` file and drag **Open Download Manager** into your **Applications** folder.
 3. Launch the app from Applications or Spotlight search.
 
@@ -123,8 +120,8 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 <br>
 
 1. Download the setup executable matching your CPU:
-   - **Windows 64-bit (x64)**: [`open-download-manager_0.2.0_win_x64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_win_x64-setup.exe)
-   - **Windows 11 ARM64**: [`open-download-manager_0.2.0_win_arm64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.2.0/open-download-manager_0.2.0_win_arm64-setup.exe)
+   - **Windows 64-bit (x64)**: [`open-download-manager_0.3.0_win_x64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0/open-download-manager_0.3.0_win_x64-setup.exe)
+   - **Windows 11 ARM64**: [`open-download-manager_0.3.0_win_arm64-setup.exe`](https://github.com/devenvoy/open-download-manager/releases/download/v0.3.0/open-download-manager_0.3.0_win_arm64-setup.exe)
 2. Run the installer wizard and choose your options.
 3. Launch **Open Download Manager** from the Start Menu or desktop shortcut.
 
@@ -137,13 +134,13 @@ Get the latest installer for your operating system from the **[Releases Page](ht
 
 - **Debian / Ubuntu / Linux Mint (`.deb`)**:
   ```bash
-  sudo dpkg -i open-download-manager_0.2.0_lin_x64.deb
+  sudo dpkg -i open-download-manager_0.3.0_lin_x64.deb
   sudo apt-get install -f
   ```
 - **Universal Linux (`.AppImage`)**:
   ```bash
-  chmod +x open-download-manager_0.2.0_lin_x64.AppImage
-  ./open-download-manager_0.2.0_lin_x64.AppImage
+  chmod +x open-download-manager_0.3.0_lin_x64.AppImage
+  ./open-download-manager_0.3.0_lin_x64.AppImage
   ```
 
 </details>
