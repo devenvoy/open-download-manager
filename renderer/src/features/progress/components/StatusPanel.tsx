@@ -11,7 +11,7 @@ export interface StatusPanelProps {
 /** The "Download status" tab: source, error card and the fact list. */
 export function StatusPanel({ download, busy, onRetry }: StatusPanelProps) {
   const facts = detailFacts(download);
-  const failed = isErrorStatus(statusOf(download));
+  const failed = isErrorStatus(statusOf(download)) || Boolean(download.error);
 
   return (
     <div id="status-panel" role="tabpanel" aria-labelledby="tab-status">

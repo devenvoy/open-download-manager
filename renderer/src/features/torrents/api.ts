@@ -65,12 +65,14 @@ export const torrentFilesQuery = (id: number) =>
   queryOptions({
     queryKey: torrentKeys.files(id),
     queryFn: () => torrentsApi.files(id),
-    staleTime: 2_000,
+    staleTime: 1_000,
+    refetchInterval: 1_000,
   });
 
 export const torrentTrackersQuery = (id: number) =>
   queryOptions({
     queryKey: torrentKeys.trackers(id),
     queryFn: () => torrentsApi.trackers(id),
-    staleTime: 15_000,
+    staleTime: 4_000,
+    refetchInterval: 5_000,
   });

@@ -10,10 +10,12 @@ import {
   sortDownloads,
   type SortField,
 } from "../model/download-table-helpers";
+import { FileTypeIcon } from "@/lib/file-icon";
 
 export interface DownloadsTableProps {
   searchRef?: React.RefObject<HTMLInputElement | null>;
   downloads: DownloadSummary[];
+  fileIcons?: Record<string, string>;
   selectedIds: string[];
   onToggle: (id: string) => void;
   onSelectRow?: (
@@ -28,6 +30,7 @@ export interface DownloadsTableProps {
 export function DownloadsTable({
   searchRef,
   downloads,
+  fileIcons,
   selectedIds,
   onToggle,
   onSelectRow,
@@ -112,67 +115,51 @@ export function DownloadsTable({
   return (
     <>
       <div
-        className="table-scroll"
+        className="table-scroll flex-1 overflow-auto bg-white dark:bg-[#1e1e1e] select-none outline-none"
         id="table-scroll"
         tabIndex={0}
         aria-label="Downloads"
         onKeyDown={handleTableKeyDown}
       >
-        <table className="downloads-table" aria-label="Downloads">
+        <table className="downloads-table w-full border-collapse text-[11px] table-fixed" aria-label="Downloads">
           <colgroup>
             <col className="name-col" />
-            <col className="queue-col" />
-            <col className="size-col" />
-            <col className="status-col" />
-            <col className="time-col" />
-            <col className="rate-col" />
-            <col className="date-col" />
-            <col className="description-col" />
+            <col className="queue-col w-[24px]" />
+            <col className="size-col w-[75px]" />
+            <col className="status-col w-[110px]" />
+            <col className="time-col w-[75px]" />
+            <col className="rate-col w-[85px]" />
+            <col className="date-col w-[120px]" />
+            <col className="description-col w-[140px]" />
           </colgroup>
           <thead>
-            <tr>
-              <th scope="col">
-                <button
-                  type="button"
-                  data-sort="filename"
-                  onClick={() => handleSort("filename")}
-                >
+            <tr className="h-[22px] bg-[#f0f0f0] dark:bg-[#252526] border-b border-[#aaa] dark:border-[#383838] sticky top-0 z-10 text-left font-normal text-[#333] dark:text-[#ccc]">
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">
+                <button type="button" data-sort="filename" onClick={() => handleSort("filename")} className="w-full text-left font-normal border-0 bg-transparent p-0 cursor-pointer">
                   File Name
                 </button>
               </th>
-              <th scope="col" title="Queue">
+              <th scope="col" title="Queue" className="px-1 text-center font-normal border-r border-[#ddd] dark:border-[#333]">
                 Q
               </th>
-              <th scope="col">
-                <button
-                  type="button"
-                  data-sort="total"
-                  onClick={() => handleSort("total")}
-                >
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">
+                <button type="button" data-sort="total" onClick={() => handleSort("total")} className="w-full text-left font-normal border-0 bg-transparent p-0 cursor-pointer">
                   Size
                 </button>
               </th>
-              <th scope="col">
-                <button
-                  type="button"
-                  data-sort="status"
-                  onClick={() => handleSort("status")}
-                >
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">
+                <button type="button" data-sort="status" onClick={() => handleSort("status")} className="w-full text-left font-normal border-0 bg-transparent p-0 cursor-pointer">
                   Status
                 </button>
               </th>
-              <th scope="col">Time left</th>
-              <th scope="col">Transfer rate</th>
-              <th scope="col">
-                <button
-                  type="button"
-                  data-sort="createdAt"
-                  onClick={() => handleSort("createdAt")}
-                >
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">Time left</th>
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">Transfer rate</th>
+              <th scope="col" className="px-1.5 font-normal border-r border-[#ddd] dark:border-[#333]">
+                <button type="button" data-sort="createdAt" onClick={() => handleSort("createdAt")} className="w-full text-left font-normal border-0 bg-transparent p-0 cursor-pointer">
                   Last Try...
                 </button>
               </th>
-              <th scope="col">Description</th>
+              <th scope="col" className="px-1.5 font-normal">Description</th>
             </tr>
           </thead>
           <tbody id="download-list">
@@ -180,25 +167,21 @@ export function DownloadsTable({
               const isSelected = selectedIds.includes(d.id);
               const statusLabel = getStatusLabel(d);
               const isDownloading = d.status === "downloading";
-              const isQueued = ["queued", "scheduled", "paused"].includes(
-                d.status,
-              );
+              const isQueued = ["queued", "scheduled", "paused"].includes(d.status);
 
               return (
                 <tr
                   key={d.id}
-                  className={`download-row ${isSelected ? "selected" : ""}`}
+                  className={`download-row h-[20px] border-b border-[#f0f0f0] dark:border-[#2a2a2a] cursor-default transition-colors text-[11px] ${
+                    isSelected ? "selected bg-[#cce8ff] dark:bg-[#1f3d5c] text-[#111] dark:text-white" : "hover:bg-[#eef5fd] dark:hover:bg-[#2d3742] text-[#222] dark:text-[#ddd]"
+                  }`}
                   data-id={d.id}
                   data-status={d.status}
                   aria-selected={isSelected}
                   onClick={(e) => {
                     if (onSelectRow) {
                       const additive = e.ctrlKey || e.metaKey;
-                      onSelectRow(d.id, {
-                        additive,
-                        range: e.shiftKey,
-                        toggle: additive && !e.shiftKey,
-                      });
+                      onSelectRow(d.id, { additive, range: e.shiftKey, toggle: additive && !e.shiftKey });
                     } else {
                       onToggle(d.id);
                     }
@@ -208,11 +191,7 @@ export function DownloadsTable({
                     e.preventDefault();
                     if (!isSelected) {
                       if (onSelectRow) {
-                        onSelectRow(d.id, {
-                          additive: false,
-                          range: false,
-                          toggle: false,
-                        });
+                        onSelectRow(d.id, { additive: false, range: false, toggle: false });
                       } else {
                         onToggle(d.id);
                       }
@@ -220,26 +199,25 @@ export function DownloadsTable({
                     onOpenProperties?.(d.id);
                   }}
                 >
-                  <td title={d.filename || d.url}>
-                    <span className="file-name">
-                      <span className="file-type-icon file-type-fallback" />
-                      <span>{d.filename || "Preparing file…"}</span>
+                  <td title={d.filename || d.url} className="px-1.5 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <span className="file-name flex items-center gap-1.5">
+                      <FileTypeIcon
+                        filename={d.filename}
+                        iconUrl={fileIcons?.[d.filename]}
+                        className="file-type-icon native-file-icon shrink-0"
+                      />
+                      <span className="overflow-hidden text-ellipsis whitespace-nowrap">{d.filename || "Preparing file…"}</span>
                     </span>
                   </td>
-                  <td>{isQueued ? "✓" : ""}</td>
-                  <td>{getSizeText(d)}</td>
-                  <td
-                    className={`row-status ${d.status}`}
-                    title={d.error || statusLabel}
-                  >
+                  <td className="px-1 text-center">{isQueued ? "✓" : ""}</td>
+                  <td className="px-1.5 tabular-nums whitespace-nowrap">{getSizeText(d)}</td>
+                  <td className={`row-status px-1.5 whitespace-nowrap ${d.status}`} title={d.error || statusLabel}>
                     {statusLabel}
                   </td>
-                  <td>
-                    {isDownloading && d.duration ? formatTimeLeft(d.duration) : ""}
-                  </td>
-                  <td>{isDownloading ? formatSpeed(d.speed) : ""}</td>
-                  <td>{formatDate(d.createdAt)}</td>
-                  <td title={d.error || d.description || ""}>
+                  <td className="px-1.5 whitespace-nowrap tabular-nums">{isDownloading && d.duration ? formatTimeLeft(d.duration) : ""}</td>
+                  <td className="px-1.5 whitespace-nowrap tabular-nums">{isDownloading ? formatSpeed(d.speed) : ""}</td>
+                  <td className="px-1.5 whitespace-nowrap tabular-nums">{formatDate(d.createdAt)}</td>
+                  <td title={d.error || d.description || ""} className="px-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-[#666] dark:text-[#888]">
                     {d.error || d.description || ""}
                   </td>
                 </tr>
@@ -248,16 +226,16 @@ export function DownloadsTable({
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div id="empty-state" className="empty-state">
-            <span id="empty-message">No downloads to display.</span>
+          <div id="empty-state" className="empty-state p-8 text-center text-[#777] dark:text-[#999] text-[11px] leading-[1.6]">
+            <span id="empty-message" className="font-semibold text-[#333] dark:text-[#ccc]">No downloads to display.</span>
             <br />
             Click Add URL to start a download.
           </div>
         )}
       </div>
 
-      <div className="list-search">
-        <label htmlFor="search">Find:</label>
+      <div className="list-search h-[28px] px-2 bg-[#f0f0f0] dark:bg-[#252526] border-t border-[#ccc] dark:border-[#383838] flex items-center gap-2 text-[11px] shrink-0 select-none">
+        <label htmlFor="search" className="text-[#555] dark:text-[#999]">Find:</label>
         <input
           ref={searchRef}
           id="search"
@@ -266,6 +244,7 @@ export function DownloadsTable({
           placeholder="File name or URL"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="h-[20px] px-1.5 border border-[#ccc] dark:border-[#444] rounded-xs bg-white dark:bg-[#1e1e1e] text-[#111] dark:text-[#e0e0e0] text-[11px] max-w-[220px]"
         />
         <button
           id="open-selected"

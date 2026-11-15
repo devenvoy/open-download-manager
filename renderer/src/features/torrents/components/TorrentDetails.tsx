@@ -2,6 +2,7 @@ import { formatBytes, formatDate, formatSpeed } from "@/lib/format";
 import {
   type TorrentFileItem,
   type TorrentListItem,
+  type TorrentReviewRequest,
   type TorrentTrackerStatus,
 } from "@/types/ipc";
 import { useTorrentsStore } from "../state/torrents-store";
@@ -9,9 +10,11 @@ import {
   formatEta,
   formatRatio,
   progressPercent,
+  stateKey,
   stateLabel,
 } from "../model/torrent-view";
 import { TorrentFilesTab } from "./TorrentFilesTab";
+import { TorrentReviewPanel } from "./TorrentReviewPanel";
 import { TorrentTrackersTab } from "./TorrentTrackersTab";
 
 export interface TorrentDetailsProps {
@@ -22,6 +25,11 @@ export interface TorrentDetailsProps {
   trackersLoading: boolean;
   filesDirty: boolean;
   applyingFiles: boolean;
+  review?: TorrentReviewRequest | null;
+  reviewConfirming?: boolean;
+  startPaused?: boolean;
+  onConfirmReview?: (included: number[], startPaused: boolean) => void;
+  onCancelReview?: () => void;
   onToggleFile: (index: number) => void;
   onSetAllFiles: (selected: boolean) => void;
   onApplyFiles: () => void;
@@ -35,6 +43,11 @@ export function TorrentDetails({
   trackersLoading,
   filesDirty,
   applyingFiles,
+  review,
+  reviewConfirming,
+  startPaused,
+  onConfirmReview,
+  onCancelReview,
   onToggleFile,
   onSetAllFiles,
   onApplyFiles,
@@ -42,6 +55,9 @@ export function TorrentDetails({
   const tab = useTorrentsStore((state) => state.tab);
   const setTab = useTorrentsStore((state) => state.setTab);
   const selection = useTorrentsStore((state) => state.fileSelection);
+  const percent = progressPercent(torrent);
+  const isComplete = percent >= 100;
+  const isSeeding = stateKey(torrent) === "seeding";
 
   return (
     <div id="torrent-detail">
@@ -51,6 +67,19 @@ export function TorrentDetails({
           {torrent.infoHash}
         </span>
       </header>
+
+      {review && review.id === torrent.id && onConfirmReview && onCancelReview ? (
+        <TorrentReviewPanel
+          review={review}
+          files={files}
+          loading={filesLoading}
+          confirming={Boolean(reviewConfirming)}
+          selection={selection}
+          startPaused={startPaused}
+          onConfirm={onConfirmReview}
+          onCancel={onCancelReview}
+        />
+      ) : null}
 
       <div
         className="torrent-tabs"
@@ -93,12 +122,14 @@ export function TorrentDetails({
               {torrent.error}
             </div>
           )}
-          <progress
-            id="torrent-detail-progress"
-            className="torrent-detail-progress"
-            max={100}
-            value={progressPercent(torrent)}
-          />
+          {!isComplete && (
+            <progress
+              id="torrent-detail-progress"
+              className="torrent-detail-progress"
+              max={100}
+              value={percent}
+            />
+          )}
           <dl className="torrent-facts">
             <div>
               <dt>Status</dt>
@@ -122,11 +153,13 @@ export function TorrentDetails({
                 {formatBytes(torrent.uploadedBytes)}
               </dd>
             </div>
-            <div>
-              <dt>Ratio</dt>
-              <dd id="torrent-fact-ratio">{formatRatio(torrent.ratio)}</dd>
-            </div>
-            <div>
+            {torrent.ratio && torrent.ratio > 0.01 ? (
+              <div>
+                <dt>Ratio</dt>
+                <dd id="torrent-fact-ratio">{formatRatio(torrent.ratio)}</dd>
+              </div>
+            ) : null}
+            <div className={isSeeding ? "torrent-fact-dormant" : undefined}>
               <dt>Download speed</dt>
               <dd id="torrent-fact-down-speed">
                 {torrent.downloadSpeed ? formatSpeed(torrent.downloadSpeed) : "—"}
@@ -148,7 +181,7 @@ export function TorrentDetails({
                 {`${torrent.seeds} seeds, ${torrent.leechers} leechers`}
               </dd>
             </div>
-            <div>
+            <div className={isSeeding ? "torrent-fact-dormant" : undefined}>
               <dt>Time remaining</dt>
               <dd id="torrent-fact-eta">
                 {formatEta(torrent.timeRemainingSecs)}

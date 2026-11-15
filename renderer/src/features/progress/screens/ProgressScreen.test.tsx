@@ -146,4 +146,26 @@ describe("ProgressScreen", () => {
     );
     await waitFor(() => expect(closeMock).toHaveBeenCalled());
   });
+
+  it("renders the completed panel when download is completed", async () => {
+    snapshotMock.mockResolvedValue(
+      snapshotWith({
+        status: "complete",
+        downloaded: 1024,
+        total: 1024,
+        path: "/downloads/file.zip",
+      }),
+    );
+    renderWithQuery(<ProgressScreen id="progress-1" />);
+
+    expect(await screen.findByText(/Downloaded 1.0 KB/)).toBeInTheDocument();
+    expect(screen.getByLabelText("The file saved as")).toHaveValue("/downloads/file.zip");
+    expect(screen.getByRole("button", { name: "Open folder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    await waitFor(() =>
+      expect(actionMock).toHaveBeenCalledWith("progress-1", "open"),
+    );
+  });
 });

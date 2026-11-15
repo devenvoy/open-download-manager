@@ -7,11 +7,11 @@ export interface AddTorrentDialogProps {
   onAddMagnet: (
     magnet: string,
     options: { outputFolder?: string; startPaused: boolean; review: boolean },
-  ) => void;
+  ) => Promise<void> | void;
   onAddFile: (
     path: string,
     options: { outputFolder?: string; startPaused: boolean; review: boolean },
-  ) => void;
+  ) => Promise<void> | void;
   onClose: () => void;
   pending: boolean;
 }
@@ -28,9 +28,11 @@ export function AddTorrentDialog({
   const [filePath, setFilePath] = useState("");
   const [folder, setFolder] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting || pending) return;
     setError(null);
 
     const options = {
@@ -49,16 +51,30 @@ export function AddTorrentDialog({
         setError("Invalid magnet link. Must start with magnet:?");
         return;
       }
-      onAddMagnet(trimmed, options);
-      onClose();
+      setSubmitting(true);
+      try {
+        await onAddMagnet(trimmed, options);
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to add magnet link.");
+      } finally {
+        setSubmitting(false);
+      }
     } else {
       const trimmed = filePath.trim();
       if (!trimmed) {
         setError("Please choose a .torrent file.");
         return;
       }
-      onAddFile(trimmed, options);
-      onClose();
+      setSubmitting(true);
+      try {
+        await onAddFile(trimmed, options);
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to add .torrent file.");
+      } finally {
+        setSubmitting(false);
+      }
     }
   }
 
@@ -187,9 +203,9 @@ export function AddTorrentDialog({
             type="submit"
             id="torrent-add-confirm"
             className="button primary"
-            disabled={pending}
+            disabled={pending || submitting}
           >
-            Add
+            {submitting ? "Adding torrent…" : "Add"}
           </button>
         </div>
       </form>

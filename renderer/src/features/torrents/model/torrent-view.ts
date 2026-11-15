@@ -1,4 +1,4 @@
-import { formatSpeed } from "@/lib/format";
+import { formatBytes, formatSpeed } from "@/lib/format";
 import { type TorrentFileItem, type TorrentListItem } from "@/types/ipc";
 
 /**
@@ -115,14 +115,17 @@ export function rowSubtitle(torrent: TorrentListItem): string {
     }`;
   }
   if (key === "seeding") {
-    return `Ratio ${formatRatio(torrent.ratio)} · ↑ ${formatSpeed(
-      torrent.uploadSpeed,
-    )}`;
+    const up = torrent.uploadedBytes ? ` · Uploaded ${formatBytes(torrent.uploadedBytes)}` : "";
+    const speed = torrent.uploadSpeed ? ` · ↑ ${formatSpeed(torrent.uploadSpeed)}` : "";
+    const ratioPart = torrent.ratio && torrent.ratio > 0.01 ? ` · Ratio ${formatRatio(torrent.ratio)}` : "";
+    return `Seeding${speed}${up}${ratioPart}`;
   }
   if (key === "waiting") {
     return "No peer with the files yet — still looking";
   }
-  if (key === "paused") return `Paused at ${percent.toFixed(1)}%`;
+  if (key === "paused") {
+    return percent >= 100 ? "Completed" : `Paused at ${percent.toFixed(1)}%`;
+  }
   if (key === "metadata") return "Fetching metadata…";
   if (key === "error") return torrent.error || "Transfer failed";
   return "—";
@@ -212,6 +215,20 @@ export function includedIndices(files: TorrentFileItem[] | null | undefined): nu
     .sort((left, right) => left - right);
 }
 
+export function defaultFileSelection(
+  files: TorrentFileItem[] | null | undefined,
+  isReview = false,
+): number[] {
+  const reported = includedIndices(files);
+  if (reported.length) return reported;
+  if (isReview && Array.isArray(files)) {
+    return files
+      .map((file) => Number(file.index))
+      .filter((index) => Number.isInteger(index) && index >= 0);
+  }
+  return [];
+}
+
 export interface ReviewPlan {
   files: number[];
   action: "pause" | "resume";
@@ -242,7 +259,7 @@ export function reviewPlan(
 
   const picked =
     selection === null || selection === undefined
-      ? includedIndices(files)
+      ? defaultFileSelection(files, true)
       : [...selection];
 
   const selected = picked

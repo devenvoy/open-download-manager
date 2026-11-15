@@ -63,6 +63,7 @@ export function ToolbarIcon({ name }: { name: string }) {
     <svg
       viewBox={name === "options" ? "0 0 24 24" : "0 0 34 34"}
       aria-hidden="true"
+      className="w-[30px] h-[30px] stroke-[1.1] stroke-round fill-none shrink-0"
     >
       {paths.map((d, i) => (
         <path key={i} d={d} />

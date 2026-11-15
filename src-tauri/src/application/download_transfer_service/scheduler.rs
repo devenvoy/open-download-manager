@@ -61,7 +61,7 @@ impl DownloadTransferService {
                             break;
                         }
                         if let Ok(record) = self.history.download(item_id) {
-                            if record.status == DownloadStatus::Queued {
+                            if record.status == DownloadStatus::Queued && !record.needs_review {
                                 if let Err(error) = self.start_download(item_id, false) {
                                     eprintln!(
                                         "Failed to auto-start queued download {item_id}: {}",

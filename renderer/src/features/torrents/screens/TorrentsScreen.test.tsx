@@ -132,4 +132,25 @@ describe("TorrentsScreen", () => {
 
     expect(await screen.findByText("No torrents yet")).toBeInTheDocument();
   });
+
+  it("shows review panel in details pane and confirms start download", async () => {
+    takeReviewMock.mockResolvedValue({
+      id: 1,
+      name: "debian.iso",
+      infoHash: "aaa",
+    });
+
+    renderWithQuery(<TorrentsScreen />);
+    expect(await screen.findByRole("region", { name: "Torrent download review" })).toBeInTheDocument();
+    const startBtn = screen.getByRole("button", { name: "Start download" });
+    await waitFor(() => expect(startBtn).toBeEnabled());
+
+    fireEvent.click(startBtn);
+    await waitFor(() =>
+      expect(setFilesMock).toHaveBeenCalledWith(1, [0]),
+    );
+    await waitFor(() =>
+      expect(actionMock).toHaveBeenCalledWith(1, "resume"),
+    );
+  });
 });

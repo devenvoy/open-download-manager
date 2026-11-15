@@ -1,5 +1,6 @@
 import { formatBytes } from "@/lib/format";
 import { type TorrentListItem } from "@/types/ipc";
+import { FileTypeIcon } from "@/lib/file-icon";
 import {
   progressPercent,
   rowSubtitle,
@@ -20,6 +21,7 @@ export function TorrentList({ torrents, selectedId, onSelect }: TorrentListProps
         const selected = torrent.id === selectedId;
         const percent = progressPercent(torrent);
         const sub = rowSubtitle(torrent);
+        const isCompleted = percent >= 100 || stateKey(torrent) === "seeding";
         return (
           <div
             key={`${torrent.infoHash}-${torrent.id}`}
@@ -38,17 +40,32 @@ export function TorrentList({ torrents, selectedId, onSelect }: TorrentListProps
             }}
           >
             <div className="torrent-row-main">
-              <span className="torrent-name" title={torrent.name || torrent.infoHash}>
-                {torrent.name || torrent.infoHash}
-              </span>
+              <div className="torrent-row-title">
+                <FileTypeIcon
+                  filename={torrent.name || torrent.infoHash}
+                  className="torrent-row-icon shrink-0"
+                />
+                <span className="torrent-name" title={torrent.name || torrent.infoHash}>
+                  {torrent.name || torrent.infoHash}
+                </span>
+              </div>
               <span className="torrent-row-sub">{sub}</span>
-              <progress
-                className="torrent-row-progress"
-                max={100}
-                value={percent}
-              />
+              {!isCompleted && (
+                <progress
+                  className="torrent-row-progress"
+                  max={100}
+                  value={percent}
+                />
+              )}
             </div>
-            <span className="torrent-size">
+            <span
+              className="torrent-size"
+              title={
+                torrent.uploadedBytes
+                  ? `Downloaded: ${formatBytes(torrent.progressBytes || torrent.totalBytes)} · Uploaded: ${formatBytes(torrent.uploadedBytes)}`
+                  : undefined
+              }
+            >
               {formatBytes(torrent.totalBytes)}
             </span>
             <span className="torrent-row-state">

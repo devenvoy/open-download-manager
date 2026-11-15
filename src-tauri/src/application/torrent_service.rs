@@ -562,6 +562,7 @@ impl TorrentService {
             // Allow re-adding a torrent whose payload already exists on disk:
             // the engine then verifies the existing files instead of failing.
             overwrite: true,
+            magnet_resolution_timeout_secs: Some(45),
             ..Default::default()
         };
 
@@ -662,13 +663,15 @@ impl TorrentService {
     pub fn files(&self, id: usize) -> AppResult<Vec<TorrentFileItem>> {
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
-        let details = api
+        let mut details = api
             .api_torrent_details(target)
             .map_err(|error| AppError::torrent(format!("{error:#}")))?;
-        let progress = api
-            .api_stats_v1(target)
-            .map(|stats| stats.file_progress)
+        let stats = api.api_stats_v1(target).ok();
+        let progress = stats
+            .as_ref()
+            .map(|s| s.file_progress.clone())
             .unwrap_or_default();
+        details.stats = stats;
         Ok(map_files(&details, &progress))
     }
 
@@ -857,16 +860,24 @@ fn map_files(
         .files
         .as_ref()
         .map(|files| {
+            let single = files.len() == 1;
+            let total_progress = details.stats.as_ref().map(|s| s.progress_bytes).unwrap_or(0);
             files
                 .iter()
                 .enumerate()
-                .map(|(index, file)| TorrentFileItem {
-                    index,
-                    name: file.name.clone(),
-                    length: file.length,
-                    included: file.included,
-                    priority: file.priority,
-                    progress_bytes: progress.get(index).copied().unwrap_or(0),
+                .map(|(index, file)| {
+                    let mut file_progress = progress.get(index).copied().unwrap_or(0);
+                    if single && total_progress > file_progress {
+                        file_progress = total_progress.min(file.length);
+                    }
+                    TorrentFileItem {
+                        index,
+                        name: file.name.clone(),
+                        length: file.length,
+                        included: file.included,
+                        priority: file.priority,
+                        progress_bytes: file_progress,
+                    }
                 })
                 .collect()
         })

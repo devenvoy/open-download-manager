@@ -39,6 +39,17 @@ describe("reviewPlan", () => {
     expect(plan.error).toBeNull();
   });
 
+  it("defaults to all files in review when all files are currently unincluded", () => {
+    const unincludedFiles = [
+      makeTorrentFile({ index: 0, included: false }),
+      makeTorrentFile({ index: 1, included: false }),
+    ];
+    const plan = reviewPlan(unincludedFiles, null, false);
+    expect(plan.files).toEqual([0, 1]);
+    expect(plan.action).toBe("resume");
+    expect(plan.error).toBeNull();
+  });
+
   it("honours the explicit file selection", () => {
     const plan = reviewPlan(files, new Set([1]), false);
     expect(plan.files).toEqual([1]);

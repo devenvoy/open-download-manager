@@ -41,30 +41,44 @@ export function ClassicDialog({
   if (!open) return null;
 
   return (
-    <dialog
-      id={id}
-      className={cn("dialog", className)}
-      open
-      aria-labelledby={titleId}
-      aria-label={ariaLabel}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[0.5px] p-4 overflow-y-auto animate-in fade-in duration-100"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      role="presentation"
     >
-      <div className="dialog-title">
-        {typeof title === "string" ? (
-          <strong id={titleId}>{title}</strong>
-        ) : (
-          title
+      <dialog
+        id={id}
+        className={cn(
+          "dialog relative m-0 max-h-[90vh] overflow-auto shadow-2xl rounded-sm border border-[#8b8b8b] dark:border-[#383838]",
+          className,
         )}
-        <button
-          type="button"
-          className="close-button"
-          data-close
-          aria-label="Close"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      </div>
-      {children}
-    </dialog>
+        open
+        aria-labelledby={titleId}
+        aria-label={ariaLabel}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="dialog-title">
+          {typeof title === "string" ? (
+            <strong id={titleId}>{title}</strong>
+          ) : (
+            title
+          )}
+          <button
+            type="button"
+            className="close-button"
+            data-close
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </dialog>
+    </div>
   );
 }

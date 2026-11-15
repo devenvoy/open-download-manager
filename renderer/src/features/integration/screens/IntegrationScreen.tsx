@@ -56,7 +56,11 @@ export function IntegrationScreen() {
   }
 
   return (
-    <dialog id="integration-dialog" className="integration-dialog" open>
+    <dialog
+      id="integration-dialog"
+      className="integration-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static"
+      open
+    >
       <div className="dialog-title">
         <strong id="integration-title">Browser integration</strong>
         <button

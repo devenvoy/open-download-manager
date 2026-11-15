@@ -42,7 +42,7 @@ impl Default for TorrentSettings {
             listen_port: 0,
             enable_dht: true,
             enable_upnp: false,
-            enable_utp: false,
+            enable_utp: true,
             download_limit_kbps: 0,
             upload_limit_kbps: 0,
             // The engine's own default is 200, and so is qBittorrent's. A

@@ -53,9 +53,14 @@ export function ReviewPanel({
   }
 
   return (
-    <dialog id="add-dialog" className="add-dialog" open>
+    <dialog
+      id="add-dialog"
+      className="add-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static"
+      open
+    >
       <form
         id="add-form"
+        className="h-full flex flex-col overflow-hidden"
         onSubmit={(event) => submit(event, false)}
       >
         <div className="dialog-title">

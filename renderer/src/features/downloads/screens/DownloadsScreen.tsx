@@ -132,7 +132,7 @@ export function DownloadsScreen() {
       }
       sidebar={<CategorySidebar />}
       footer={
-        <footer className="status-bar">
+        <footer className="status-bar h-[22px] px-2 bg-[#f0f0f0] dark:bg-[#252526] border-t border-[#ccc] dark:border-[#383838] flex items-center justify-between text-[11px] text-[#555] dark:text-[#999] shrink-0 select-none">
           <span id="list-count">
             {isPending
               ? "Connecting…"
@@ -146,6 +146,7 @@ export function DownloadsScreen() {
       <DownloadsTable
         searchRef={searchInputRef}
         downloads={visible}
+        fileIcons={data?.fileIcons}
         selectedIds={selectedVisible}
         onToggle={toggleSelected}
         onSelectRow={(id, { additive, toggle }) => {

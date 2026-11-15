@@ -39,7 +39,7 @@ export function SchedulerScreen() {
   return (
     <dialog
       id="scheduler-dialog"
-      className="scheduler-dialog"
+      className="scheduler-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static"
       open
       aria-labelledby="scheduler-title"
     >

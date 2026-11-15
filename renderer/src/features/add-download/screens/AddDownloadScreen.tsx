@@ -171,7 +171,11 @@ export function AddDownloadScreen({ paste, scheduledAt }: AddDownloadScreenProps
   }
 
   return (
-    <dialog id="add-dialog" className="add-dialog" open>
+    <dialog
+      id="add-dialog"
+      className="add-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static"
+      open
+    >
       <AddDownloadForm
         values={values}
         error={error}

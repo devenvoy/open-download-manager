@@ -118,7 +118,10 @@ export function useTorrentActions() {
   const setFiles = useMutation({
     mutationFn: ({ id, included }: { id: number; included: number[] }) =>
       torrentsApi.setFiles(id, included),
-    onSuccess: refresh,
+    onSuccess: async (_data, variables) => {
+      await client.invalidateQueries({ queryKey: torrentKeys.files(variables.id) });
+      await refresh();
+    },
     onError: (error) => toast.error(friendlyError(error)),
   });
 

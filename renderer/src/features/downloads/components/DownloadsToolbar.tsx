@@ -21,6 +21,12 @@ export interface DownloadsToolbarProps {
   onOpenTorrents: () => void;
 }
 
+const TOOL_BTN_CLS =
+  "tool h-[63px] min-w-[53px] px-1 py-1 border border-transparent bg-transparent flex flex-col items-center justify-center gap-1.5 whitespace-nowrap shrink-0 text-[10px] text-inherit cursor-pointer hover:not-disabled:border-[#99b4d1] dark:hover:not-disabled:border-[#4a6a8a] hover:not-disabled:bg-[#e5eff9] dark:hover:not-disabled:bg-[#2d3b4a] active:not-disabled:border-[#6f95bd] dark:active:not-disabled:border-[#5d87b0] active:not-disabled:bg-[#cfdfef] dark:active:not-disabled:bg-[#364a5e] disabled:text-[#929292] dark:disabled:text-[#6a6a6a] disabled:opacity-40 transition-colors";
+
+const TOOL_DIV_CLS =
+  "tool-divider w-[1px] self-stretch bg-[#c8c8c8] dark:bg-[#383838] border-r border-white dark:border-[#2b2b2b] my-1.5 mx-1 shrink-0";
+
 export function DownloadsToolbar({
   selectedIds,
   canResume = selectedIds.length > 0,
@@ -42,10 +48,14 @@ export function DownloadsToolbar({
   onOpenTorrents,
 }: DownloadsToolbarProps) {
   return (
-    <div className="toolbar" role="toolbar" aria-label="Download commands">
+    <div
+      className="toolbar h-[70px] shrink-0 bg-[#f0f0f0] dark:bg-[#1e1e1e] border-t border-white dark:border-[#2b2b2b] border-b border-[#aaa] dark:border-[#383838] flex items-center px-1 py-0.5 overflow-hidden select-none"
+      role="toolbar"
+      aria-label="Download commands"
+    >
       <button
         id="new-download"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="add"
         title="Add URL (Ctrl+N)"
         onClick={onAdd}
@@ -57,7 +67,7 @@ export function DownloadsToolbar({
 
       <button
         id="resume-selected"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="resume"
         disabled={!canResume}
         onClick={onResume}
@@ -69,7 +79,7 @@ export function DownloadsToolbar({
 
       <button
         id="stop-selected"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="stop"
         disabled={!canStop}
         onClick={onStop}
@@ -81,7 +91,7 @@ export function DownloadsToolbar({
 
       <button
         id="pause-all"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="stopall"
         disabled={!canStopAll}
         onClick={onStopAll}
@@ -91,11 +101,11 @@ export function DownloadsToolbar({
         <span>Stop all</span>
       </button>
 
-      <span className="tool-divider" />
+      <span className={TOOL_DIV_CLS} />
 
       <button
         id="remove-selected"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="delete"
         disabled={!canDelete}
         onClick={onDelete}
@@ -107,7 +117,7 @@ export function DownloadsToolbar({
 
       <button
         id="remove-completed"
-        className="tool wide"
+        className={`${TOOL_BTN_CLS} wide min-w-[95px]`}
         data-icon="clear"
         disabled={!canDeleteCompleted}
         onClick={onDeleteCompleted}
@@ -117,11 +127,11 @@ export function DownloadsToolbar({
         <span>Delete Completed</span>
       </button>
 
-      <span className="tool-divider" />
+      <span className={TOOL_DIV_CLS} />
 
       <button
         id="settings-button"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="options"
         onClick={onOpenOptions}
         type="button"
@@ -132,7 +142,7 @@ export function DownloadsToolbar({
 
       <button
         id="scheduler-button"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="clock"
         onClick={onOpenScheduler}
         type="button"
@@ -143,7 +153,7 @@ export function DownloadsToolbar({
 
       <button
         id="resume-all"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="startqueue"
         onClick={onStartQueue}
         type="button"
@@ -154,7 +164,7 @@ export function DownloadsToolbar({
 
       <button
         id="stop-queue"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="stopqueue"
         onClick={onStopQueue}
         type="button"
@@ -163,11 +173,11 @@ export function DownloadsToolbar({
         <span>Stop Queue</span>
       </button>
 
-      <span className="tool-divider" />
+      <span className={TOOL_DIV_CLS} />
 
       <button
         id="integration-button"
-        className="tool integration-tool"
+        className={`${TOOL_BTN_CLS} integration-tool min-w-[104px]`}
         data-icon="browser"
         onClick={onOpenIntegration}
         type="button"
@@ -178,7 +188,7 @@ export function DownloadsToolbar({
 
       <button
         id="torrents-button"
-        className="tool"
+        className={TOOL_BTN_CLS}
         data-icon="torrent"
         title="Torrents (Beta)"
         onClick={onOpenTorrents}
@@ -186,7 +196,13 @@ export function DownloadsToolbar({
       >
         <ToolbarIcon name="torrent" />
         <span>
-          Torrents<i className="beta-tag" title="Beta">β</i>
+          Torrents
+          <i
+            className="beta-tag inline-block ml-0.5 px-0.5 rounded bg-[#d67b1f] text-white text-[8px] font-bold leading-[11px] align-[2px]"
+            title="Beta"
+          >
+            β
+          </i>
         </span>
       </button>
     </div>

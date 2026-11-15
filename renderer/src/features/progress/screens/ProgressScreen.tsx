@@ -18,6 +18,7 @@ import {
   useUpdateSettings,
 } from "../api";
 import { CompletionPanel } from "../components/CompletionPanel";
+import { CompletedPanel } from "../components/CompletedPanel";
 import { ReviewPanel } from "../components/ReviewPanel";
 import { SegmentSection } from "../components/SegmentSection";
 import { SpeedLimitPanel } from "../components/SpeedLimitPanel";
@@ -86,10 +87,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
   );
 
   const saveCompletionToggles = useCallback(
-    async (patch: {
-      notifyOnComplete: boolean;
-      revealOnComplete: boolean;
-    }) => {
+    async (patch: { notifyOnComplete: boolean; revealOnComplete: boolean }) => {
       await updateSettings.mutateAsync(patch);
     },
     [updateSettings],
@@ -97,7 +95,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
 
   if (snapshot.isPending) {
     return (
-      <dialog id="details-dialog" className="details-dialog" open>
+      <dialog id="details-dialog" className="details-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           Loading download progress…
         </div>
@@ -107,7 +105,7 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
 
   if (snapshot.isError || !download) {
     return (
-      <dialog id="details-dialog" className="details-dialog" open>
+      <dialog id="details-dialog" className="details-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           {snapshot.isError
             ? `Could not read download: ${snapshot.error instanceof Error ? snapshot.error.message : "Error"}`
@@ -141,15 +139,17 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
   return (
     <dialog
       id="details-dialog"
-      className={`details-dialog ${status === "completed" ? "is-complete" : ""}`}
+      className={`details-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static ${status === "completed" ? "is-complete" : ""}`}
       open
       aria-labelledby="details-title"
     >
       <div className="dialog-title">
         <strong id="details-title">
-          {`${percent !== null ? `${Math.floor(percent)}% ` : ""}${
-            download.filename || "Download status"
-          }`}
+          {status === "completed"
+            ? "Download complete"
+            : `${percent !== null ? `${Math.floor(percent)}% ` : ""}${
+                download.filename || "Download status"
+              }`}
         </strong>
         <button
           type="button"
@@ -305,6 +305,19 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
           Close
         </button>
       </div>
+
+      {status === "completed" && settings ? (
+        <CompletedPanel
+          download={download}
+          settings={settings}
+          onOpen={() => action.mutate("open")}
+          onReveal={() => action.mutate("reveal")}
+          onClose={close}
+          onUpdateSettings={async (patch) => {
+            await updateSettings.mutateAsync(patch);
+          }}
+        />
+      ) : null}
     </dialog>
   );
 }

@@ -6,6 +6,8 @@ export interface TorrentReviewPanelProps {
   files: TorrentFileItem[];
   loading: boolean;
   confirming: boolean;
+  selection?: Set<number> | null;
+  startPaused?: boolean;
   onConfirm: (included: number[], startPaused: boolean) => void;
   onCancel: () => void;
 }
@@ -15,10 +17,18 @@ export function TorrentReviewPanel({
   files,
   loading,
   confirming,
+  selection,
+  startPaused = false,
   onConfirm,
   onCancel,
 }: TorrentReviewPanelProps) {
-  const plan = reviewPlan(files, null, false);
+  const plan = reviewPlan(files, selection, startPaused);
+  const selectedCount = selection ? selection.size : files.length;
+  const hint = loading
+    ? "Fetching torrent metadata…"
+    : plan.error
+      ? plan.error
+      : `${selectedCount} of ${files.length} file${files.length === 1 ? "" : "s"} ticked. Nothing is downloaded until you start it.`;
 
   return (
     <div
@@ -31,13 +41,7 @@ export function TorrentReviewPanel({
         <strong id="torrent-review-name">
           {review.name || review.infoHash}
         </strong>
-        <span id="torrent-review-hint">
-          {loading
-            ? "Fetching torrent metadata…"
-            : plan.error
-              ? plan.error
-              : `Review files before starting (${files.length} file${files.length === 1 ? "" : "s"} found).`}
-        </span>
+        <span id="torrent-review-hint">{hint}</span>
       </div>
       <div className="torrent-review-actions">
         <button
@@ -45,7 +49,7 @@ export function TorrentReviewPanel({
           id="torrent-review-start"
           className="button primary"
           disabled={loading || confirming || Boolean(plan.error)}
-          onClick={() => onConfirm(plan.files, false)}
+          onClick={() => onConfirm(plan.files, startPaused)}
         >
           Start download
         </button>

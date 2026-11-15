@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use super::ytdlp::YtDlpTools;
 use crate::{
     application::{
         download_executor::{DownloadControl, DownloadProgressHandler},
@@ -29,12 +30,31 @@ impl YoutubeDownloadExecutor {
     pub async fn transfer(
         &self,
         download: DownloadRecord,
-        _progress_handler: DownloadProgressHandler,
-        _control: DownloadControl,
+        progress_handler: DownloadProgressHandler,
+        control: DownloadControl,
         _rate_limiter: Arc<DownloadRateLimiter>,
     ) -> AppResult<DownloadResult> {
+        if let Some(ytdlp) = YtDlpTools::new() {
+            let directory = download
+                .directory
+                .as_ref()
+                .map(PathBuf::from)
+                .ok_or_else(|| AppError::download("Download directory is not set."))?;
+            let destination = directory.join(&download.filename);
+            return ytdlp
+                .download(
+                    &download.url,
+                    download.youtube_format.as_deref(),
+                    download.referer.as_deref(),
+                    &destination,
+                    progress_handler,
+                    control,
+                    0,
+                )
+                .await;
+        }
         Err(AppError::download(format!(
-            "The address '{}' is a web page, not a direct media stream. To download this video with full multi-connection acceleration, please play the video in your web browser and click the Download button on the media panel.",
+            "yt-dlp is required to download media from '{}'. Please install yt-dlp in Settings > Media Tools.",
             download.url
         )))
     }

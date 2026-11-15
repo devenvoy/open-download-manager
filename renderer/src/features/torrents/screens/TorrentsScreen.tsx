@@ -18,11 +18,9 @@ import { TorrentDetails } from "../components/TorrentDetails";
 import { TorrentEngineBanner } from "../components/TorrentEngineBanner";
 import { TorrentList } from "../components/TorrentList";
 import { TorrentRemoveDialog } from "../components/TorrentRemoveDialog";
-import { TorrentReviewPanel } from "../components/TorrentReviewPanel";
 import { TorrentSettingsDialog } from "../components/TorrentSettingsDialog";
 import { TorrentToolbar } from "../components/TorrentToolbar";
 
-/** The standalone Torrents window (`torrents.html`). */
 export function TorrentsScreen() {
   const status = useTorrentEngine();
   const list = useTorrentList();
@@ -34,6 +32,40 @@ export function TorrentsScreen() {
   const [removeOpen, setRemoveOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const [splitWidth, setSplitWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("odm:torrent-split-width");
+      const parsed = saved ? parseInt(saved, 10) : 380;
+      return Number.isFinite(parsed) && parsed >= 260 ? parsed : 380;
+    } catch {
+      return 380;
+    }
+  });
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = splitWidth;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const next = Math.max(260, Math.min(window.innerWidth - 280, startW + (ev.clientX - startX)));
+      setSplitWidth(next);
+      try {
+        localStorage.setItem("odm:torrent-split-width", String(next));
+      } catch {
+        // ignore
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [splitWidth]);
+
   const selectedId = useTorrentsStore((state) => state.selectedId);
   const select = useTorrentsStore((state) => state.select);
   const tab = useTorrentsStore((state) => state.tab);
@@ -44,23 +76,16 @@ export function TorrentsScreen() {
   const answered = useTorrentsStore((state) => state.answeredReviews);
   const markReviewAnswered = useTorrentsStore((state) => state.markReviewAnswered);
 
-  // The torrent window needs the app theme, which lives in the manager settings.
-  const snapshot = useQuery({
-    ...snapshotQueryOptions,
-    refetchInterval: false,
-    staleTime: Infinity,
-  });
-  useHydrateTheme(snapshot.data?.settings.theme);
+  const snapshot = useQuery({ ...snapshotQueryOptions, refetchInterval: false, staleTime: Infinity });
+  useHydrateTheme(snapshot.data?.settings?.theme);
 
   const torrents = useMemo(() => list.data ?? [], [list.data]);
   const selected = torrents.find((torrent) => torrent.id === selectedId) ?? null;
   const summary = useMemo(() => summarize(torrents), [torrents]);
 
   const filesQuery = useTorrentFiles(selected?.id ?? null);
-  const reviewFilesQuery = useTorrentFiles(review?.id ?? null);
   const trackersQuery = useTorrentTrackers(selected?.id ?? null, tab === "trackers");
 
-  // Keep one row selected so the detail panel is never empty by accident.
   useEffect(() => {
     if (selectedId !== null) {
       if (torrents.some((torrent) => torrent.id === selectedId)) return;
@@ -70,17 +95,25 @@ export function TorrentsScreen() {
     if (torrents[0]) select(torrents[0].id);
   }, [torrents, selectedId, select]);
 
-  // A review that the user already answered must not come back.
   useEffect(() => {
-    if (review && answered.has(review.infoHash)) setReview(null);
-  }, [review, answered, setReview]);
+    if (review && answered.has(review.infoHash)) {
+      setReview(null);
+    } else if (review) {
+      select(review.id);
+      useTorrentsStore.getState().setTab("files");
+    }
+  }, [review, answered, setReview, select]);
 
-  // A new torrent means a new file list; drop the old ticks.
   useEffect(() => {
     setFileSelection(null);
   }, [selected?.infoHash, setFileSelection]);
 
-  const files = useMemo(() => filesQuery.data ?? [], [filesQuery.data]);
+  const files = useMemo(() => {
+    if (filesQuery.data && filesQuery.data.length > 0) return filesQuery.data;
+    if (selected?.files && selected.files.length > 0) return selected.files;
+    return [];
+  }, [filesQuery.data, selected?.files]);
+
   const includedFiles = useMemo(
     () => new Set(files.filter((file) => file.included).map((file) => file.index)),
     [files],
@@ -95,11 +128,7 @@ export function TorrentsScreen() {
       if (!selected) return;
       actions.action.mutate(
         { id: selected.id, action: kind },
-        {
-          onSuccess: () => {
-            if (kind === "forget" || kind === "delete") select(null);
-          },
-        },
+        { onSuccess: () => { if (kind === "forget" || kind === "delete") select(null); } },
       );
     },
     [selected, actions.action, select],
@@ -122,16 +151,14 @@ export function TorrentsScreen() {
         { id: review.id, included },
         {
           onSuccess: () => {
-            actions.action.mutate({
-              id: review.id,
-              action: startPaused ? "pause" : "resume",
-            });
+            actions.action.mutate({ id: review.id, action: startPaused ? "pause" : "resume" });
+            setFileSelection(null);
             setReview(null);
           },
         },
       );
     },
-    [review, markReviewAnswered, actions.setFiles, actions.action, setReview],
+    [review, markReviewAnswered, actions.setFiles, actions.action, setReview, setFileSelection],
   );
 
   const handleCancelReview = useCallback(() => {
@@ -142,10 +169,7 @@ export function TorrentsScreen() {
   }, [review, markReviewAnswered, actions.action, setReview]);
 
   const busy =
-    actions.action.isPending ||
-    actions.addFile.isPending ||
-    actions.addMagnet.isPending ||
-    actions.setFiles.isPending;
+    actions.action.isPending || actions.addFile.isPending || actions.addMagnet.isPending || actions.setFiles.isPending;
 
   return (
     <div className="torrent-shell">
@@ -162,39 +186,20 @@ export function TorrentsScreen() {
       {status.data ? (
         <TorrentEngineBanner
           status={status.data}
-          onEnable={() =>
-            settings.data &&
-            actions.saveSettings.mutate({ ...settings.data, enabled: true })
-          }
+          onEnable={() => settings.data && actions.saveSettings.mutate({ ...settings.data, enabled: true })}
           onRestart={() => actions.restartEngine.mutate()}
           restarting={actions.restartEngine.isPending}
         />
       ) : null}
 
-      {review ? (
-        <TorrentReviewPanel
-          review={review}
-          files={reviewFilesQuery.data ?? []}
-          loading={reviewFilesQuery.isPending}
-          confirming={actions.setFiles.isPending}
-          onConfirm={handleConfirmReview}
-          onCancel={handleCancelReview}
-        />
-      ) : null}
-
-      <div className="torrent-main">
+      <div className="torrent-main" style={{ gridTemplateColumns: `${splitWidth}px 4px minmax(0, 1fr)` }}>
         <section className="torrent-list-pane" aria-label="Torrents">
           <div className="torrent-list-header">
             <span>Name</span>
             <span>Size</span>
             <span>Status</span>
           </div>
-          <div
-            id="torrent-list"
-            className="torrent-list"
-            role="listbox"
-            tabIndex={0}
-          >
+          <div id="torrent-list" className="torrent-list" role="listbox" tabIndex={0}>
             {list.isPending ? (
               <div className="p-3" aria-label="Loading torrents">
                 Loading torrents…
@@ -202,45 +207,45 @@ export function TorrentsScreen() {
             ) : torrents.length === 0 ? (
               <div id="torrent-empty" className="torrent-empty">
                 <strong>No torrents yet</strong>
-                <span>
-                  Add a magnet link or open a .torrent file to start downloading.
-                </span>
+                <span>Add a magnet link or open a .torrent file to start downloading.</span>
               </div>
             ) : (
-              <TorrentList
-                torrents={torrents}
-                selectedId={selectedId}
-                onSelect={select}
-              />
+              <TorrentList torrents={torrents} selectedId={selectedId} onSelect={select} />
             )}
           </div>
         </section>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="torrent-splitter"
+          onMouseDown={handleMouseDown}
+          title="Drag to resize"
+        />
 
         <section className="torrent-detail-pane" aria-label="Torrent details">
           {selected ? (
             <TorrentDetails
               torrent={selected}
               files={files}
-              filesLoading={filesQuery.isPending}
+              filesLoading={filesQuery.isPending && files.length === 0}
               trackers={trackersQuery.data ?? []}
               trackersLoading={trackersQuery.isPending}
               filesDirty={filesDirty}
               applyingFiles={actions.setFiles.isPending}
+              review={review}
+              reviewConfirming={actions.setFiles.isPending}
+              startPaused={Boolean(settings.data?.startPaused)}
+              onConfirmReview={handleConfirmReview}
+              onCancelReview={handleCancelReview}
               onToggleFile={toggleFile}
-              onSetAllFiles={(checked) =>
-                setAllFiles(
-                  files.map((file) => file.index),
-                  checked,
-                )
-              }
+              onSetAllFiles={(checked) => setAllFiles(files.map((file) => file.index), checked)}
               onApplyFiles={handleApplyFiles}
             />
           ) : (
             <div id="torrent-detail-empty" className="torrent-detail-empty">
               <strong>Select a torrent</strong>
-              <span>
-                Choose a torrent in the list to see its progress, files, and trackers.
-              </span>
+              <span>Choose a torrent in the list to see its progress, files, and trackers.</span>
             </div>
           )}
         </section>
@@ -249,20 +254,29 @@ export function TorrentsScreen() {
       {addMode && (
         <AddTorrentDialog
           initialMode={addMode}
-          onAddMagnet={(magnet, opts) => actions.addMagnet.mutate({ magnet, options: opts })}
-          onAddFile={(path, opts) => actions.addFile.mutate({ path, options: opts })}
+          onAddMagnet={async (magnet, opts) => {
+            const res = await actions.addMagnet.mutateAsync({ magnet, options: opts });
+            if (res && typeof res.id === "number") {
+              select(res.id);
+              useTorrentsStore.getState().setTab("files");
+              setReview({ id: res.id, name: res.name || "Torrent", infoHash: res.infoHash || "" });
+            }
+          }}
+          onAddFile={async (path, opts) => {
+            const res = await actions.addFile.mutateAsync({ path, options: opts });
+            if (res && typeof res.id === "number") {
+              select(res.id);
+              useTorrentsStore.getState().setTab("files");
+              setReview({ id: res.id, name: res.name || "Torrent", infoHash: res.infoHash || "" });
+            }
+          }}
           onClose={() => setAddMode(null)}
           pending={busy}
         />
       )}
 
       {removeOpen && selected && (
-        <TorrentRemoveDialog
-          torrent={selected}
-          disabled={busy}
-          onAction={handleAction}
-          onClose={() => setRemoveOpen(false)}
-        />
+        <TorrentRemoveDialog torrent={selected} disabled={busy} onAction={handleAction} onClose={() => setRemoveOpen(false)} />
       )}
 
       {settingsOpen && settings.data && (

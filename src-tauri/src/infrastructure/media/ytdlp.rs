@@ -212,7 +212,15 @@ impl YtDlpTools {
             .arg("--progress-delta")
             .arg("0.5")
             .arg("--progress-template")
-            .arg("download:ADPROGRESS:%(progress)j");
+            .arg("download:ADPROGRESS:%(progress)j")
+            .arg("--embed-metadata")
+            .arg("--embed-chapters")
+            .arg("--embed-subs")
+            .arg("--write-subs")
+            .arg("--sub-langs")
+            .arg("all")
+            .arg("--compat-options")
+            .arg("no-abort-on-error");
 
         if let Some(ffmpeg_path) = super::tools::find_tool_path("ffmpeg") {
             command.arg("--ffmpeg-location").arg(ffmpeg_path);
@@ -221,33 +229,53 @@ impl YtDlpTools {
             command.arg("--referer").arg(referer);
         }
 
-        if let Some(spec) = format_spec {
-            let clean = spec.trim().trim_start_matches("audio:");
-            let resilient_spec = if clean.contains('+') {
-                let parts: Vec<&str> = clean.splitn(2, '+').collect();
-                let v = parts[0].trim();
-                let a = parts[1].trim();
-                format!("{v}+{a}/{v}+ba/{v}+bestaudio/bv*+ba/best")
-            } else if !clean.is_empty() {
-                format!("{clean}/ba/bestaudio/best")
-            } else {
-                "bv*+ba/best".to_string()
-            };
-            command.arg("-f").arg(resilient_spec);
-        } else {
-            command.arg("-f").arg("bv*+ba/best");
-        }
-
         let output_format = destination
             .to_string_lossy()
             .to_ascii_lowercase()
             .rsplit_once('.')
             .map(|(_, extension)| extension.to_owned())
             .unwrap_or_default();
+
+        let is_mp4 = output_format == "mp4" || output_format.is_empty();
+
+        if let Some(spec) = format_spec {
+            let clean = spec.trim().trim_start_matches("audio:");
+            let resilient_spec = if clean.contains('+') {
+                let parts: Vec<&str> = clean.splitn(2, '+').collect();
+                let v = parts[0].trim();
+                let a = parts[1].trim();
+                if is_mp4 {
+                    format!("{v}+{a}/{v}+ba[acodec^=mp4a]/{v}+ba/bv*[vcodec^=avc]+ba[acodec^=mp4a]/bv*+ba/best")
+                } else {
+                    format!("{v}+{a}/{v}+ba/{v}+bestaudio/bv*+ba/best")
+                }
+            } else if !clean.is_empty() {
+                if is_mp4 {
+                    format!("{clean}/ba[acodec^=mp4a]/ba/bestaudio/best")
+                } else {
+                    format!("{clean}/ba/bestaudio/best")
+                }
+            } else if is_mp4 {
+                "bv*[vcodec^=avc]+ba[acodec^=mp4a]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/best".to_string()
+            } else {
+                "bv*+ba/best".to_string()
+            };
+            command.arg("-f").arg(resilient_spec);
+        } else if is_mp4 {
+            command.arg("-f").arg("bv*[vcodec^=avc]+ba[acodec^=mp4a]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/best");
+        } else {
+            command.arg("-f").arg("bv*+ba/best");
+        }
+
+        if is_mp4 {
+            // Prioritize standard H.264/AAC for seamless playback on native media players (QuickTime / Windows Media)
+            command.arg("--format-sort").arg("vcodec:h264,acodec:aac");
+        }
+
         if output_format == "mp3" {
             command.arg("--extract-audio").arg("--audio-format").arg("mp3");
         } else if matches!(output_format.as_str(), "mp4" | "webm") {
-            command.arg("--merge-output-format").arg(output_format);
+            command.arg("--merge-output-format").arg(&output_format);
         } else {
             command.arg("--merge-output-format").arg("mp4");
         }

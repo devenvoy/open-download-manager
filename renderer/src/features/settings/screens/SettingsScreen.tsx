@@ -17,7 +17,7 @@ export function SettingsScreen() {
 
   if (isPending) {
     return (
-      <dialog id="settings-dialog" className="settings-dialog" open>
+      <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           Loading options…
         </div>
@@ -27,7 +27,7 @@ export function SettingsScreen() {
 
   if (isError) {
     return (
-      <dialog id="settings-dialog" className="settings-dialog" open>
+      <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
         <div className="dialog-body" style={{ padding: 20 }}>
           Could not load settings: {error instanceof Error ? error.message : "Error"}
         </div>
@@ -36,7 +36,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <dialog id="settings-dialog" className="settings-dialog" open>
+    <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
       <SettingsPanel
         settings={data.settings}
         saving={updateSettings.isPending}
