@@ -6,21 +6,14 @@
 
 use std::path::{Path, PathBuf};
 
-use tokio::{
-    fs::{self, OpenOptions},
-    io::{AsyncReadExt, AsyncWriteExt},
+use tokio::fs;
+
+use crate::application::{
+    download_result::DownloadResult,
+    error::{AppError, AppResult},
 };
 
-use crate::{
-    application::{
-        download_executor::{stopped_error, DownloadControl},
-        download_result::DownloadResult,
-        error::{AppError, AppResult},
-    },
-    domain::download::DownloadSegmentProgress,
-};
-
-use super::policy::{CONCAT_BUFFER_SIZE, TEMPORARY_DOWNLOAD_PREFIX};
+use super::policy::TEMPORARY_DOWNLOAD_PREFIX;
 
 pub(crate) fn segment_path(directory: &Path, id: &str, index: usize) -> PathBuf {
     directory.join(format!(
@@ -87,85 +80,6 @@ pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppRe
         }
     }
     Ok(removed_any)
-}
-
-pub async fn concat_segments(
-    id: &str,
-    segments: &[DownloadSegmentProgress],
-    directory: &Path,
-    temporary: &Path,
-    control: &mut DownloadControl,
-) -> AppResult<()> {
-    let mut sorted_chunks: Vec<(usize, &DownloadSegmentProgress)> =
-        segments.iter().enumerate().collect();
-    sorted_chunks.sort_by_key(|(_, s)| s.start);
-
-    let mut expected_start = 0_u64;
-    for (_, s) in &sorted_chunks {
-        if s.start != expected_start {
-            return Err(AppError::download(format!(
-                "Inconsistent chunk boundary during assembly: expected start {expected_start}, found {}",
-                s.start
-            )));
-        }
-        expected_start = s.end + 1;
-    }
-
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(temporary)
-        .await
-        .map_err(|error| {
-            AppError::download(format!("Could not assemble the download file: {error}"))
-        })?;
-
-    let mut buffer = vec![0; CONCAT_BUFFER_SIZE];
-    for (segment_index, _) in sorted_chunks {
-        let path = segment_path(directory, id, segment_index);
-        let mut input = fs::File::open(path).await.map_err(|error| {
-            AppError::download(format!("Could not read a completed segment: {error}"))
-        })?;
-        loop {
-            let count = input.read(&mut buffer).await.map_err(|error| {
-                AppError::download(format!("Could not read a completed segment: {error}"))
-            })?;
-            if count == 0 {
-                break;
-            }
-            if let Some(reason) = control.current_stop_reason() {
-                output.sync_all().await.map_err(|error| {
-                    AppError::download(format!("Could not save the partial assembly: {error}"))
-                })?;
-                drop(output);
-                fs::remove_file(temporary).await.map_err(|error| {
-                    AppError::download(format!("Could not discard the partial assembly: {error}"))
-                })?;
-                return Err(stopped_error(reason));
-            }
-            output.write_all(&buffer[..count]).await.map_err(|error| {
-                AppError::download(format!("Could not assemble the download file: {error}"))
-            })?;
-        }
-    }
-    if let Some(reason) = control.current_stop_reason() {
-        output.sync_all().await.map_err(|error| {
-            AppError::download(format!("Could not save the partial assembly: {error}"))
-        })?;
-        drop(output);
-        fs::remove_file(temporary).await.map_err(|error| {
-            AppError::download(format!("Could not discard the partial assembly: {error}"))
-        })?;
-        return Err(stopped_error(reason));
-    }
-    output.flush().await.map_err(|error| {
-        AppError::download(format!("Could not finalize the assembled file: {error}"))
-    })?;
-    output.sync_all().await.map_err(|error| {
-        AppError::download(format!("Could not finalize the assembled file: {error}"))
-    })?;
-    Ok(())
 }
 
 pub async fn finalize(

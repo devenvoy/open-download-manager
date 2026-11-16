@@ -12,4 +12,3 @@ pub(crate) const MAX_TRANSIENT_RETRIES: u8 = 3;
 pub(crate) const INITIAL_RETRY_DELAY_MILLISECONDS: u64 = 250;
 pub(crate) const MAX_RETRY_DELAY_SECONDS: u64 = 30;
 pub(crate) const TEMPORARY_DOWNLOAD_PREFIX: &str = ".open-download-manager-";
-pub(crate) const CONCAT_BUFFER_SIZE: usize = 256 * 1024;
