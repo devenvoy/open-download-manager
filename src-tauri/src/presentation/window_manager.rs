@@ -192,7 +192,7 @@ pub fn activate_existing_window(window: &WebviewWindow) -> AppResult<()> {
 }
 
 fn initial_aux_window_visibility() -> bool {
-    !cfg!(target_os = "windows")
+    false
 }
 
 pub async fn show_window_on_ready_or_fallback(
@@ -202,10 +202,7 @@ pub async fn show_window_on_ready_or_fallback(
 ) {
     let fallback = std::time::Duration::from_millis(1500);
     let _ = crate::infrastructure::perf::wait_for_window_ui_ready(&label, fallback).await;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = window.show();
-    }
+    let _ = window.show();
     if !crate::infrastructure::smoke::is_smoke_test() {
         let _ = window.set_focus();
     }

@@ -1,6 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { App } from "@/app/App";
 import { Providers } from "@/app/providers";
 import { readWindowRoute } from "@/app/window-mode";
@@ -20,8 +19,7 @@ try {
   ).__TAURI_INTERNALS__;
   windowLabel =
     internals?.metadata?.currentWebview?.label ??
-    internals?.metadata?.currentWindow?.label ??
-    getCurrentWebviewWindow().label;
+    internals?.metadata?.currentWindow?.label;
 } catch {
   // Running in non-Tauri browser context or test runner
 }
