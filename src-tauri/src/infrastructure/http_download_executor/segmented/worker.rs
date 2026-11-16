@@ -35,7 +35,14 @@ use super::{
     MIN_CHUNK_REASSIGN_BYTES,
 };
 
-const SYNC_INTERVAL_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB flush buffer
+const DEFAULT_SYNC_INTERVAL_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB default flush buffer
+
+fn flush_cadence_bytes() -> u64 {
+    std::env::var("ODM_FLUSH_CADENCE_BYTES")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SYNC_INTERVAL_BYTES)
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_segment_worker(
@@ -619,7 +626,8 @@ async fn download_chunk(
         downloaded += to_write;
 
         // Periodic range map flush
-        if downloaded.saturating_sub(last_synced) >= SYNC_INTERVAL_BYTES {
+        let cadence = flush_cadence_bytes();
+        if cadence > 0 && downloaded.saturating_sub(last_synced) >= cadence {
             let _ = sync_worker_data(&worker_file);
             if let Ok(mut rm) = range_map.lock() {
                 rm.add_range(start_offset + last_synced, write_offset + to_write - 1);
