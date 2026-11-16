@@ -34,7 +34,7 @@ pub fn torrent_list(state: State<'_, AppState>) -> AppResult<Vec<TorrentListItem
     state.torrents.list()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_add_magnet(
     state: State<'_, AppState>,
     magnet: String,
@@ -50,7 +50,7 @@ pub async fn torrent_add_magnet(
         })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_add_file(
     state: State<'_, AppState>,
     path: String,
@@ -76,7 +76,7 @@ pub fn torrent_take_review(state: State<'_, AppState>) -> Option<TorrentReviewRe
     review
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_action(
     state: State<'_, AppState>,
     id: usize,
@@ -103,7 +103,7 @@ pub fn torrent_tracker_status(
     state.torrents.tracker_status(id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_set_files(
     state: State<'_, AppState>,
     id: usize,
@@ -125,7 +125,7 @@ pub fn torrent_settings_get(state: State<'_, AppState>) -> TorrentSettings {
     state.torrents.settings()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_settings_set(
     state: State<'_, AppState>,
     settings: TorrentSettings,
@@ -140,7 +140,7 @@ pub fn torrent_set_watching(state: State<'_, AppState>, watching: bool) {
     state.torrents.set_watching(watching);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn torrent_restart_engine(state: State<'_, AppState>) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("torrent_restart_engine");
     state.torrents.restart_engine().await

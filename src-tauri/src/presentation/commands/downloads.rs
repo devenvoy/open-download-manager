@@ -37,7 +37,7 @@ pub fn check_destination_conflict(
         .check_destination_conflict(&directory, &filename)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn add_download(
     state: State<'_, AppState>,
     request: DownloadRequest,
@@ -111,7 +111,7 @@ pub fn update_download_completion_actions(
         .update_download_completion_actions(&id, actions)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn retry_download_actions(
     state: State<'_, AppState>,
     id: String,

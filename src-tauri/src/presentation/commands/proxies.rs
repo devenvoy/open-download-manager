@@ -10,7 +10,7 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn test_proxy_connection(
     proxy: ProxySettings,
     test_url: Option<String>,

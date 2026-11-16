@@ -82,7 +82,7 @@ pub fn show_about_dialog(app: tauri::AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("check_for_updates");
     let service = state.update_service.clone();

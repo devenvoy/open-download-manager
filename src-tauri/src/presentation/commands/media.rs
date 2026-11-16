@@ -16,7 +16,7 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn get_playlist_info(
     state: State<'_, AppState>,
     url: String,
@@ -82,7 +82,7 @@ pub async fn get_playlist_info(
     ytdlp.fetch_playlist_info(&url).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn resolve_asx_playlist(
     url_or_content: String,
 ) -> AppResult<AsxPlaylist> {
@@ -109,7 +109,7 @@ pub async fn resolve_asx_playlist(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn get_video_formats(
     state: State<'_, AppState>,
     url: String,
@@ -134,7 +134,7 @@ pub fn get_media_tools_status() -> AppResult<Vec<MediaToolStatus>> {
     Ok(manager.status_all())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn install_media_tool(
     tool: MediaToolType,
 ) -> AppResult<MediaToolStatus> {

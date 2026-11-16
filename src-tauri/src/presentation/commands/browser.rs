@@ -16,7 +16,7 @@ pub fn get_integration_info(state: State<'_, AppState>) -> AppResult<Integration
     state.integration.get_integration_info()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn register_browser(
     state: State<'_, AppState>,
     browser: String,
@@ -29,7 +29,7 @@ pub async fn register_browser(
         .await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn browser_setup_action(
     state: State<'_, AppState>,
     action: String,
