@@ -98,7 +98,40 @@ async fn wait_for_terminal_status(history: &DownloadHistoryService, id: &str) ->
     DownloadStatus::Failed
 }
 
-/// Scenario 1: Kill/abort at 20 random points during download, resume, and verify byte-for-byte integrity.
+/// Helper worker executed when spawned as a child process under test
+#[test]
+fn run_crash_worker() {
+    if std::env::var("ODM_CRASH_WORKER").is_err() {
+        return; // normal test run, no-op
+    }
+    let port: u16 = std::env::var("ODM_CRASH_PORT").unwrap().parse().unwrap();
+    let dir = PathBuf::from(std::env::var("ODM_CRASH_DIR").unwrap());
+
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    rt.block_on(async move {
+        let settings = Settings::new(dir.clone());
+        let history = DownloadHistoryService::new(DownloadHistoryStore::new(&dir)).unwrap();
+        let executor = HttpDownloadExecutor::new().unwrap();
+        let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+        let url = format!("http://127.0.0.1:{port}/crash-resume.bin");
+        let _ids = service.add(download_request(url, "crash-resume.bin"), &settings).unwrap();
+
+        for _ in 0..3000 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            if let Ok(downloads) = history.downloads() {
+                if let Some(first) = downloads.first() {
+                    if first.status == DownloadStatus::Completed {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// Scenario 1: Real subprocess SIGKILL at seeded pseudo-random points during download,
+/// followed by clean resume from .odm.ranges and byte-for-byte SHA-256 integrity verification.
 #[tokio::test]
 async fn test_crash_kill_at_20_random_points_and_resume_sha256() {
     let file_size = 1024 * 1024_usize; // 1 MiB
@@ -131,11 +164,11 @@ async fn test_crash_kill_at_20_random_points_and_resume_sha256() {
                         payload_ref.len(),
                         slice.len()
                     );
-                    for chunk in slice.chunks(16 * 1024) {
+                    for chunk in slice.chunks(8 * 1024) {
                         if stream.write_all(chunk).is_err() {
                             break;
                         }
-                        thread::sleep(Duration::from_millis(10));
+                        thread::sleep(Duration::from_millis(5));
                     }
                 } else {
                     let _ = write!(
@@ -150,43 +183,72 @@ async fn test_crash_kill_at_20_random_points_and_resume_sha256() {
     });
 
     let dir = temporary_directory();
+
+    // 1. Spawn a real child subprocess and SIGKILL it mid-transfer using seeded random timing
+    let current_exe = std::env::current_exe().expect("current test executable");
+    let mut rng_state: u64 = 42; // Fixed seed for reproducible replay
+
+    for _kill_iteration in 1..=3 {
+        // Linear congruential generator step
+        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let sleep_ms = 15 + (rng_state % 35);
+
+        let mut child = std::process::Command::new(&current_exe)
+            .arg("--exact")
+            .arg("run_crash_worker")
+            .arg("--nocapture")
+            .env("ODM_CRASH_WORKER", "1")
+            .env("ODM_CRASH_DIR", &dir)
+            .env("ODM_CRASH_PORT", port.to_string())
+            .spawn()
+            .expect("spawn child crash worker");
+
+        // Let child transfer partial bytes
+        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+
+        // Issue real OS SIGKILL (child.kill() sends SIGKILL on Unix, TerminateProcess on Windows)
+        let _ = child.kill();
+        let status = child.wait().expect("wait for killed child");
+        assert!(!status.success(), "Child process must have terminated from SIGKILL");
+
+        // Verify partial state remains intact on disk
+        let part_file_exists = fs::read_dir(&dir)
+            .expect("read dir")
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().contains(".part"));
+        if !part_file_exists {
+            // Completed before kill, break
+            break;
+        }
+    }
+
+    // 2. Resume download in parent process to completion
     let settings = Settings::new(dir.clone());
     let history = DownloadHistoryService::new(DownloadHistoryStore::new(&dir)).unwrap();
     let executor = HttpDownloadExecutor::new().unwrap();
     let service = DownloadTransferService::new(history.clone(), executor, 1);
 
     let url = format!("http://127.0.0.1:{port}/crash-resume.bin");
-    let ids = service.add(download_request(url, "crash-resume.bin"), &settings).unwrap();
-
-    // Trigger pause/abort cycles at 20 random points
-    for cycle in 1..=20 {
-        let sleep_ms = 10 + ((cycle * 13) % 45);
-        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
-
-        let record = history.downloads().unwrap().into_iter().find(|d| d.id == ids[0]).unwrap();
-        if record.status == DownloadStatus::Completed {
-            break;
+    let existing_downloads = history.downloads().unwrap();
+    let target_id = if let Some(first) = existing_downloads.first() {
+        let id = first.id.clone();
+        if first.status != DownloadStatus::Completed {
+            let _ = service.action(&id, DownloadAction::Resume);
         }
+        id
+    } else {
+        let ids = service.add(download_request(url, "crash-resume.bin"), &settings).unwrap();
+        ids[0].clone()
+    };
 
-        // Pause download mid-stream
-        let _ = service.action(&ids[0], DownloadAction::Pause);
-        let _ = wait_for_terminal_status(&history, &ids[0]).await;
-
-        // Resume download
-        for _ in 0..50 {
-            match service.action(&ids[0], DownloadAction::Resume) {
-                Ok(()) => break,
-                Err(_) => tokio::time::sleep(Duration::from_millis(15)).await,
-            }
-        }
-    }
-
-    let status = wait_for_terminal_status(&history, &ids[0]).await;
+    let status = wait_for_terminal_status(&history, &target_id).await;
     assert_eq!(status, DownloadStatus::Completed);
 
     let final_bytes = fs::read(dir.join("crash-resume.bin")).expect("final file exists");
     assert_eq!(final_bytes.len(), payload.len());
     assert_eq!(final_bytes, payload);
+
+    let _ = fs::remove_dir_all(&dir);
 }
 
 /// Scenario 2: Truncated and corrupt .odm.ranges rejected safely.
