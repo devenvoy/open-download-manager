@@ -51,6 +51,11 @@ export function AddTorrentDialog({
         setError("Invalid magnet link. Must start with magnet:?");
         return;
       }
+      try {
+        performance.mark("torrent:add-click");
+      } catch {
+        // Ignored if performance timing is unavailable
+      }
       setSubmitting(true);
       try {
         await onAddMagnet(trimmed, options);

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { formatBytes } from "@/lib/format";
 import { type TorrentListItem } from "@/types/ipc";
 import { FileTypeIcon } from "@/lib/file-icon";
@@ -15,6 +16,27 @@ export interface TorrentListProps {
 }
 
 export function TorrentList({ torrents, selectedId, onSelect }: TorrentListProps) {
+  useEffect(() => {
+    if (torrents.length > 0) {
+      try {
+        const clickMarks = performance.getEntriesByName("torrent:add-click");
+        if (clickMarks.length > 0) {
+          performance.mark("torrent:row-rendered");
+          const measure = performance.measure(
+            "torrent:click-to-row",
+            "torrent:add-click",
+            "torrent:row-rendered",
+          );
+          console.log(`[CLICK_TO_ROW] ${measure.duration.toFixed(2)} ms`);
+          performance.clearMarks("torrent:add-click");
+          performance.clearMarks("torrent:row-rendered");
+        }
+      } catch {
+        // Ignored if marks unavailable
+      }
+    }
+  }, [torrents.length]);
+
   return (
     <>
       {torrents.map((torrent) => {

@@ -76,7 +76,7 @@ pub struct TorrentListItem {
     pub files: Vec<TorrentFileItem>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TorrentAddOptions {
     pub output_folder: Option<String>,
