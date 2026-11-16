@@ -1,0 +1,381 @@
+{
+  "metadata": {
+    "rig": "Apple Silicon M2 / macOS 15.x / Internal APFS NVMe SSD",
+    "server": "tools/dev/benchmark-server.ts (Bun loopback)",
+    "server_ceiling_mb_s": 6224.25,
+    "baseline_commit_sha": "bbdc7ea1bbec0768b4447cbe9dd7bb84cf751025",
+    "baseline_binary_sha256": "08518408d40132efdece34b01f14c51287b1a3a977a90de5754e6e76087997c5",
+    "sparse_commit_sha": "f0e063f88156fe419601b0a6411c64debe7ab31f",
+    "sparse_binary_sha256": "f1d637719674130c54ea89c2178ba73afaecb919ef7e39953adf2acd5cdda16f",
+    "interleaved_execution": true,
+    "flush_cadence_bytes": 4194304
+  },
+  "baseline": {
+    "timestamp": "2026-11-16T20:10:37.465793+00:00",
+    "summaries": [
+      {
+        "size_label": "1 GiB",
+        "size_bytes": 1073741824,
+        "runs": 5,
+        "start_to_first_byte": {
+          "min": 1.645,
+          "median": 248.054208,
+          "max": 254.416917
+        },
+        "transfer": {
+          "min": 1206.1603750000002,
+          "median": 2220.5188749999998,
+          "max": 3667.302583
+        },
+        "concat_finish": {
+          "min": 1179.305041,
+          "median": 2364.746959,
+          "max": 4040.4184589999995
+        },
+        "total": {
+          "min": 2387.110416,
+          "median": 4833.320042,
+          "max": 7618.717667
+        },
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": {
+          "min": 18.015625,
+          "median": 20.3125,
+          "max": 20.765625
+        }
+      },
+      {
+        "size_label": "2 GiB",
+        "size_bytes": 2147483648,
+        "runs": 5,
+        "start_to_first_byte": {
+          "min": 2.218541,
+          "median": 159.249083,
+          "max": 252.587917
+        },
+        "transfer": {
+          "min": 6656.4435,
+          "median": 7560.391874999999,
+          "max": 8731.832750000001
+        },
+        "concat_finish": {
+          "min": 5500.398208,
+          "median": 5956.475291000001,
+          "max": 6494.368292
+        },
+        "total": {
+          "min": 12810.215083,
+          "median": 13519.878125,
+          "max": 14234.509250000001
+        },
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": {
+          "min": 20.828125,
+          "median": 20.828125,
+          "max": 20.828125
+        }
+      }
+    ],
+    "raw_runs": [
+      {
+        "iteration": 1,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 1.645,
+        "transfer_ms": 1206.1603750000002,
+        "concat_finish_ms": 1179.305041,
+        "total_ms": 2387.110416,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 18.015625
+      },
+      {
+        "iteration": 2,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 228.80283300000002,
+        "transfer_ms": 1459.0211669999999,
+        "concat_finish_ms": 2085.2892079999997,
+        "total_ms": 3773.1132079999998,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 19.328125
+      },
+      {
+        "iteration": 3,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 254.277209,
+        "transfer_ms": 3667.302583,
+        "concat_finish_ms": 2702.096833,
+        "total_ms": 6623.676625,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 20.3125
+      },
+      {
+        "iteration": 4,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 248.054208,
+        "transfer_ms": 2220.5188749999998,
+        "concat_finish_ms": 2364.746959,
+        "total_ms": 4833.320042,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 20.3125
+      },
+      {
+        "iteration": 5,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 254.416917,
+        "transfer_ms": 3323.882291,
+        "concat_finish_ms": 4040.4184589999995,
+        "total_ms": 7618.717667,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 20.765625
+      },
+      {
+        "iteration": 1,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 2.218541,
+        "transfer_ms": 7560.391874999999,
+        "concat_finish_ms": 6494.368292,
+        "total_ms": 14056.978708,
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": 20.828125
+      },
+      {
+        "iteration": 2,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 252.587917,
+        "transfer_ms": 7706.3730000000005,
+        "concat_finish_ms": 5560.917208,
+        "total_ms": 13519.878125,
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": 20.828125
+      },
+      {
+        "iteration": 3,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 2.278292,
+        "transfer_ms": 8731.832750000001,
+        "concat_finish_ms": 5500.398208,
+        "total_ms": 14234.509250000001,
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": 20.828125
+      },
+      {
+        "iteration": 4,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 159.249083,
+        "transfer_ms": 6656.4435,
+        "concat_finish_ms": 5994.5225,
+        "total_ms": 12810.215083,
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": 20.828125
+      },
+      {
+        "iteration": 5,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 219.585666,
+        "transfer_ms": 6689.077209,
+        "concat_finish_ms": 5956.475291000001,
+        "total_ms": 12865.138165999999,
+        "disk_bytes_written": 4294967296,
+        "peak_rss_mb": 20.828125
+      }
+    ]
+  },
+  "sparse": {
+    "timestamp": "2026-11-16T20:11:47.100187+00:00",
+    "summaries": [
+      {
+        "size_label": "1 GiB",
+        "size_bytes": 1073741824,
+        "runs": 5,
+        "start_to_first_byte": {
+          "min": 30.047958,
+          "median": 35.795542,
+          "max": 49.681749999999994
+        },
+        "transfer": {
+          "min": 2083.511333,
+          "median": 4429.472042,
+          "max": 5143.796959
+        },
+        "concat_finish": {
+          "min": 0.221833,
+          "median": 0.24354199999999998,
+          "max": 0.7862499999999999
+        },
+        "total": {
+          "min": 2119.5325000000003,
+          "median": 4479.375625000001,
+          "max": 5174.6311670000005
+        },
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": {
+          "min": 15.625,
+          "median": 17.71875,
+          "max": 17.765625
+        },
+        "fsyncs_per_gib": {
+          "min": 260.0,
+          "median": 261.0,
+          "max": 261.0
+        }
+      },
+      {
+        "size_label": "2 GiB",
+        "size_bytes": 2147483648,
+        "runs": 5,
+        "start_to_first_byte": {
+          "min": 0.792417,
+          "median": 58.578792,
+          "max": 108.360292
+        },
+        "transfer": {
+          "min": 4333.058,
+          "median": 8645.939625,
+          "max": 11421.188042000002
+        },
+        "concat_finish": {
+          "min": 0.211458,
+          "median": 0.24233300000000002,
+          "max": 0.6139589999999999
+        },
+        "total": {
+          "min": 4341.799875,
+          "median": 8715.658959,
+          "max": 11480.009167
+        },
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": {
+          "min": 17.8125,
+          "median": 17.890625,
+          "max": 18.96875
+        },
+        "fsyncs_per_gib": {
+          "min": 258.0,
+          "median": 258.5,
+          "max": 259.5
+        }
+      }
+    ],
+    "raw_runs": [
+      {
+        "iteration": 1,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 49.667041000000005,
+        "transfer_ms": 2198.436792,
+        "concat_finish_ms": 0.24354199999999998,
+        "total_ms": 2248.347375,
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": 15.625,
+        "fsyncs_count": 261,
+        "fsyncs_per_gib": 261.0
+      },
+      {
+        "iteration": 2,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 35.795542,
+        "transfer_ms": 2083.511333,
+        "concat_finish_ms": 0.225625,
+        "total_ms": 2119.5325000000003,
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": 17.40625,
+        "fsyncs_count": 261,
+        "fsyncs_per_gib": 261.0
+      },
+      {
+        "iteration": 3,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 49.681749999999994,
+        "transfer_ms": 4429.472042,
+        "concat_finish_ms": 0.221833,
+        "total_ms": 4479.375625000001,
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": 17.71875,
+        "fsyncs_count": 260,
+        "fsyncs_per_gib": 260.0
+      },
+      {
+        "iteration": 4,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 31.410083999999998,
+        "transfer_ms": 4467.229208,
+        "concat_finish_ms": 0.454917,
+        "total_ms": 4499.094209,
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": 17.765625,
+        "fsyncs_count": 260,
+        "fsyncs_per_gib": 260.0
+      },
+      {
+        "iteration": 5,
+        "size_bytes": 1073741824,
+        "start_to_first_byte_ms": 30.047958,
+        "transfer_ms": 5143.796959,
+        "concat_finish_ms": 0.7862499999999999,
+        "total_ms": 5174.6311670000005,
+        "disk_bytes_written": 1073741824,
+        "peak_rss_mb": 17.765625,
+        "fsyncs_count": 261,
+        "fsyncs_per_gib": 261.0
+      },
+      {
+        "iteration": 1,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 69.105375,
+        "transfer_ms": 8645.939625,
+        "concat_finish_ms": 0.6139589999999999,
+        "total_ms": 8715.658959,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 17.8125,
+        "fsyncs_count": 517,
+        "fsyncs_per_gib": 258.5
+      },
+      {
+        "iteration": 2,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 58.578792,
+        "transfer_ms": 11421.188042000002,
+        "concat_finish_ms": 0.24233300000000002,
+        "total_ms": 11480.009167,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 17.84375,
+        "fsyncs_count": 519,
+        "fsyncs_per_gib": 259.5
+      },
+      {
+        "iteration": 3,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 108.360292,
+        "transfer_ms": 11204.729458,
+        "concat_finish_ms": 0.245,
+        "total_ms": 11313.33475,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 17.890625,
+        "fsyncs_count": 516,
+        "fsyncs_per_gib": 258.0
+      },
+      {
+        "iteration": 4,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 0.792417,
+        "transfer_ms": 4453.9775,
+        "concat_finish_ms": 0.211458,
+        "total_ms": 4454.981375,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 18.234375,
+        "fsyncs_count": 518,
+        "fsyncs_per_gib": 259.0
+      },
+      {
+        "iteration": 5,
+        "size_bytes": 2147483648,
+        "start_to_first_byte_ms": 8.520833,
+        "transfer_ms": 4333.058,
+        "concat_finish_ms": 0.221042,
+        "total_ms": 4341.799875,
+        "disk_bytes_written": 2147483648,
+        "peak_rss_mb": 18.96875,
+        "fsyncs_count": 517,
+        "fsyncs_per_gib": 258.5
+      }
+    ]
+  }
+}
