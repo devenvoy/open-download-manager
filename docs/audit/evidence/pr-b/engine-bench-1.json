@@ -1,0 +1,169 @@
+{
+  "timestamp": "2026-11-16T13:07:56.684535+00:00",
+  "summaries": [
+    {
+      "size_label": "1 GiB",
+      "size_bytes": 1073741824,
+      "runs": 5,
+      "start_to_first_byte": {
+        "min": 1.211125,
+        "median": 2.5619169999999998,
+        "max": 253.06995799999999
+      },
+      "transfer": {
+        "min": 1442.443125,
+        "median": 1661.8680829999998,
+        "max": 3237.2415
+      },
+      "concat_finish": {
+        "min": 1200.747917,
+        "median": 1645.38425,
+        "max": 3028.8469999999998
+      },
+      "total": {
+        "min": 2760.553458,
+        "median": 3388.14225,
+        "max": 6268.650417
+      },
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": {
+        "min": 17.15625,
+        "median": 22.078125,
+        "max": 22.4375
+      }
+    },
+    {
+      "size_label": "2 GiB",
+      "size_bytes": 2147483648,
+      "runs": 5,
+      "start_to_first_byte": {
+        "min": 1.592583,
+        "median": 251.03870799999999,
+        "max": 262.210542
+      },
+      "transfer": {
+        "min": 4328.6465419999995,
+        "median": 5138.560292,
+        "max": 6530.1795
+      },
+      "concat_finish": {
+        "min": 4503.715833,
+        "median": 6205.51675,
+        "max": 8237.033916
+      },
+      "total": {
+        "min": 8970.316583,
+        "median": 12469.168541000001,
+        "max": 13630.379708
+      },
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": {
+        "min": 22.4375,
+        "median": 22.4375,
+        "max": 22.4375
+      }
+    }
+  ],
+  "raw_runs": [
+    {
+      "iteration": 1,
+      "size_bytes": 1073741824,
+      "start_to_first_byte_ms": 183.658084,
+      "transfer_ms": 1661.8680829999998,
+      "concat_finish_ms": 1542.616083,
+      "total_ms": 3388.14225,
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": 17.15625
+    },
+    {
+      "iteration": 2,
+      "size_bytes": 1073741824,
+      "start_to_first_byte_ms": 1.211125,
+      "transfer_ms": 1558.5944160000001,
+      "concat_finish_ms": 1200.747917,
+      "total_ms": 2760.553458,
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": 17.15625
+    },
+    {
+      "iteration": 3,
+      "size_bytes": 1073741824,
+      "start_to_first_byte_ms": 253.06995799999999,
+      "transfer_ms": 1442.443125,
+      "concat_finish_ms": 1645.38425,
+      "total_ms": 3340.897333,
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": 22.078125
+    },
+    {
+      "iteration": 4,
+      "size_bytes": 1073741824,
+      "start_to_first_byte_ms": 1.229167,
+      "transfer_ms": 3072.202166,
+      "concat_finish_ms": 1896.435584,
+      "total_ms": 4969.866917,
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": 22.421875
+    },
+    {
+      "iteration": 5,
+      "size_bytes": 1073741824,
+      "start_to_first_byte_ms": 2.5619169999999998,
+      "transfer_ms": 3237.2415,
+      "concat_finish_ms": 3028.8469999999998,
+      "total_ms": 6268.650417,
+      "disk_bytes_written": 2147483648,
+      "peak_rss_mb": 22.4375
+    },
+    {
+      "iteration": 1,
+      "size_bytes": 2147483648,
+      "start_to_first_byte_ms": 262.210542,
+      "transfer_ms": 4974.322749999999,
+      "concat_finish_ms": 7478.341417000001,
+      "total_ms": 12714.874709,
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": 22.4375
+    },
+    {
+      "iteration": 2,
+      "size_bytes": 2147483648,
+      "start_to_first_byte_ms": 137.954208,
+      "transfer_ms": 4328.6465419999995,
+      "concat_finish_ms": 4503.715833,
+      "total_ms": 8970.316583,
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": 22.4375
+    },
+    {
+      "iteration": 3,
+      "size_bytes": 2147483648,
+      "start_to_first_byte_ms": 1.592583,
+      "transfer_ms": 6530.1795,
+      "concat_finish_ms": 5937.396458,
+      "total_ms": 12469.168541000001,
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": 22.4375
+    },
+    {
+      "iteration": 4,
+      "size_bytes": 2147483648,
+      "start_to_first_byte_ms": 251.03870799999999,
+      "transfer_ms": 5476.9757500000005,
+      "concat_finish_ms": 6205.51675,
+      "total_ms": 11933.531208,
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": 22.4375
+    },
+    {
+      "iteration": 5,
+      "size_bytes": 2147483648,
+      "start_to_first_byte_ms": 254.78549999999998,
+      "transfer_ms": 5138.560292,
+      "concat_finish_ms": 8237.033916,
+      "total_ms": 13630.379708,
+      "disk_bytes_written": 4294967296,
+      "peak_rss_mb": 22.4375
+    }
+  ]
+}

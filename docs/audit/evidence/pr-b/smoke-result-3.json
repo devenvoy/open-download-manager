@@ -1,0 +1,107 @@
+{
+  "timestamp": "2026-11-16T13:14:17.403180+00:00",
+  "snapshots": [
+    {
+      "count": 100,
+      "iterations": 30,
+      "median_ms": 0.13891599999999998,
+      "min_ms": 0.136916,
+      "max_ms": 0.669166,
+      "p95_ms": 0.1615,
+      "payload_bytes": 66597
+    },
+    {
+      "count": 1000,
+      "iterations": 30,
+      "median_ms": 1.098291,
+      "min_ms": 0.967834,
+      "max_ms": 1.429125,
+      "p95_ms": 1.294,
+      "payload_bytes": 634258
+    },
+    {
+      "count": 5000,
+      "iterations": 30,
+      "median_ms": 4.98825,
+      "min_ms": 4.759416,
+      "max_ms": 6.482333,
+      "p95_ms": 6.096375,
+      "payload_bytes": 3182238
+    }
+  ],
+  "windows": [
+    {
+      "mode": "options",
+      "iterations": 10,
+      "median_ms": 218.24116700000002,
+      "min_ms": 92.78079100000001,
+      "max_ms": 346.449541,
+      "p95_ms": 346.449541,
+      "timed_out": false
+    },
+    {
+      "mode": "add",
+      "iterations": 10,
+      "median_ms": 217.816416,
+      "min_ms": 76.255291,
+      "max_ms": 330.11225,
+      "p95_ms": 330.11225,
+      "timed_out": false
+    },
+    {
+      "mode": "scheduler",
+      "iterations": 10,
+      "median_ms": 217.792292,
+      "min_ms": 67.359375,
+      "max_ms": 320.636916,
+      "p95_ms": 320.636916,
+      "timed_out": false
+    },
+    {
+      "mode": "integration",
+      "iterations": 10,
+      "median_ms": 218.27129200000002,
+      "min_ms": 68.857958,
+      "max_ms": 321.770042,
+      "p95_ms": 321.770042,
+      "timed_out": false
+    },
+    {
+      "mode": "torrents",
+      "iterations": 10,
+      "median_ms": 219.01875,
+      "min_ms": 75.944125,
+      "max_ms": 331.317625,
+      "p95_ms": 331.317625,
+      "timed_out": false
+    },
+    {
+      "mode": "progress",
+      "iterations": 10,
+      "median_ms": 217.324584,
+      "min_ms": 67.653459,
+      "max_ms": 321.176542,
+      "p95_ms": 321.176542,
+      "timed_out": false
+    }
+  ],
+  "magnet": {
+    "magnet": "magnet:?xt=urn:btih:2b6c31677c447e5b9d3b84ef6f530e1590fb3b34&dn=ubuntu-24.04.1-desktop-amd64.iso",
+    "name": "Ubuntu 24.04.1 Desktop AMD64 ISO",
+    "add_return_ms": 0.007834,
+    "row_visible_ms": 0.009084,
+    "success": true,
+    "error": null
+  },
+  "idle": {
+    "duration_seconds": 60,
+    "stall_count": 0
+  },
+  "active_load": {
+    "concurrent_downloads": 5,
+    "duration_seconds": 60,
+    "watchdog_stalls": 0,
+    "ui_responsiveness_ms": 27.455792
+  },
+  "all_windows_passed": true
+}
