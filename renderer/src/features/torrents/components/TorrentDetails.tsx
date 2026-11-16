@@ -2,6 +2,8 @@ import { formatBytes, formatDate, formatSpeed } from "@/lib/format";
 import {
   type TorrentFileItem,
   type TorrentListItem,
+  type TorrentPeerItem,
+  type TorrentPiecesInfo,
   type TorrentReviewRequest,
   type TorrentTrackerStatus,
 } from "@/types/ipc";
@@ -14,6 +16,8 @@ import {
   stateLabel,
 } from "../model/torrent-view";
 import { TorrentFilesTab } from "./TorrentFilesTab";
+import { TorrentPeersTab } from "./TorrentPeersTab";
+import { TorrentPiecesTab } from "./TorrentPiecesTab";
 import { TorrentReviewPanel } from "./TorrentReviewPanel";
 import { TorrentTrackersTab } from "./TorrentTrackersTab";
 
@@ -23,6 +27,10 @@ export interface TorrentDetailsProps {
   filesLoading: boolean;
   trackers: TorrentTrackerStatus[];
   trackersLoading: boolean;
+  peers?: TorrentPeerItem[];
+  peersLoading?: boolean;
+  piecesInfo?: TorrentPiecesInfo;
+  piecesLoading?: boolean;
   filesDirty: boolean;
   applyingFiles: boolean;
   review?: TorrentReviewRequest | null;
@@ -33,6 +41,7 @@ export interface TorrentDetailsProps {
   onToggleFile: (index: number) => void;
   onSetAllFiles: (selected: boolean) => void;
   onApplyFiles: () => void;
+  onStopSeeding?: () => void;
 }
 
 export function TorrentDetails({
@@ -41,6 +50,10 @@ export function TorrentDetails({
   filesLoading,
   trackers,
   trackersLoading,
+  peers = [],
+  peersLoading = false,
+  piecesInfo,
+  piecesLoading = false,
   filesDirty,
   applyingFiles,
   review,
@@ -51,6 +64,7 @@ export function TorrentDetails({
   onToggleFile,
   onSetAllFiles,
   onApplyFiles,
+  onStopSeeding,
 }: TorrentDetailsProps) {
   const tab = useTorrentsStore((state) => state.tab);
   const setTab = useTorrentsStore((state) => state.setTab);
@@ -106,12 +120,30 @@ export function TorrentDetails({
         </button>
         <button
           type="button"
+          className={`torrent-tab ${tab === "peers" ? "active-tab" : ""}`}
+          role="tab"
+          aria-selected={tab === "peers"}
+          onClick={() => setTab("peers")}
+        >
+          Peers{peers.length ? ` (${peers.length})` : ""}
+        </button>
+        <button
+          type="button"
           className={`torrent-tab ${tab === "trackers" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "trackers"}
           onClick={() => setTab("trackers")}
         >
           Trackers
+        </button>
+        <button
+          type="button"
+          className={`torrent-tab ${tab === "pieces" ? "active-tab" : ""}`}
+          role="tab"
+          aria-selected={tab === "pieces"}
+          onClick={() => setTab("pieces")}
+        >
+          Pieces{piecesInfo?.totalPieces ? ` (${piecesInfo.completedPieces}/${piecesInfo.totalPieces})` : ""}
         </button>
       </div>
 
@@ -199,6 +231,17 @@ export function TorrentDetails({
               <dt>Save to</dt>
               <dd id="torrent-fact-folder">{torrent.outputFolder || "—"}</dd>
             </div>
+            {isSeeding && onStopSeeding ? (
+              <div className="torrent-fact-wide torrent-seeding-action-row">
+                <button
+                  type="button"
+                  className="torrent-button torrent-stop-seeding-btn"
+                  onClick={onStopSeeding}
+                >
+                  Stop Seeding
+                </button>
+              </div>
+            ) : null}
           </dl>
         </div>
       )}
@@ -216,8 +259,16 @@ export function TorrentDetails({
         />
       )}
 
+      {tab === "peers" && (
+        <TorrentPeersTab peers={peers} loading={Boolean(peersLoading)} />
+      )}
+
       {tab === "trackers" && (
         <TorrentTrackersTab trackers={trackers} loading={trackersLoading} />
+      )}
+
+      {tab === "pieces" && (
+        <TorrentPiecesTab piecesInfo={piecesInfo} loading={Boolean(piecesLoading)} />
       )}
     </div>
   );

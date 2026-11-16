@@ -85,6 +85,27 @@ export interface TorrentTrackerStatus {
   lastError: string | null;
 }
 
+/** `TorrentPeerItem` */
+export interface TorrentPeerItem {
+  address: string;
+  client: string | null;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  progressPercent: number;
+  flags: string;
+  connectionType: string;
+  fetchedBytes: number;
+  uploadedBytes: number;
+}
+
+/** `TorrentPiecesInfo` */
+export interface TorrentPiecesInfo {
+  totalPieces: number;
+  pieceLength: number;
+  completedPieces: number;
+  pieceStates: number[];
+}
+
 /** `TorrentAction` (snake_case on the wire). */
 export type TorrentActionKind = "pause" | "resume" | "recheck" | "forget" | "delete";
 

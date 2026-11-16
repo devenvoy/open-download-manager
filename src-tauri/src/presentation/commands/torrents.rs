@@ -9,7 +9,8 @@ use crate::{
     application::error::AppResult,
     domain::torrent::{
         TorrentAction, TorrentAddOptions, TorrentAddResult, TorrentEngineStatus, TorrentFileItem,
-        TorrentListItem, TorrentReviewRequest, TorrentSettings, TorrentTrackerStatus,
+        TorrentListItem, TorrentPeerItem, TorrentPiecesInfo, TorrentReviewRequest, TorrentSettings,
+        TorrentTrackerStatus,
     },
     presentation::app_state::AppState,
 };
@@ -101,6 +102,24 @@ pub fn torrent_tracker_status(
 ) -> AppResult<Vec<TorrentTrackerStatus>> {
     let _timer = crate::infrastructure::perf::track_command("torrent_tracker_status");
     state.torrents.tracker_status(id)
+}
+
+#[tauri::command(async)]
+pub fn torrent_peers(
+    state: State<'_, AppState>,
+    id: usize,
+) -> AppResult<Vec<TorrentPeerItem>> {
+    let _timer = crate::infrastructure::perf::track_command("torrent_peers");
+    state.torrents.peers(id)
+}
+
+#[tauri::command(async)]
+pub fn torrent_pieces(
+    state: State<'_, AppState>,
+    id: usize,
+) -> AppResult<TorrentPiecesInfo> {
+    let _timer = crate::infrastructure::perf::track_command("torrent_pieces");
+    state.torrents.pieces(id)
 }
 
 #[tauri::command(async)]

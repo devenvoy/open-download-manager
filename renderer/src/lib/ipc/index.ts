@@ -158,6 +158,8 @@ export const ipc = {
     call("torrent_set_files", { id, included }),
   torrentTrackerStatus: (id: number) =>
     call("torrent_tracker_status", { id }),
+  torrentPeers: (id: number) => call("torrent_peers", { id }),
+  torrentPieces: (id: number) => call("torrent_pieces", { id }),
   torrentSettingsGet: () => call("torrent_settings_get"),
   torrentSettingsSet: (settings: TorrentSettings) =>
     call("torrent_settings_set", { settings }),

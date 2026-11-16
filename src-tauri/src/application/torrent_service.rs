@@ -25,7 +25,8 @@ use crate::{
     application::error::{AppError, AppResult},
     domain::torrent::{
         TorrentAction, TorrentAddOptions, TorrentAddResult, TorrentEngineStatus, TorrentFileItem,
-        TorrentListItem, TorrentReviewRequest, TorrentSettings, TorrentTrackerStatus,
+        TorrentListItem, TorrentPeerItem, TorrentPiecesInfo, TorrentReviewRequest, TorrentSettings,
+        TorrentTrackerStatus,
     },
     infrastructure::torrent::settings_store::TorrentSettingsStore,
 };
@@ -1073,6 +1074,65 @@ impl TorrentService {
             .unwrap_or_default();
         details.stats = stats;
         Ok(map_files(&details, &progress))
+    }
+
+    pub fn peers(&self, id: usize) -> AppResult<Vec<TorrentPeerItem>> {
+        let api = match self.api() {
+            Ok(a) => a,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let target = librtbit::api::TorrentIdOrHash::Id(id);
+        let snapshot = match api.api_peer_stats(target, Default::default()) {
+            Ok(s) => s,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let mut result = Vec::new();
+        for (addr, p) in snapshot.peers {
+            let conn_type = p
+                .conn_kind
+                .map(|k| k.to_string().to_uppercase())
+                .unwrap_or_else(|| "TCP".to_string());
+            result.push(TorrentPeerItem {
+                address: addr,
+                client: None,
+                download_speed: 0,
+                upload_speed: 0,
+                progress_percent: 0.0,
+                flags: p.state.to_string(),
+                connection_type: conn_type,
+                fetched_bytes: p.counters.fetched_bytes,
+                uploaded_bytes: p.counters.uploaded_bytes,
+            });
+        }
+        result.sort_by(|a, b| b.fetched_bytes.cmp(&a.fetched_bytes));
+        Ok(result)
+    }
+
+    pub fn pieces(&self, id: usize) -> AppResult<TorrentPiecesInfo> {
+        let api = match self.api() {
+            Ok(a) => a,
+            Err(_) => {
+                return Ok(TorrentPiecesInfo {
+                    total_pieces: 0,
+                    piece_length: 0,
+                    completed_pieces: 0,
+                    piece_states: Vec::new(),
+                })
+            }
+        };
+        let target = librtbit::api::TorrentIdOrHash::Id(id);
+        let piece_states = api.api_dump_piece_states(target).unwrap_or_default();
+        let (total_pieces, piece_length) = match api.api_dump_haves(target) {
+            Ok((_bf, len)) => (len, 0),
+            Err(_) => (piece_states.len() as u32, 0),
+        };
+        let completed_pieces = piece_states.iter().filter(|&&s| s == 2).count() as u32;
+        Ok(TorrentPiecesInfo {
+            total_pieces,
+            piece_length,
+            completed_pieces,
+            piece_states,
+        })
     }
 
     pub fn update_settings(

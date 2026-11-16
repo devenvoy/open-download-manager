@@ -8,6 +8,8 @@ import {
   useTorrentEngine,
   useTorrentFiles,
   useTorrentList,
+  useTorrentPeers,
+  useTorrentPieces,
   useTorrentSettings,
   useTorrentTrackers,
 } from "../hooks/use-torrents";
@@ -85,6 +87,8 @@ export function TorrentsScreen() {
 
   const filesQuery = useTorrentFiles(selected?.id ?? null);
   const trackersQuery = useTorrentTrackers(selected?.id ?? null, tab === "trackers");
+  const peersQuery = useTorrentPeers(selected?.id ?? null, tab === "peers");
+  const piecesQuery = useTorrentPieces(selected?.id ?? null, tab === "pieces");
 
   useEffect(() => {
     if (selectedId !== null) {
@@ -231,6 +235,10 @@ export function TorrentsScreen() {
               filesLoading={filesQuery.isPending && files.length === 0}
               trackers={trackersQuery.data ?? []}
               trackersLoading={trackersQuery.isPending}
+              peers={peersQuery.data ?? []}
+              peersLoading={peersQuery.isPending}
+              piecesInfo={piecesQuery.data}
+              piecesLoading={piecesQuery.isPending}
               filesDirty={filesDirty}
               applyingFiles={actions.setFiles.isPending}
               review={review}
@@ -241,6 +249,7 @@ export function TorrentsScreen() {
               onToggleFile={toggleFile}
               onSetAllFiles={(checked) => setAllFiles(files.map((file) => file.index), checked)}
               onApplyFiles={handleApplyFiles}
+              onStopSeeding={() => handleAction("pause")}
             />
           ) : (
             <div id="torrent-detail-empty" className="torrent-detail-empty">

@@ -50,8 +50,9 @@ use presentation::{
 };
 use presentation::commands::torrents::{
     torrent_action, torrent_add_file, torrent_add_magnet, torrent_files, torrent_list,
-    torrent_restart_engine, torrent_set_files, torrent_set_watching, torrent_settings_get,
-    torrent_settings_set, torrent_status, torrent_take_review, torrent_tracker_status,
+    torrent_peers, torrent_pieces, torrent_restart_engine, torrent_set_files, torrent_set_watching,
+    torrent_settings_get, torrent_settings_set, torrent_status, torrent_take_review,
+    torrent_tracker_status,
 };
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -515,6 +516,8 @@ pub fn run() {
             torrent_restart_engine,
             torrent_take_review,
             torrent_tracker_status,
+            torrent_peers,
+            torrent_pieces,
             tray_set_active_downloads,
             mark_ui_ready,
             window_ready,
