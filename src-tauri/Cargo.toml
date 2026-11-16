@@ -24,15 +24,17 @@ name = "perf_benchmark"
 path = "src/bin/perf_benchmark.rs"
 # Development-only tool. The Tauri CLI skips binaries whose required features
 # are disabled, so the benchmark never ends up in a shipped installer.
-required-features = ["bench"]
+required-features = ["dev-tools"]
 
 [[bin]]
 name = "engine_benchmark"
 path = "src/bin/engine_benchmark.rs"
-required-features = ["bench"]
+required-features = ["dev-tools"]
 
 [features]
-bench = []
+default = []
+dev-tools = []
+bench = ["dev-tools"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

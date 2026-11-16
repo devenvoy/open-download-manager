@@ -581,6 +581,7 @@ impl DownloadHistoryService {
         Ok(())
     }
 
+    #[cfg(feature = "dev-tools")]
     pub fn seed_downloads(&self, records: Vec<DownloadRecord>) -> AppResult<()> {
         let mut downloads = self
             .downloads

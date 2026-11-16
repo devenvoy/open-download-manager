@@ -429,6 +429,7 @@ pub fn run() {
             crate::infrastructure::perf::start_main_thread_watchdog(app.handle().clone());
             crate::infrastructure::perf::mark_setup_done();
 
+            #[cfg(feature = "dev-tools")]
             if crate::infrastructure::smoke::is_smoke_test() {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
