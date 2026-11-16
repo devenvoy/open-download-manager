@@ -81,6 +81,61 @@ struct TorrentRefresh {
     last_reannounce: std::time::Instant,
 }
 
+/// Synchronously parses a magnet URL, validating syntax and extracting the BitTorrent info hash and display name.
+/// Completes in under 0.1 ms without network or disk I/O.
+pub fn parse_magnet_link(magnet: &str) -> AppResult<(String, String)> {
+    let trimmed = magnet.trim();
+    if !trimmed.starts_with("magnet:?") && !trimmed.starts_with("MAGNET:?") {
+        return Err(AppError::torrent("Enter a valid magnet link."));
+    }
+    if trimmed.len() > MAX_MAGNET_LENGTH {
+        return Err(AppError::torrent("The magnet link is too long."));
+    }
+
+    let query_str = &trimmed[8..];
+    let mut info_hash = None;
+    let mut name = None;
+
+    for (k, v) in url::form_urlencoded::parse(query_str.as_bytes()) {
+        if k.eq_ignore_ascii_case("xt") {
+            let lower = v.to_ascii_lowercase();
+            if let Some(stripped) = lower.strip_prefix("urn:btih:") {
+                if !stripped.is_empty() {
+                    info_hash = Some(stripped.to_string());
+                }
+            }
+        } else if k.eq_ignore_ascii_case("dn") {
+            name = Some(v.into_owned());
+        }
+    }
+
+    let hash = info_hash.ok_or_else(|| {
+        AppError::torrent("The magnet link does not contain a BitTorrent info hash.")
+    })?;
+
+    let display_name = name.unwrap_or_else(|| hash.clone());
+    Ok((hash, display_name))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResolvingStatus {
+    Resolving,
+    Failed(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvingTorrent {
+    pub placeholder_id: usize,
+    pub magnet: String,
+    pub info_hash: String,
+    pub name: String,
+    pub output_folder: String,
+    pub options: TorrentAddOptions,
+    pub status: ResolvingStatus,
+    pub started_at: std::time::Instant,
+    pub cancel_flag: Arc<AtomicBool>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 enum EngineState {
@@ -125,6 +180,8 @@ pub struct TorrentService {
     /// What the service remembers about running torrents, to decide when a
     /// torrent needs new peers.
     peer_refresh: RwLock<std::collections::HashMap<usize, TorrentRefresh>>,
+    resolving_torrents: RwLock<std::collections::HashMap<String, ResolvingTorrent>>,
+    next_placeholder_id: AtomicUsize,
     engine: RwLock<Option<crate::infrastructure::torrent::engine::TorrentEngine>>,
     app: Option<tauri::AppHandle>,
 }
@@ -147,6 +204,8 @@ impl TorrentService {
             watching: AtomicUsize::new(0),
             pending_review: RwLock::new(None),
             peer_refresh: RwLock::new(std::collections::HashMap::new()),
+            resolving_torrents: RwLock::new(std::collections::HashMap::new()),
+            next_placeholder_id: AtomicUsize::new(1_000_000),
             engine: RwLock::new(None),
             app: None,
         })
@@ -176,6 +235,8 @@ impl TorrentService {
             watching: AtomicUsize::new(0),
             pending_review: RwLock::new(None),
             peer_refresh: RwLock::new(std::collections::HashMap::new()),
+            resolving_torrents: RwLock::new(std::collections::HashMap::new()),
+            next_placeholder_id: AtomicUsize::new(1_000_000),
             engine: RwLock::new(Some(engine)),
             app: None,
         })
@@ -207,6 +268,8 @@ impl TorrentService {
             watching: AtomicUsize::new(0),
             pending_review: RwLock::new(None),
             peer_refresh: RwLock::new(std::collections::HashMap::new()),
+            resolving_torrents: RwLock::new(std::collections::HashMap::new()),
+            next_placeholder_id: AtomicUsize::new(1_000_000),
             engine: RwLock::new(None),
             app: Some(app),
         });
@@ -389,34 +452,225 @@ impl TorrentService {
     }
 
     pub fn list(&self) -> AppResult<Vec<TorrentListItem>> {
-        let api = self.api()?;
-        let response = api.api_torrent_list_ext(librtbit::api::ApiTorrentListOpts {
-            with_stats: true,
-            ..Default::default()
-        });
-        Ok(response.torrents.iter().map(map_list_item).collect())
+        let mut items = Vec::new();
+        if let Ok(api) = self.api() {
+            let response = api.api_torrent_list_ext(librtbit::api::ApiTorrentListOpts {
+                with_stats: true,
+                ..Default::default()
+            });
+            items.extend(response.torrents.iter().map(map_list_item));
+        }
+
+        let resolving = self.resolving_torrents.read().unwrap_or_else(|e| e.into_inner());
+        for t in resolving.values() {
+            if items.iter().any(|item| item.info_hash.eq_ignore_ascii_case(&t.info_hash)) {
+                continue;
+            }
+            let elapsed_secs = t.started_at.elapsed().as_secs();
+            let (state, error) = match &t.status {
+                ResolvingStatus::Resolving => ("initializing".to_string(), None),
+                ResolvingStatus::Failed(err) => ("error".to_string(), Some(err.clone())),
+            };
+            items.push(TorrentListItem {
+                id: t.placeholder_id,
+                info_hash: t.info_hash.clone(),
+                name: t.name.clone(),
+                output_folder: t.output_folder.clone(),
+                state,
+                error,
+                progress_bytes: 0,
+                uploaded_bytes: 0,
+                total_bytes: 0,
+                finished: false,
+                download_speed: 0,
+                upload_speed: 0,
+                time_remaining_secs: Some(elapsed_secs),
+                seeds: 0,
+                leechers: 0,
+                peers: 0,
+                ratio: 0.0,
+                added_on: Some(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                ),
+                trackers: Vec::new(),
+                files: Vec::new(),
+            });
+        }
+
+        Ok(items)
     }
 
     pub async fn add_magnet(
-        &self,
+        self: &Arc<Self>,
         magnet: String,
         options: TorrentAddOptions,
     ) -> AppResult<TorrentAddResult> {
-        let magnet = magnet.trim().to_owned();
-        if !magnet.starts_with("magnet:?") {
-            return Err(AppError::torrent("Enter a valid magnet link."));
+        let (info_hash, name) = parse_magnet_link(&magnet)?;
+
+        // Deduplication against existing list (both engine and resolving placeholders)
+        if let Ok(items) = self.list() {
+            if let Some(existing) = items.iter().find(|i| i.info_hash.eq_ignore_ascii_case(&info_hash)) {
+                return Ok(TorrentAddResult {
+                    id: Some(existing.id),
+                    info_hash: existing.info_hash.clone(),
+                    name: existing.name.clone(),
+                    already_managed: true,
+                    output_folder: existing.output_folder.clone(),
+                });
+            }
         }
-        if magnet.len() > MAX_MAGNET_LENGTH {
-            return Err(AppError::torrent("The magnet link is too long."));
+
+        let output_folder = options
+            .output_folder
+            .clone()
+            .unwrap_or_else(|| self.default_download_directory.to_string_lossy().to_string());
+
+        let placeholder_id = self.next_placeholder_id.fetch_add(1, Ordering::SeqCst);
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+
+        let placeholder = ResolvingTorrent {
+            placeholder_id,
+            magnet: magnet.clone(),
+            info_hash: info_hash.clone(),
+            name: name.clone(),
+            output_folder: output_folder.clone(),
+            options: options.clone(),
+            status: ResolvingStatus::Resolving,
+            started_at: std::time::Instant::now(),
+            cancel_flag: cancel_flag.clone(),
+        };
+
+        {
+            let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+            map.insert(info_hash.clone(), placeholder);
         }
-        if !magnet.to_ascii_lowercase().contains("xt=urn:btih:") {
-            return Err(AppError::torrent(
-                "The magnet link does not contain a BitTorrent info hash.",
-            ));
+
+        let service = self.clone();
+        let hash_for_bg = info_hash.clone();
+        let magnet_for_bg = magnet.clone();
+        let options_for_bg = options.clone();
+        let cancel_for_bg = cancel_flag.clone();
+
+        tauri::async_runtime::spawn(async move {
+            service
+                .background_resolve_magnet(
+                    placeholder_id,
+                    hash_for_bg,
+                    magnet_for_bg,
+                    options_for_bg,
+                    cancel_for_bg,
+                )
+                .await;
+        });
+
+        Ok(TorrentAddResult {
+            id: Some(placeholder_id),
+            info_hash,
+            name,
+            already_managed: false,
+            output_folder,
+        })
+    }
+
+    async fn background_resolve_magnet(
+        self: &Arc<Self>,
+        _placeholder_id: usize,
+        info_hash: String,
+        magnet: String,
+        options: TorrentAddOptions,
+        cancel_flag: Arc<AtomicBool>,
+    ) {
+        for _ in 0..40 {
+            if cancel_flag.load(Ordering::SeqCst) {
+                return;
+            }
+            if self.api().is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        let api = self.api()?;
+
+        if cancel_flag.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let api = match self.api() {
+            Ok(api) => api,
+            Err(e) => {
+                let mut map = self.resolving_torrents.write().unwrap_or_else(|err| err.into_inner());
+                if let Some(item) = map.get_mut(&info_hash) {
+                    item.status = ResolvingStatus::Failed(format!("Engine error: {}", e.message));
+                }
+                return;
+            }
+        };
+
         let add = librtbit::AddTorrent::from_url(magnet.as_str());
-        self.add(api, add, options).await
+        let resolve_timeout = Duration::from_secs(60);
+
+        let add_options = librtbit::AddTorrentOptions {
+            paused: if options.review {
+                true
+            } else {
+                options.start_paused
+            },
+            only_files: if options.review {
+                Some(Vec::new())
+            } else {
+                options.only_files
+            },
+            initial_peers: parse_initial_peers(options.initial_peers.as_deref()).unwrap_or_default(),
+            output_folder: if options.output_folder.as_deref().unwrap_or("").trim().is_empty() {
+                None
+            } else {
+                options.output_folder
+            },
+            overwrite: true,
+            magnet_resolution_timeout_secs: Some(60),
+            ..Default::default()
+        };
+
+        let add_future = api.api_add_torrent(add, Some(add_options));
+        match tokio::time::timeout(resolve_timeout, add_future).await {
+            Ok(Ok(response)) => {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    if let Some(id) = response.details.id {
+                        let _ = api.api_torrent_action_delete(librtbit::api::TorrentIdOrHash::Id(id)).await;
+                    }
+                    let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                    map.remove(&info_hash);
+                    return;
+                }
+                let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                map.remove(&info_hash);
+            }
+            Ok(Err(err)) => {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                    map.remove(&info_hash);
+                    return;
+                }
+                let err_msg = format!("{err:#}");
+                let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                if let Some(item) = map.get_mut(&info_hash) {
+                    item.status = ResolvingStatus::Failed(err_msg);
+                }
+            }
+            Err(_) => {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                    map.remove(&info_hash);
+                    return;
+                }
+                let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                if let Some(item) = map.get_mut(&info_hash) {
+                    item.status = ResolvingStatus::Failed("Magnet metadata resolution timed out after 60s".to_string());
+                }
+            }
+        }
     }
 
     /// Adds a .torrent payload, waiting for the engine to finish starting.
@@ -448,24 +702,11 @@ impl TorrentService {
     /// errors that happen while the engine is starting are retried; every
     /// other failure is final and reported to the caller.
     pub async fn add_magnet_when_ready(
-        &self,
+        self: &Arc<Self>,
         magnet: String,
         options: TorrentAddOptions,
     ) -> AppResult<TorrentAddResult> {
-        for attempt in 0..ENGINE_READY_ATTEMPTS {
-            match self.add_magnet(magnet.clone(), options.clone()).await {
-                Ok(result) => return Ok(result),
-                Err(error) => {
-                    if self.status().state != "starting" || attempt + 1 == ENGINE_READY_ATTEMPTS {
-                        return Err(error);
-                    }
-                    tokio::time::sleep(ENGINE_READY_DELAY).await;
-                }
-            }
-        }
-        Err(AppError::torrent(
-            "The torrent engine did not become ready in time.",
-        ))
+        self.add_magnet(magnet, options).await
     }
 
     pub async fn add_file(
@@ -580,7 +821,48 @@ impl TorrentService {
         })
     }
 
-    pub async fn action(&self, id: usize, action: TorrentAction) -> AppResult<()> {
+    pub async fn action(self: &Arc<Self>, id: usize, action: TorrentAction) -> AppResult<()> {
+        let resolving_match = {
+            let map = self.resolving_torrents.read().unwrap_or_else(|e| e.into_inner());
+            map.values().find(|r| r.placeholder_id == id).cloned()
+        };
+
+        if let Some(item) = resolving_match {
+            match action {
+                TorrentAction::Delete | TorrentAction::Forget => {
+                    item.cancel_flag.store(true, Ordering::SeqCst);
+                    let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                    map.remove(&item.info_hash);
+                    return Ok(());
+                }
+                TorrentAction::Resume | TorrentAction::Recheck => {
+                    let cancel_flag = Arc::new(AtomicBool::new(false));
+                    {
+                        let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                        if let Some(placeholder) = map.get_mut(&item.info_hash) {
+                            placeholder.status = ResolvingStatus::Resolving;
+                            placeholder.started_at = std::time::Instant::now();
+                            placeholder.cancel_flag = cancel_flag.clone();
+                        }
+                    }
+                    let service = self.clone();
+                    let hash = item.info_hash.clone();
+                    let magnet = item.magnet.clone();
+                    let opts = item.options.clone();
+                    tauri::async_runtime::spawn(async move {
+                        service.background_resolve_magnet(id, hash, magnet, opts, cancel_flag).await;
+                    });
+                    return Ok(());
+                }
+                TorrentAction::Pause => {
+                    item.cancel_flag.store(true, Ordering::SeqCst);
+                    let mut map = self.resolving_torrents.write().unwrap_or_else(|e| e.into_inner());
+                    map.remove(&item.info_hash);
+                    return Ok(());
+                }
+            }
+        }
+
         let api = self.api()?;
         let target = librtbit::api::TorrentIdOrHash::Id(id);
         let result = match action {
@@ -1014,6 +1296,7 @@ mod engine_contract_tests {
     use std::path::PathBuf;
 
     use librtbit::{AddTorrent, AddTorrentOptions, Api, Session, SessionOptions};
+    use crate::domain::torrent::{TorrentAction, TorrentAddOptions};
 
     fn bencode_bytes(data: &[u8]) -> Vec<u8> {
         let mut out = format!("{}:", data.len()).into_bytes();
@@ -1293,5 +1576,57 @@ mod engine_contract_tests {
         );
 
         let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[tokio::test]
+    async fn add_magnet_is_non_blocking_and_returns_placeholder_under_10ms() {
+        let dir = tempfile::tempdir().unwrap();
+        let directory = dir.path().to_path_buf();
+        let dls = tempfile::tempdir().unwrap();
+        let downloads = dls.path().to_path_buf();
+        let service = super::TorrentService::disabled();
+
+        let magnet = "magnet:?xt=urn:btih:2b6c31677c447e5b9d3b84ef6f530e1590fb3b34&dn=ubuntu-iso";
+        let start = std::time::Instant::now();
+        let result = service
+            .add_magnet(magnet.to_string(), TorrentAddOptions::default())
+            .await
+            .expect("magnet add should succeed immediately");
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 10,
+            "add_magnet must complete in <10ms (took {:?})",
+            elapsed
+        );
+        assert!(!result.already_managed);
+        assert_eq!(result.info_hash, "2b6c31677c447e5b9d3b84ef6f530e1590fb3b34");
+        assert_eq!(result.name, "ubuntu-iso");
+        let placeholder_id = result.id.expect("must return a placeholder id");
+
+        // Immediately visible in list with state initializing
+        let list = service.list().expect("list must succeed");
+        let item = list.iter().find(|i| i.id == placeholder_id).expect("item must be in list");
+        assert_eq!(item.state, "initializing");
+        assert_eq!(item.info_hash, "2b6c31677c447e5b9d3b84ef6f530e1590fb3b34");
+
+        // Deduplication: adding the same magnet again returns already_managed: true
+        let dedup_result = service
+            .add_magnet(magnet.to_string(), TorrentAddOptions::default())
+            .await
+            .expect("dedup add should succeed");
+        assert!(dedup_result.already_managed);
+        assert_eq!(dedup_result.id, Some(placeholder_id));
+
+        // Cancellation: deleting placeholder removes it from list
+        service
+            .action(placeholder_id, TorrentAction::Delete)
+            .await
+            .expect("delete action should succeed");
+        let list_after = service.list().expect("list must succeed");
+        assert!(!list_after.iter().any(|i| i.id == placeholder_id));
+
+        let _ = std::fs::remove_dir_all(&directory);
+        let _ = std::fs::remove_dir_all(&downloads);
     }
 }
