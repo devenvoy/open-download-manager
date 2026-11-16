@@ -169,7 +169,7 @@ fn set_sparse_flag(file: &File) -> io::Result<()> {
     let handle = file.as_raw_handle();
     let mut bytes_returned = 0u32;
     let success = unsafe {
-        windows_sys::Win32::System::Ioctl::DeviceIoControl(
+        windows_sys::Win32::System::IO::DeviceIoControl(
             handle as _,
             windows_sys::Win32::System::Ioctl::FSCTL_SET_SPARSE,
             std::ptr::null_mut(),
