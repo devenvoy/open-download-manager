@@ -36,14 +36,18 @@ pub(crate) use worker::run_segment_worker;
 
 pub const MIN_CHUNK_REASSIGN_BYTES: u64 = 2 * 1024 * 1024; // 2 MB minimum remaining to split a chunk
 
+#[allow(clippy::too_many_arguments)]
 pub async fn download_segments(
     client: reqwest::Client,
-    id: &str,
+    _id: &str,
     url: Url,
     validator: &SegmentValidator,
     segments: Vec<DownloadSegmentProgress>,
     connections: u8,
-    directory: &Path,
+    _directory: &Path,
+    part_path: &Path,
+    range_map: Arc<Mutex<super::range_map::RangeMap>>,
+    ranges_path: &Path,
     control: &mut DownloadControl,
     rate_limiter: Arc<DownloadRateLimiter>,
     progress_handler: &DownloadProgressHandler,
@@ -52,12 +56,17 @@ pub async fn download_segments(
     request_headers: crate::domain::download::BrowserRequestHeaders,
     initial_host: String,
 ) -> AppResult<Vec<DownloadSegmentProgress>> {
+    // Ensure sparse file is allocated
+    super::sparse_file::allocate_sparse_file(part_path, validator.total)?;
+
     let segments_shared = Arc::new(Mutex::new(segments));
     let meter = Arc::new(Mutex::new(crate::application::throughput_meter::ThroughputMeter::new()));
     let auth_shared: Option<Arc<str>> = auth_header.map(Arc::from);
     let referer_shared: Option<Arc<str>> = referer.map(Arc::from);
     let headers_shared = Arc::new(request_headers);
     let initial_host_shared: Arc<str> = Arc::from(initial_host);
+    let part_path_buf = part_path.to_path_buf();
+    let ranges_path_buf = ranges_path.to_path_buf();
 
     // Initial progress report
     {
@@ -135,8 +144,9 @@ pub async fn download_segments(
     for worker_id in 0..worker_count {
         let worker_client = client.clone();
         let worker_url = url.clone();
-        let worker_dir = directory.to_path_buf();
-        let worker_id_str = id.to_owned();
+        let worker_part_path = part_path_buf.clone();
+        let worker_range_map = range_map.clone();
+        let worker_ranges_path = ranges_path_buf.clone();
         let worker_segments = segments_shared.clone();
         let worker_control = control.clone();
         let worker_validator = validator.clone();
@@ -152,8 +162,9 @@ pub async fn download_segments(
             run_segment_worker(
                 worker_client,
                 worker_url,
-                worker_dir,
-                worker_id_str,
+                worker_part_path,
+                worker_range_map,
+                worker_ranges_path,
                 worker_id,
                 worker_segments,
                 worker_validator,

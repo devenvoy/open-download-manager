@@ -71,20 +71,22 @@ pub async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppResult<()> {
+pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppResult<bool> {
     let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
-        Err(_) => return Ok(()),
+        Err(_) => return Ok(false),
     };
-    let prefix = format!("{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-");
+    let marker = format!("{id}.segment-");
+    let mut removed_any = false;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.starts_with(&prefix) && name_str.ends_with(".part") {
+        if name_str.contains(&marker) && name_str.ends_with(".part") {
             let _ = std::fs::remove_file(entry.path());
+            removed_any = true;
         }
     }
-    Ok(())
+    Ok(removed_any)
 }
 
 pub async fn concat_segments(
@@ -189,8 +191,30 @@ pub async fn finalize(
         })?;
     }
 
-    match fs::rename(&temporary, &destination).await {
-        Ok(()) => {}
+    // Completeness check: if total length is known, ensure full range coverage before rename
+    if let Some(expected_total) = total {
+        if downloaded < expected_total {
+            return Err(AppError::download(format!(
+                "Cannot finalize incomplete download: received {downloaded} of {expected_total} bytes."
+            )));
+        }
+        let ranges_path = super::range_map::range_map_path(&temporary);
+        if fs::try_exists(&ranges_path).await.unwrap_or(false) {
+            if let Ok(Some(map)) = super::range_map::RangeMap::load(&ranges_path, expected_total, 0) {
+                if !map.is_complete() {
+                    return Err(AppError::download(
+                        "Cannot finalize incomplete download: sparse range map has gaps.",
+                    ));
+                }
+            }
+        }
+    }
+
+    match super::sparse_file::rename_with_av_retry(&temporary, &destination).await {
+        Ok(()) => {
+            let ranges_path = super::range_map::range_map_path(&temporary);
+            let _ = fs::remove_file(ranges_path).await;
+        }
         Err(err)
             if err.kind() == std::io::ErrorKind::CrossesDevices
                 || err.raw_os_error() == Some(18)
@@ -207,6 +231,8 @@ pub async fn finalize(
                 _id,
             )
             .await?;
+            let ranges_path = super::range_map::range_map_path(&temporary);
+            let _ = fs::remove_file(ranges_path).await;
         }
         Err(error) => {
             return Err(AppError::download(format!(

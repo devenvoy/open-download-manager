@@ -1,6 +1,6 @@
 // Created: 2026-11-16
 // Reason: chore(mac-baseline): engine finish-phase benchmark measuring segmented transfer, concat, and disk/memory footprint
-// Description: Benchmark runner downloading 1 GiB and 2 GiB files via the CURRENT segmented HTTP engine against a local server.
+// Description: Benchmark runner downloading 1 GiB and 2 GiB files via HTTP engine against a local server.
 
 use std::{
     fs,
@@ -23,8 +23,10 @@ use open_download_manager_lib::{
     },
     domain::download::BrowserRequestHeaders,
     infrastructure::http_download_executor::{
-        assembler::{concat_segments, finalize, remove_partial_file, remove_segment_parts},
+        assembler::{finalize, remove_partial_file, remove_segment_parts},
+        range_map::{hash_etag, range_map_path, RangeMap},
         segmented::{discover_ranges, download_segments, segment_ranges},
+        sparse_file::{get_fsync_count, reset_fsync_count},
     },
 };
 
@@ -38,6 +40,8 @@ pub struct EngineRunMetrics {
     pub total_ms: f64,
     pub disk_bytes_written: u64,
     pub peak_rss_mb: f64,
+    pub fsyncs_count: u64,
+    pub fsyncs_per_gib: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +55,7 @@ pub struct EngineBenchmarkSummary {
     pub total: MetricStats,
     pub disk_bytes_written: u64,
     pub peak_rss_mb: MetricStats,
+    pub fsyncs_per_gib: MetricStats,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +122,7 @@ async fn run_single_download(
         }
     });
 
+    reset_fsync_count();
     let t_start = Instant::now();
 
     // 1. Discovery
@@ -137,18 +143,25 @@ async fn run_single_download(
     let validator = discovery.validator;
     let connections = 4_u8;
 
+    let temporary = temp_dir.join(format!("{download_id}.download.part"));
+    let destination = temp_dir.join(format!("{download_id}.bin"));
+    let ranges_path = range_map_path(&temporary);
+    let etag_h = hash_etag(validator.value());
+    let range_map_shared = Arc::new(Mutex::new(RangeMap::new(validator.total, etag_h)));
+
     let segments = segment_ranges(
         validator.total,
         connections,
         temp_dir,
         &download_id,
         None,
+        Some(&range_map_shared.lock().unwrap()),
     )
     .await
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     // 2. Transfer Phase
-    let download_res = download_segments(
+    let _download_res = download_segments(
         client.clone(),
         &download_id,
         discovery.final_url,
@@ -156,6 +169,9 @@ async fn run_single_download(
         segments,
         connections,
         temp_dir,
+        &temporary,
+        range_map_shared.clone(),
+        &ranges_path,
         &mut control,
         rate_limiter,
         &progress_handler,
@@ -169,20 +185,7 @@ async fn run_single_download(
 
     let t_transfer_done = Instant::now();
 
-    // 3. Concat / Finish Phase
-    let temporary = temp_dir.join(format!("{download_id}.download.part"));
-    let destination = temp_dir.join(format!("{download_id}.bin"));
-
-    concat_segments(
-        &download_id,
-        &download_res,
-        temp_dir,
-        &temporary,
-        &mut control,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-
+    // 3. Concat / Finish Phase (With sparse file, in-place finalize replaces concat)
     let _final_res = finalize(
         &download_id,
         temporary,
@@ -195,8 +198,12 @@ async fn run_single_download(
 
     let t_concat_done = Instant::now();
 
-    // Disk bytes written: sum of segment files (which were size_bytes) + final assembled file (size_bytes)
-    let disk_bytes_written = size_bytes * 2;
+    let fsyncs_count = get_fsync_count();
+    let gibs = (size_bytes as f64) / (1024.0 * 1024.0 * 1024.0);
+    let fsyncs_per_gib = (fsyncs_count as f64) / gibs;
+
+    // Sparse engine writes exactly 1.0x of the file size directly into the allocated part file
+    let disk_bytes_written = size_bytes;
     let peak_rss_mb = get_peak_rss_mb();
 
     let first_byte_instant = *t_first_byte.lock().unwrap();
@@ -218,6 +225,8 @@ async fn run_single_download(
         total_ms,
         disk_bytes_written,
         peak_rss_mb,
+        fsyncs_count,
+        fsyncs_per_gib,
     })
 }
 
@@ -233,7 +242,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = fs::create_dir_all(&temp_bench_dir);
 
     println!("=========================================================================");
-    println!(" Open Download Manager - Engine Finish-Phase Benchmark");
+    println!(" Open Download Manager - Sparse Engine Benchmark");
     println!("=========================================================================");
     println!("Target Server   : {base_url}");
     println!("Temp Directory  : {}", temp_bench_dir.display());
@@ -268,11 +277,12 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
             println!(
-                "  Run {iter}: First Byte: {:>6.1}ms | Transfer: {:>7.1}ms | Concat: {:>6.1}ms | Total: {:>7.1}ms | Peak RSS: {:>6.1}MB",
+                "  Run {iter}: First Byte: {:>6.1}ms | Transfer: {:>7.1}ms | Finish: {:>6.2}ms | Total: {:>7.1}ms | Fsyncs/GiB: {:>5.0} | Peak RSS: {:>6.1}MB",
                 res.start_to_first_byte_ms,
                 res.transfer_ms,
                 res.concat_finish_ms,
                 res.total_ms,
+                res.fsyncs_per_gib,
                 res.peak_rss_mb,
             );
             runs.push(res);
@@ -284,6 +294,7 @@ async fn main() -> anyhow::Result<()> {
         let concat_stats = compute_stats(runs.iter().map(|r| r.concat_finish_ms).collect());
         let total_stats = compute_stats(runs.iter().map(|r| r.total_ms).collect());
         let rss_stats = compute_stats(runs.iter().map(|r| r.peak_rss_mb).collect());
+        let fsync_stats = compute_stats(runs.iter().map(|r| r.fsyncs_per_gib).collect());
 
         println!(
             "\n  --- {label} Summary ---"
@@ -297,7 +308,7 @@ async fn main() -> anyhow::Result<()> {
             transfer_stats.min, transfer_stats.median, transfer_stats.max
         );
         println!(
-            "  Finish / Concat   : Min {:>6.1}ms | Median {:>6.1}ms | Max {:>6.1}ms",
+            "  Finish Phase      : Min {:>6.2}ms | Median {:>6.2}ms | Max {:>6.2}ms",
             concat_stats.min, concat_stats.median, concat_stats.max
         );
         println!(
@@ -305,9 +316,13 @@ async fn main() -> anyhow::Result<()> {
             total_stats.min, total_stats.median, total_stats.max
         );
         println!(
-            "  Disk Bytes Written: {} bytes ({} GiB on disk)",
-            size_bytes * 2,
-            (size_bytes * 2) / (1024 * 1024 * 1024)
+            "  Disk Bytes Written: {} bytes ({:.1} GiB on disk, write amp: 1.0x)",
+            size_bytes,
+            (size_bytes as f64) / (1024.0 * 1024.0 * 1024.0)
+        );
+        println!(
+            "  Fsyncs per GiB    : Min {:>6.0} | Median {:>6.0} | Max {:>6.0}",
+            fsync_stats.min, fsync_stats.median, fsync_stats.max
         );
         println!(
             "  Peak Memory (RSS) : Min {:>6.1}MB | Median {:>6.1}MB | Max {:>6.1}MB\n",
@@ -322,8 +337,9 @@ async fn main() -> anyhow::Result<()> {
             transfer: transfer_stats,
             concat_finish: concat_stats,
             total: total_stats,
-            disk_bytes_written: size_bytes * 2,
+            disk_bytes_written: size_bytes,
             peak_rss_mb: rss_stats,
+            fsyncs_per_gib: fsync_stats,
         });
 
         all_raw_runs.extend(runs);

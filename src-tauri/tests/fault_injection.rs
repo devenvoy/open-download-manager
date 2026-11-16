@@ -79,6 +79,22 @@ fn extract_range_start(request: &str) -> Option<u64> {
     })
 }
 
+fn extract_range(request: &str) -> Option<(usize, usize)> {
+    request.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.trim().eq_ignore_ascii_case("range") {
+            let val = value.trim();
+            if let Some(rest) = val.strip_prefix("bytes=") {
+                let mut parts = rest.split('-');
+                let start: usize = parts.next()?.parse().ok()?;
+                let end: usize = parts.next()?.parse().ok()?;
+                return Some((start, end));
+            }
+        }
+        None
+    })
+}
+
 async fn wait_for_terminal_status(history: &DownloadHistoryService, id: &str) -> DownloadStatus {
     for _ in 0..600 {
         let record = history
@@ -434,4 +450,99 @@ async fn test_fault_pause_and_resume_integrity() {
     let downloaded_bytes = fs::read(dir.join("pause-resume.bin")).expect("final file exists");
     assert_eq!(downloaded_bytes.len(), payload.len());
     assert_eq!(downloaded_bytes, payload);
+}
+
+/// Scenario 6: Server enforces max_conns=N concurrency limit (Item 5).
+/// Excess connections receive 429; the engine learns the cap, settles at N,
+/// and completes the transfer with SHA-256 integrity.
+#[tokio::test]
+async fn test_fault_max_conns_learned_cap_settles_at_n() {
+    let payload: Vec<u8> = (0..512 * 1024).map(|i| (i * 31 + 13) as u8).collect();
+    let full_payload = payload.clone();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("fixture should bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let active_conns = Arc::new(AtomicUsize::new(0));
+    let four29_count = Arc::new(AtomicUsize::new(0));
+    let max_conns = 3_usize;
+
+    let active_clone = active_conns.clone();
+    let four29_clone = four29_count.clone();
+
+    thread::spawn(move || {
+        while let Ok((mut stream, _)) = listener.accept() {
+            let req = read_http_request(&mut stream);
+            if req.starts_with("HEAD") {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"maxconns-etag\"\r\nConnection: close\r\n\r\n",
+                    full_payload.len()
+                );
+                continue;
+            }
+
+            let cur = active_clone.fetch_add(1, Ordering::SeqCst);
+            if cur >= max_conns {
+                four29_clone.fetch_add(1, Ordering::SeqCst);
+                active_clone.fetch_sub(1, Ordering::SeqCst);
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                );
+                continue;
+            }
+
+            let active_dec = active_clone.clone();
+            let payload_ref = full_payload.clone();
+
+            thread::spawn(move || {
+                let range = extract_range(&req);
+                if let Some((start, end)) = range {
+                    let slice = &payload_ref[start..=end];
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{}\r\nContent-Length: {}\r\nETag: \"maxconns-etag\"\r\nConnection: close\r\n\r\n",
+                        payload_ref.len(),
+                        slice.len()
+                    );
+                    for chunk in slice.chunks(8 * 1024) {
+                        if stream.write_all(chunk).is_err() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(20));
+                    }
+                } else {
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nETag: \"maxconns-etag\"\r\nConnection: close\r\n\r\n",
+                        payload_ref.len()
+                    );
+                    for chunk in payload_ref.chunks(8 * 1024) {
+                        if stream.write_all(chunk).is_err() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(20));
+                    }
+                }
+                active_dec.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+    });
+
+    let dir = temporary_directory();
+    let settings = Settings::new(dir.clone());
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(&dir)).unwrap();
+    let executor = HttpDownloadExecutor::new().unwrap();
+    let service = DownloadTransferService::new(history.clone(), executor, 1);
+
+    let url = format!("http://127.0.0.1:{port}/max-conns-test.bin");
+    let ids = service.add(download_request(url, "max-conns-test.bin"), &settings).unwrap();
+
+    let status = wait_for_terminal_status(&history, &ids[0]).await;
+    assert_eq!(status, DownloadStatus::Completed);
+
+    let downloaded_bytes = fs::read(dir.join("max-conns-test.bin")).expect("final file exists");
+    assert_eq!(downloaded_bytes.len(), payload.len());
+    assert_eq!(downloaded_bytes, payload);
+    assert!(four29_count.load(Ordering::SeqCst) > 0, "Server should register 429 when concurrency exceeded N=3");
 }

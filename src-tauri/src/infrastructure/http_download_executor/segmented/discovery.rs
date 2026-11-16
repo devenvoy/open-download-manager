@@ -16,6 +16,7 @@ use crate::{
 
 use super::super::{
     assembler::segment_path,
+    range_map::RangeMap,
     validator::{content_range, extract_validator, SegmentValidator},
 };
 
@@ -106,6 +107,7 @@ pub async fn segment_ranges(
     directory: &Path,
     id: &str,
     existing: Option<&[DownloadSegmentProgress]>,
+    range_map: Option<&RangeMap>,
 ) -> AppResult<Vec<DownloadSegmentProgress>> {
     if let Some(existing_segs) = existing {
         if !existing_segs.is_empty() {
@@ -121,17 +123,21 @@ pub async fn segment_ranges(
             if valid && expected_start == total {
                 let mut restored = Vec::with_capacity(existing_segs.len());
                 for (idx, seg) in existing_segs.iter().enumerate() {
-                    let path = segment_path(directory, id, idx);
-                    let downloaded = match fs::metadata(&path).await {
-                        Ok(metadata) => metadata.len().min(seg.total),
-                        Err(_) => 0,
+                    let downloaded = if let Some(rm) = range_map {
+                        rm.bytes_in_range(seg.start, seg.end).min(seg.total)
+                    } else {
+                        let path = segment_path(directory, id, idx);
+                        match fs::metadata(&path).await {
+                            Ok(metadata) => metadata.len().min(seg.total),
+                            Err(_) => 0,
+                        }
                     };
                     restored.push(DownloadSegmentProgress {
                         start: seg.start,
                         end: seg.end,
                         downloaded,
                         total: seg.total,
-                        status: if downloaded == seg.total {
+                        status: if downloaded >= seg.total {
                             "complete"
                         } else {
                             "queued"
@@ -158,14 +164,18 @@ pub async fn segment_ranges(
             u64::try_from(index).map_err(|_| AppError::download("The segment index is invalid."))?;
         let segment_total = base_size + u64::from(index_u64 < remainder);
         let end = start + segment_total - 1;
-        let path = segment_path(directory, id, index);
-        let downloaded = match fs::metadata(path).await {
-            Ok(metadata) => metadata.len(),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
-            Err(error) => {
-                return Err(AppError::download(format!(
-                    "Could not inspect a partial segment: {error}"
-                )));
+        let downloaded = if let Some(rm) = range_map {
+            rm.bytes_in_range(start, end).min(segment_total)
+        } else {
+            let path = segment_path(directory, id, index);
+            match fs::metadata(path).await {
+                Ok(metadata) => metadata.len(),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+                Err(error) => {
+                    return Err(AppError::download(format!(
+                        "Could not inspect a partial segment: {error}"
+                    )));
+                }
             }
         };
         if downloaded > segment_total {
@@ -178,7 +188,7 @@ pub async fn segment_ranges(
             end,
             downloaded,
             total: segment_total,
-            status: if downloaded == segment_total {
+            status: if downloaded >= segment_total {
                 "complete"
             } else {
                 "queued"
