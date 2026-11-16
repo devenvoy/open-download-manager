@@ -55,7 +55,7 @@ impl MediaToolAdapter for MacosAdapter {
         // static macOS ARM64 FFmpeg build is available upstream.
         let url = match tool {
             MediaToolType::YtDlp => {
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos.zip"
             }
             MediaToolType::Ffmpeg => "https://evermeet.cx/ffmpeg/getrelease/zip",
         };
@@ -117,7 +117,7 @@ mod tests {
             let ytdlp = adapter
                 .download_spec(MediaToolType::YtDlp)
                 .expect("macOS yt-dlp spec");
-            assert!(ytdlp.url.ends_with("/yt-dlp_macos"));
+            assert!(ytdlp.url.ends_with("/yt-dlp_macos.zip"));
             assert_eq!(ytdlp.binary_name, "yt-dlp");
 
             let ffmpeg = adapter

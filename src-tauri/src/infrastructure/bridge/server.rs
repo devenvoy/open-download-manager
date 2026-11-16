@@ -430,6 +430,12 @@ async fn handle_bridge_connection(
                     let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
                 }
             }
+        } else if parsed.url.contains(".m3u8") {
+            if let Ok(items) = crate::infrastructure::media::ytdlp::YtDlpTools::sniff_hls_formats(&parsed.url).await {
+                let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": items})).await;
+            } else {
+                let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
+            }
         } else {
             let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
         }
