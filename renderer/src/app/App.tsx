@@ -11,6 +11,7 @@ const ROUTE_TITLES: Record<WindowMode, string> = {
   add: "Download File Info",
   scheduler: "Scheduler",
   integration: "Browser integration",
+  torrents: "Torrents",
 };
 
 /** The application root. Declaratively sets the window title and renders the route. */
@@ -21,6 +22,7 @@ export function App({ route }: { route: WindowRoute }) {
     const label =
       route.mode === "progress" ? `progress-${route.downloadId}` : route.mode;
     void call("mark_ui_ready", { label }).catch(() => {});
+    void call("window_ready", { label }).catch(() => {});
   }, [route.mode, route.mode === "progress" ? route.downloadId : ""]);
 
   return <WindowRouter route={route} />;

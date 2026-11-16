@@ -10,6 +10,7 @@ document.body.classList.add("torrents-window");
 function TorrentsApp() {
   useEffect(() => {
     void call("mark_ui_ready", { label: "torrents" }).catch(() => {});
+    void call("window_ready", { label: "torrents" }).catch(() => {});
   }, []);
 
   return (

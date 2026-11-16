@@ -450,6 +450,13 @@ pub fn mark_window_ui_ready(label: &str) -> Option<Duration> {
 }
 
 pub async fn wait_for_window_ui_ready(label: &str, timeout: Duration) -> Result<Duration, String> {
+    if let Ok(map) = window_opens_map().read() {
+        if let Some(record) = map.get(label) {
+            if record.notified {
+                return Ok(Instant::now().saturating_duration_since(record.open_time));
+            }
+        }
+    }
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
         let mut notifiers = window_notifiers_map().write().map_err(|e| e.to_string())?;

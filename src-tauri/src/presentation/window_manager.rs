@@ -83,6 +83,13 @@ pub fn progress_label(id: &str) -> String {
     format!("{PROGRESS_WINDOW_PREFIX}{id}")
 }
 
+static PENDING_ADD_OPTIONS: std::sync::Mutex<Option<OpenAddOptions>> = std::sync::Mutex::new(None);
+
+#[tauri::command(async)]
+pub fn take_add_window_options() -> Option<OpenAddOptions> {
+    PENDING_ADD_OPTIONS.lock().unwrap().take()
+}
+
 pub fn progress_route(id: &str) -> AppResult<String> {
     if id.is_empty()
         || id.len() > 128
@@ -93,39 +100,27 @@ pub fn progress_route(id: &str) -> AppResult<String> {
         return Err(AppError::window("The download identifier is invalid."));
     }
 
-    Ok(format!("index.html?progress={id}"))
+    Ok("index.html".to_string())
 }
 
 pub fn options_route() -> &'static str {
-    "index.html?options=1"
+    "index.html"
 }
 
 pub fn torrent_route() -> &'static str {
-    "torrents.html"
+    "index.html"
 }
 
 pub fn scheduler_route() -> &'static str {
-    "index.html?scheduler=1"
+    "index.html"
 }
 
 pub fn integration_route() -> &'static str {
-    "index.html?integration=1"
+    "index.html"
 }
 
-pub fn add_route(options: Option<&OpenAddOptions>) -> String {
-    let mut parts = vec!["add=1".to_string()];
-    if let Some(opts) = options {
-        if opts.paste.unwrap_or(false) {
-            parts.push("paste=1".to_string());
-        }
-        if let Some(scheduled) = &opts.scheduled {
-            if !scheduled.is_empty() {
-                let encoded = url::form_urlencoded::byte_serialize(scheduled.as_bytes()).collect::<String>();
-                parts.push(format!("scheduled={encoded}"));
-            }
-        }
-    }
-    format!("index.html?{}", parts.join("&"))
+pub fn add_route(_options: Option<&OpenAddOptions>) -> String {
+    "index.html".to_string()
 }
 
 pub fn needs_close_choice(status: &DownloadStatus, needs_review: bool) -> bool {
@@ -139,21 +134,37 @@ pub fn should_cancel_review_on_close(needs_review: bool) -> bool {
     needs_review
 }
 
-fn activate_existing_window(window: &WebviewWindow) -> AppResult<()> {
+pub fn activate_existing_window(window: &WebviewWindow) -> AppResult<()> {
     if window.is_minimized().unwrap_or(false) {
         let _ = window.unminimize();
     }
     let _ = window.show();
-    window
-        .set_focus()
-        .map_err(|error| AppError::window(error.to_string()))
+    if !crate::infrastructure::smoke::is_smoke_test() {
+        window
+            .set_focus()
+            .map_err(|error| AppError::window(error.to_string()))?;
+    }
+    Ok(())
 }
 
-#[tauri::command]
+pub async fn show_window_on_ready_or_fallback(
+    window: WebviewWindow,
+    label: String,
+    start: std::time::Instant,
+) {
+    let fallback = std::time::Duration::from_millis(1500);
+    let _ = crate::infrastructure::perf::wait_for_window_ui_ready(&label, fallback).await;
+    let _ = window.show();
+    if !crate::infrastructure::smoke::is_smoke_test() {
+        let _ = window.set_focus();
+    }
+    crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
+}
+
+#[tauri::command(async)]
 pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_progress_window");
     let start = std::time::Instant::now();
-    let route = progress_route(&id)?;
     let label = progress_label(&id);
 
     if let Some(window) = app.get_webview_window(&label) {
@@ -183,18 +194,24 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     let window = WebviewWindowBuilder::new(
         &app,
         &label,
-        WebviewUrl::App(PathBuf::from(route)),
+        WebviewUrl::App(PathBuf::from("index.html")),
     )
     .title(&title)
     .inner_size(width, height)
     .min_inner_size(min_w, min_h)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(&label);
-    crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
+
+    let win_clone = window.clone();
+    let lbl_clone = label.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, lbl_clone, start).await;
+    });
 
     let app_handle = app.clone();
     let download_id = id.clone();
@@ -276,7 +293,7 @@ fn handle_progress_close(
         });
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn close_auxiliary_window(window: WebviewWindow) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("close_auxiliary_window");
     if window.label() == "main" {
@@ -290,7 +307,7 @@ pub fn close_auxiliary_window(window: WebviewWindow) -> AppResult<()> {
         .map_err(|error| AppError::window(error.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resize_progress_window(window: WebviewWindow, expanded: bool) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("resize_progress_window");
     if !window.label().starts_with(PROGRESS_WINDOW_PREFIX) && window.label() != "progress" {
@@ -321,7 +338,7 @@ pub fn resize_progress_window(window: WebviewWindow, expanded: bool) -> AppResul
         .map_err(|error| AppError::window(error.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resize_auxiliary_window(
     window: WebviewWindow,
     width: Option<f64>,
@@ -353,7 +370,7 @@ pub fn resize_auxiliary_window(
         .map_err(|error| AppError::window(error.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_options_window");
     let start = std::time::Instant::now();
@@ -371,17 +388,22 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .title("Options")
     .inner_size(OPTIONS_WINDOW_WIDTH, OPTIONS_WINDOW_HEIGHT)
     .min_inner_size(OPTIONS_WINDOW_MIN_WIDTH, OPTIONS_WINDOW_MIN_HEIGHT)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let res = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(OPTIONS_WINDOW_LABEL);
-    crate::infrastructure::perf::record_window_shown(OPTIONS_WINDOW_LABEL, start.elapsed());
-    res
+
+    let win_clone = window.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, OPTIONS_WINDOW_LABEL.to_string(), start).await;
+    });
+    Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_add_window(
     app: AppHandle,
     options: Option<OpenAddOptions>,
@@ -392,33 +414,40 @@ pub fn open_add_window(
         let _ = scheduler.close();
     }
 
+    if let Some(opts) = options {
+        *PENDING_ADD_OPTIONS.lock().unwrap() = Some(opts);
+    }
+
     if let Some(window) = app.get_webview_window(ADD_WINDOW_LABEL) {
         let res = activate_existing_window(&window);
         crate::infrastructure::perf::record_window_shown(ADD_WINDOW_LABEL, start.elapsed());
         return res;
     }
 
-    let route = add_route(options.as_ref());
-
     let window = WebviewWindowBuilder::new(
         &app,
         ADD_WINDOW_LABEL,
-        WebviewUrl::App(PathBuf::from(route)),
+        WebviewUrl::App(PathBuf::from(add_route(None))),
     )
     .title("Download File Info")
     .inner_size(ADD_WINDOW_WIDTH, ADD_WINDOW_HEIGHT)
     .min_inner_size(ADD_WINDOW_MIN_WIDTH, ADD_WINDOW_MIN_HEIGHT)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let res = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(ADD_WINDOW_LABEL);
-    crate::infrastructure::perf::record_window_shown(ADD_WINDOW_LABEL, start.elapsed());
-    res
+
+    let win_clone = window.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, ADD_WINDOW_LABEL.to_string(), start).await;
+    });
+    Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_scheduler_window");
     let start = std::time::Instant::now();
@@ -436,17 +465,22 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .title("Scheduler")
     .inner_size(SCHEDULER_WINDOW_WIDTH, SCHEDULER_WINDOW_HEIGHT)
     .min_inner_size(SCHEDULER_WINDOW_MIN_WIDTH, SCHEDULER_WINDOW_MIN_HEIGHT)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let res = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(SCHEDULER_WINDOW_LABEL);
-    crate::infrastructure::perf::record_window_shown(SCHEDULER_WINDOW_LABEL, start.elapsed());
-    res
+
+    let win_clone = window.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, SCHEDULER_WINDOW_LABEL.to_string(), start).await;
+    });
+    Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_integration_window");
     let start = std::time::Instant::now();
@@ -464,17 +498,22 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .title("Browser integration")
     .inner_size(INTEGRATION_WINDOW_WIDTH, INTEGRATION_WINDOW_HEIGHT)
     .min_inner_size(INTEGRATION_WINDOW_MIN_WIDTH, INTEGRATION_WINDOW_MIN_HEIGHT)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let res = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(INTEGRATION_WINDOW_LABEL);
-    crate::infrastructure::perf::record_window_shown(INTEGRATION_WINDOW_LABEL, start.elapsed());
-    res
+
+    let win_clone = window.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, INTEGRATION_WINDOW_LABEL.to_string(), start).await;
+    });
+    Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_torrent_window");
     let start = std::time::Instant::now();
@@ -492,6 +531,8 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     .title("Torrents")
     .inner_size(TORRENT_WINDOW_WIDTH, TORRENT_WINDOW_HEIGHT)
     .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
+    .visible(false)
+    .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -505,8 +546,11 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     });
 
     let _ = window.remove_menu();
-    let res = activate_existing_window(&window);
     crate::infrastructure::perf::record_window_open(TORRENT_WINDOW_LABEL);
-    crate::infrastructure::perf::record_window_shown(TORRENT_WINDOW_LABEL, start.elapsed());
-    res
+
+    let win_clone = window.clone();
+    tauri::async_runtime::spawn(async move {
+        show_window_on_ready_or_fallback(win_clone, TORRENT_WINDOW_LABEL.to_string(), start).await;
+    });
+    Ok(())
 }
