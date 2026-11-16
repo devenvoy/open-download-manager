@@ -45,13 +45,16 @@ describe("SettingsScreen", () => {
   it("renders the settings from the snapshot", async () => {
     renderWithQuery(<SettingsScreen />);
 
+    expect(await screen.findByText("Options")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("tab", { name: "Save To" }));
+
     const directory = await screen.findByLabelText("Default download folder:");
     expect(directory).toHaveValue("/Users/test/Downloads");
-    expect(screen.getByText("Options")).toBeInTheDocument();
   });
 
   it("saves the options and closes auxiliary window on OK", async () => {
     renderWithQuery(<SettingsScreen />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Save To" }));
     await screen.findByLabelText("Default download folder:");
 
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
@@ -80,7 +83,7 @@ describe("SettingsScreen", () => {
 
   it("closes the window on Cancel", async () => {
     renderWithQuery(<SettingsScreen />);
-    await screen.findByLabelText("Default download folder:");
+    expect(await screen.findByText("Options")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 

@@ -22,10 +22,10 @@ export interface DownloadsToolbarProps {
 }
 
 const TOOL_BTN_CLS =
-  "tool h-[63px] min-w-[53px] px-1 py-1 border border-transparent bg-transparent flex flex-col items-center justify-center gap-1.5 whitespace-nowrap shrink-0 text-[10px] text-inherit cursor-pointer hover:not-disabled:border-[#99b4d1] dark:hover:not-disabled:border-[#4a6a8a] hover:not-disabled:bg-[#e5eff9] dark:hover:not-disabled:bg-[#2d3b4a] active:not-disabled:border-[#6f95bd] dark:active:not-disabled:border-[#5d87b0] active:not-disabled:bg-[#cfdfef] dark:active:not-disabled:bg-[#364a5e] disabled:text-[#929292] dark:disabled:text-[#6a6a6a] disabled:opacity-40 transition-colors";
+  "tool group h-[60px] min-w-[50px] px-2 py-1 border border-transparent bg-transparent flex flex-col items-center justify-center gap-1 whitespace-nowrap shrink-0 text-[11px] text-[#333] dark:text-[#ddd] cursor-pointer rounded hover:not-disabled:border-[#99b4d1] dark:hover:not-disabled:border-[#4a6a8a] hover:not-disabled:bg-[#e5eff9] dark:hover:not-disabled:bg-[#2d3b4a] active:not-disabled:border-[#6f95bd] dark:active:not-disabled:border-[#5d87b0] active:not-disabled:bg-[#cfdfef] dark:active:not-disabled:bg-[#364a5e] disabled:text-[#929292] dark:disabled:text-[#6a6a6a] disabled:opacity-40 transition-colors";
 
 const TOOL_DIV_CLS =
-  "tool-divider w-[1px] self-stretch bg-[#c8c8c8] dark:bg-[#383838] border-r border-white dark:border-[#2b2b2b] my-1.5 mx-1 shrink-0";
+  "tool-divider w-[1px] h-[36px] bg-[#c8c8c8] dark:bg-[#383838] my-auto mx-1 shrink-0";
 
 export function DownloadsToolbar({
   selectedIds,
@@ -49,7 +49,7 @@ export function DownloadsToolbar({
 }: DownloadsToolbarProps) {
   return (
     <div
-      className="toolbar h-[70px] shrink-0 bg-[#f0f0f0] dark:bg-[#1e1e1e] border-t border-white dark:border-[#2b2b2b] border-b border-[#aaa] dark:border-[#383838] flex items-center px-1 py-0.5 overflow-hidden select-none"
+      className="toolbar h-[66px] shrink-0 bg-[#f0f0f0] dark:bg-[#1e1e1e] border-t border-white dark:border-[#2b2b2b] border-b border-[#aaa] dark:border-[#383838] flex items-center px-1 py-0.5 overflow-x-auto overflow-y-hidden select-none"
       role="toolbar"
       aria-label="Download commands"
     >

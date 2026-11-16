@@ -2882,55 +2882,28 @@ code {
 	}
 }
 :root .tool {
-	width: 65px;
-	min-width: 0;
-	padding-inline: 3px;
+	min-width: 50px;
+	width: auto;
+	padding-inline: 6px;
 }
 .toolbar .tool svg {
-	width: 34px;
-	height: 34px;
-	stroke-width: 1.7;
-	fill: none;
+	width: 22px;
+	height: 22px;
 }
 .toolbar .tool span {
 	font-size: 11px;
-	max-width: 60px;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: center;
+	line-height: 1.2;
 }
 .toolbar .tool.wide {
-	min-width: 0;
+	min-width: 82px;
 }
 .toolbar .integration-tool {
-	width: 78px;
-	min-width: 0;
+	min-width: 90px;
 }
 .tool-divider {
-	display: none;
-}
-.tool[data-icon="add"] svg {
-	stroke: #7fbaa5;
-}
-.tool[data-icon="resume"] svg,
-.tool[data-icon="stop"] svg,
-.tool[data-icon="stopall"] svg,
-.tool[data-icon="delete"] svg {
-	stroke: #999;
-}
-.tool[data-icon="clear"] svg {
-	stroke: #b46da2;
-}
-.tool[data-icon="options"] svg {
-	stroke: #8977d8;
-}
-.tool[data-icon="clock"] svg {
-	stroke: #b192b7;
-}
-.tool[data-icon="startqueue"] svg {
-	stroke: #81aebc;
-}
-.tool[data-icon="stopqueue"] svg {
-	stroke: #a489bb;
+	display: block;
 }
 .categories {
 	width: 148px;
@@ -3007,47 +2980,13 @@ td {
 	height: 17px;
 }
 .table-scroll {
-	background:
-		repeating-linear-gradient(
-			180deg,
-			transparent 0,
-			transparent 16px,
-			#eee 16px,
-			#eee 17px
-		),
-		linear-gradient(
-			90deg,
-			transparent 149px,
-			#eee 149px,
-			#eee 150px,
-			transparent 150px,
-			transparent 169px,
-			#eee 169px,
-			#eee 170px,
-			transparent 170px,
-			transparent 239px,
-			#eee 239px,
-			#eee 240px,
-			transparent 240px,
-			transparent 304px,
-			#eee 304px,
-			#eee 305px,
-			transparent 305px,
-			transparent 379px,
-			#eee 379px,
-			#eee 380px,
-			transparent 380px,
-			transparent 474px,
-			#eee 474px,
-			#eee 475px,
-			transparent 475px,
-			transparent 539px,
-			#eee 539px,
-			#eee 540px,
-			transparent 540px
-		);
-	background-position: 0 24px;
-	overflow: scroll;
+	background: #ffffff;
+	overflow: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+}
+[data-theme="dark"] .table-scroll {
+	background: #1e1e1e !important;
 }
 .list-search {
 	display: none;

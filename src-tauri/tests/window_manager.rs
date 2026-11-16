@@ -72,10 +72,10 @@ fn auxiliary_window_routes_return_plain_index_html_on_all_platforms() {
     assert_eq!(progress_route("dl-123").unwrap(), "index.html");
 
     // Verify dimension constants
-    assert_eq!(OPTIONS_WINDOW_WIDTH, 540.0);
-    assert_eq!(OPTIONS_WINDOW_HEIGHT, 650.0);
-    assert_eq!(OPTIONS_WINDOW_MIN_WIDTH, 500.0);
-    assert_eq!(OPTIONS_WINDOW_MIN_HEIGHT, 500.0);
+    assert_eq!(OPTIONS_WINDOW_WIDTH, 720.0);
+    assert_eq!(OPTIONS_WINDOW_HEIGHT, 560.0);
+    assert_eq!(OPTIONS_WINDOW_MIN_WIDTH, 640.0);
+    assert_eq!(OPTIONS_WINDOW_MIN_HEIGHT, 480.0);
 
     assert_eq!(SCHEDULER_WINDOW_WIDTH, 550.0);
     assert_eq!(SCHEDULER_WINDOW_HEIGHT, 430.0);
