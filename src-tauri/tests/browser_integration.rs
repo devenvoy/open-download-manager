@@ -179,19 +179,19 @@ fn native_host_manifest_structures_match_browser_specifications() {
 #[test]
 fn test_browser_native_messaging_directories_resolve() {
     let home = PathBuf::from("/mock/home/user");
-    let chrome_dir = browser_native_messaging_dir(BrowserType::Chrome, &home);
-    let edge_dir = browser_native_messaging_dir(BrowserType::Edge, &home);
-    let brave_dir = browser_native_messaging_dir(BrowserType::Brave, &home);
-    let opera_dir = browser_native_messaging_dir(BrowserType::Opera, &home);
-    let firefox_dir = browser_native_messaging_dir(BrowserType::Firefox, &home);
+    let _chrome_dir = browser_native_messaging_dir(BrowserType::Chrome, &home);
+    let _edge_dir = browser_native_messaging_dir(BrowserType::Edge, &home);
+    let _brave_dir = browser_native_messaging_dir(BrowserType::Brave, &home);
+    let _opera_dir = browser_native_messaging_dir(BrowserType::Opera, &home);
+    let _firefox_dir = browser_native_messaging_dir(BrowserType::Firefox, &home);
 
     #[cfg(target_os = "macos")]
     {
-        assert_eq!(chrome_dir, home.join("Library/Application Support/Google/Chrome/NativeMessagingHosts"));
-        assert_eq!(edge_dir, home.join("Library/Application Support/Microsoft Edge/NativeMessagingHosts"));
-        assert_eq!(brave_dir, home.join("Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"));
-        assert_eq!(opera_dir, home.join("Library/Application Support/com.operasoftware.Opera/NativeMessagingHosts"));
-        assert_eq!(firefox_dir, home.join("Library/Application Support/Mozilla/NativeMessagingHosts"));
+        assert_eq!(_chrome_dir, home.join("Library/Application Support/Google/Chrome/NativeMessagingHosts"));
+        assert_eq!(_edge_dir, home.join("Library/Application Support/Microsoft Edge/NativeMessagingHosts"));
+        assert_eq!(_brave_dir, home.join("Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"));
+        assert_eq!(_opera_dir, home.join("Library/Application Support/com.operasoftware.Opera/NativeMessagingHosts"));
+        assert_eq!(_firefox_dir, home.join("Library/Application Support/Mozilla/NativeMessagingHosts"));
     }
 
     #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -1379,4 +1379,56 @@ fn human_scenario_native_messaging_manifest_sync_repairs_stale_path_and_preserve
     assert!(origins.contains(&"chrome-extension://hlomaolpnkkbikjacplamegklgegpjbj/".to_owned()));
 
     fs::remove_dir_all(directory).expect("cleanup directory");
+}
+
+#[tokio::test]
+async fn test_unregister_browser_manifest_deletes_manifest_and_targets_only_own_host_key() {
+    use open_download_manager_lib::infrastructure::browser::unregister_browser_manifest;
+
+    let dir = temporary_directory();
+    let nm_dir = dir.join("NativeMessaging");
+    fs::create_dir_all(&nm_dir).expect("create nm dir");
+
+    let chrome_manifest = nm_dir.join(format!("{}.json", BrowserType::Chrome.manifest_name()));
+    fs::write(&chrome_manifest, b"{}").expect("write dummy manifest");
+    assert!(chrome_manifest.exists());
+
+    // Calling unregister must remove the manifest file
+    let res = unregister_browser_manifest(BrowserType::Chrome, &dir).await;
+    assert!(res.is_ok());
+    assert!(!chrome_manifest.exists(), "Manifest file should be removed on unregister");
+
+    #[cfg(windows)]
+    {
+        // On Windows, verify that winreg targets only NATIVE_HOST_NAME
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let parent_path = format!(r"Software\{}\NativeMessagingHosts", BrowserType::Chrome.registry_key());
+        if let Ok((parent_key, _)) = hkcu.create_subkey(&parent_path) {
+            // Create a sibling dummy host key to prove only our key is deleted
+            let sibling_name = "com.other_test_downloader.host";
+            let _ = parent_key.create_subkey(sibling_name);
+
+            // Create our own key
+            let _ = parent_key.create_subkey(NATIVE_HOST_NAME);
+
+            // Execute unregister
+            let _ = unregister_browser_manifest(BrowserType::Chrome, &dir).await;
+
+            // Verify our key is gone
+            let own_key_res = parent_key.open_subkey_with_flags(NATIVE_HOST_NAME, KEY_READ);
+            assert!(own_key_res.is_err(), "Our own host key must be deleted");
+
+            // Verify sibling key remains intact
+            let sibling_key_res = parent_key.open_subkey_with_flags(sibling_name, KEY_READ);
+            assert!(sibling_key_res.is_ok(), "Sibling host key must NOT be touched");
+
+            // Clean up sibling test key
+            let _ = parent_key.delete_subkey(sibling_name);
+        }
+    }
+
+    let _ = fs::remove_dir_all(dir);
 }

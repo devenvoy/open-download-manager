@@ -16,6 +16,30 @@ const MAX_MESSAGE: usize = 1024 * 1024;
 struct BridgeConfig {
     port: u16,
     token: String,
+    #[serde(default)]
+    pid: Option<u32>,
+}
+
+fn grant_foreground_to_process(_pid: Option<u32>) {
+    #[cfg(windows)]
+    if let Some(pid) = _pid {
+        unsafe {
+            // Validate that pid is a live process using OpenProcess
+            let handle = windows_sys::Win32::System::Threading::OpenProcess(
+                windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION,
+                0,
+                pid,
+            );
+            if !handle.is_null() {
+                windows_sys::Win32::Foundation::CloseHandle(handle);
+                let ret = windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid);
+                eprintln!("[native_host] AllowSetForegroundWindow({pid}) returned {ret}");
+            } else {
+                let err = windows_sys::Win32::Foundation::GetLastError();
+                eprintln!("[native_host] PID {pid} is not a live process (OpenProcess error {err}), skipping AllowSetForegroundWindow");
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -54,6 +78,7 @@ async fn main() {
 async fn run() -> Result<(), HostError> {
     let msg = read_message()?;
     let bridge_config = ensure_bridge_config(false).await?;
+    grant_foreground_to_process(bridge_config.pid);
 
     let action = msg
         .get("action")
@@ -131,6 +156,7 @@ async fn send_with_retry(
             for _ in 0..20 {
                 tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 if let Ok(new_cfg) = load_bridge_config() {
+                    grant_foreground_to_process(new_cfg.pid);
                     let new_url = format!("http://127.0.0.1:{}{}", new_cfg.port, url.split_once("127.0.0.1:").map(|(_, rest)| rest.split_once('/').map(|(_, p)| format!("/{p}")).unwrap_or_default()).unwrap_or_default());
                     if let Ok(resp) = client
                         .post(&new_url)
@@ -187,12 +213,15 @@ fn try_launch_desktop() {
     let _ = std::fs::File::create(&lock_path);
 
     if let Some(exe) = find_desktop_executable() {
-        let _ = std::process::Command::new(exe)
+        if let Ok(child) = std::process::Command::new(exe)
             .arg("--browser-download")
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .spawn();
+            .spawn()
+        {
+            grant_foreground_to_process(Some(child.id()));
+        }
     }
 }
 

@@ -328,17 +328,26 @@ pub async fn unregister_browser_manifest(
 
     #[cfg(windows)]
     {
-        let key = format!(
-            r"HKCU\Software\{}\NativeMessagingHosts\{}",
-            browser.registry_key(),
-            NATIVE_HOST_NAME
-        );
-        let _ = tokio::process::Command::new("reg.exe")
-            .arg("DELETE")
-            .arg(&key)
-            .arg("/f")
-            .status()
-            .await;
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE};
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let subkey_path = format!(r"Software\{}\NativeMessagingHosts", browser.registry_key());
+        let full_key_path = format!(r"HKCU\{}\{}", subkey_path, NATIVE_HOST_NAME);
+
+        eprintln!("[odm] unregistering browser: targeting registry key {full_key_path}");
+        if let Ok(parent_key) = hkcu.open_subkey_with_flags(&subkey_path, KEY_WRITE) {
+            match parent_key.delete_subkey(NATIVE_HOST_NAME) {
+                Ok(()) => {
+                    eprintln!("[odm] successfully deleted registry subkey: {NATIVE_HOST_NAME} from HKCU\\{subkey_path}");
+                }
+                Err(err) => {
+                    eprintln!("[odm] registry subkey {NATIVE_HOST_NAME} not found or already deleted: {err}");
+                }
+            }
+        } else {
+            eprintln!("[odm] parent registry key HKCU\\{subkey_path} does not exist or is not writable");
+        }
     }
 
     #[cfg(not(windows))]
