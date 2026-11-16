@@ -23,6 +23,7 @@ pub struct BrowserIncomingMessage {
     pub output_format: Option<String>,
     pub urls: Option<Vec<String>>,
     pub filename: Option<String>,
+    pub directory: Option<String>,
     pub referer: Option<String>,
     pub canonical_url: Option<String>,
     pub video_id: Option<String>,
@@ -44,6 +45,7 @@ pub struct ValidatedBrowserRequest {
     pub output_format: Option<String>,
     pub urls: Option<Vec<String>>,
     pub filename: Option<String>,
+    pub directory: Option<String>,
     pub referer: Option<String>,
     pub headers: HashMap<String, String>,
 }
@@ -91,6 +93,7 @@ pub fn sanitize_browser_request(
             output_format: None,
             urls: None,
             filename: None,
+            directory: None,
             referer: None,
             headers: HashMap::new(),
         });
@@ -201,6 +204,7 @@ pub fn sanitize_browser_request(
         output_format: msg.output_format,
         urls,
         filename,
+        directory: msg.directory.filter(|d| !d.trim().is_empty()),
         referer,
         headers: filtered_headers,
     })
