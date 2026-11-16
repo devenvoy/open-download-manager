@@ -36,6 +36,6 @@ pub use queues::{
     reorder_queue_items, start_queue, update_queue,
 };
 pub use settings::{
-    check_for_updates, mark_ui_ready, show_about_dialog, snapshot, update_settings,
-    validate_directory,
+    check_for_updates, mark_ui_ready, show_about_dialog, snapshot, test_sleep_async,
+    test_sleep_sync, update_settings, validate_directory, window_ready,
 };

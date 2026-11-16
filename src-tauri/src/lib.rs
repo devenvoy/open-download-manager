@@ -37,14 +37,15 @@ use presentation::{
         remove_completed, reorder_queue_items, repair_advanced_integration, resolve_asx_playlist,
         retry_download_actions, review_download, save_credential_rule, show_about_dialog, snapshot,
         start_queue, test_proxy_connection, update_download_completion_actions, update_queue,
-        update_settings, validate_directory, mark_ui_ready,
+        update_settings, validate_directory, mark_ui_ready, window_ready,
+        test_sleep_sync, test_sleep_async,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     tray::tray_set_active_downloads,
     window_manager::{
         close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
         open_progress_window, open_scheduler_window, open_torrent_window, resize_auxiliary_window,
-        resize_progress_window,
+        resize_progress_window, take_add_window_options,
     },
 };
 use presentation::commands::torrents::{
@@ -100,9 +101,15 @@ pub fn run() {
                 return;
             }
             if argv.iter().any(|arg| arg == "--browser-setup") {
-                let _ = presentation::window_manager::open_integration_window(app.app_handle().clone());
+                let app_handle = app.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = presentation::window_manager::open_integration_window(app_handle);
+                });
             } else if !argv.iter().any(|arg| arg == "--background" || arg == "--browser-download") {
-                presentation::tray::show_main_window(app.app_handle());
+                let app_handle = app.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    presentation::tray::show_main_window(&app_handle);
+                });
             }
         }))
         .setup(|app| {
@@ -220,17 +227,17 @@ pub fn run() {
             let on_torrent = std::sync::Arc::new(
                 move |review: crate::domain::torrent::TorrentReviewRequest| {
                     let app = bridge_app.clone();
-                    let app_for_thread = app.clone();
-                    let _ = app.run_on_main_thread(move || {
-                        let _ = presentation::window_manager::open_torrent_window(app_for_thread);
+                    let review_torrents = review_torrents.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = presentation::window_manager::open_torrent_window(app.clone());
+                        // The review is delivered exactly once: while no window
+                        // listens it stays pending, afterwards it is gone.
+                        crate::application::torrent_os_integration::deliver_review(
+                            &app,
+                            &review_torrents,
+                            review,
+                        );
                     });
-                    // The review is delivered exactly once: while no window
-                    // listens it stays pending, afterwards it is gone.
-                    crate::application::torrent_os_integration::deliver_review(
-                        &app,
-                        &review_torrents,
-                        review,
-                    );
                 },
             );
 
@@ -301,7 +308,10 @@ pub fn run() {
             }
 
             if is_browser_setup {
-                let _ = presentation::window_manager::open_integration_window(app.handle().clone());
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = presentation::window_manager::open_integration_window(app_handle);
+                });
             }
 
             let file_icons = crate::infrastructure::file_icons::FileIconProvider::new(
@@ -450,6 +460,7 @@ pub fn run() {
             close_auxiliary_window,
             resize_auxiliary_window,
             resize_progress_window,
+            take_add_window_options,
             get_integration_info,
             register_browser,
             browser_setup_action,
@@ -506,6 +517,9 @@ pub fn run() {
             torrent_tracker_status,
             tray_set_active_downloads,
             mark_ui_ready,
+            window_ready,
+            test_sleep_sync,
+            test_sleep_async,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Open Download Manager")

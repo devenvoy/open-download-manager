@@ -38,7 +38,9 @@ pub fn show_main_window<R: tauri::Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
-        let _ = window.set_focus();
+        if !crate::infrastructure::smoke::is_smoke_test() {
+            let _ = window.set_focus();
+        }
     }
 }
 
@@ -113,7 +115,7 @@ pub fn setup_system_tray(
 }
 
 /// Sets the number of active downloads and updates the tray tooltip.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tray_set_active_downloads(
     app: AppHandle<tauri::Wry>,
     state: State<'_, TrayState>,

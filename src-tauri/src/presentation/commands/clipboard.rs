@@ -9,7 +9,7 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dismiss_clipboard_candidate(
     state: State<'_, AppState>,
     url: String,
