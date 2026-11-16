@@ -10,8 +10,9 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_integration_info(state: State<'_, AppState>) -> AppResult<IntegrationStatus> {
+    let _timer = crate::infrastructure::perf::track_command("get_integration_info");
     state.integration.get_integration_info()
 }
 
@@ -21,6 +22,7 @@ pub async fn register_browser(
     browser: String,
     extension_id: String,
 ) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("register_browser");
     state
         .integration
         .register_browser(&browser, &extension_id)
@@ -33,34 +35,39 @@ pub async fn browser_setup_action(
     action: String,
     browser: String,
 ) -> AppResult<BrowserSetupResult> {
+    let _timer = crate::infrastructure::perf::track_command("browser_setup_action");
     state.integration.browser_setup(&action, &browser).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_advanced_integration_capability(
     state: State<'_, AppState>,
 ) -> AppResult<AdvancedIntegrationCapability> {
+    let _timer = crate::infrastructure::perf::track_command("get_advanced_integration_capability");
     Ok(state.advanced_integration.capability())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn enable_advanced_integration(
     state: State<'_, AppState>,
     consent: bool,
 ) -> AppResult<AdvancedIntegrationCapability> {
+    let _timer = crate::infrastructure::perf::track_command("enable_advanced_integration");
     state.advanced_integration.enable(consent)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn disable_advanced_integration(
     state: State<'_, AppState>,
 ) -> AppResult<AdvancedIntegrationCapability> {
+    let _timer = crate::infrastructure::perf::track_command("disable_advanced_integration");
     state.advanced_integration.disable()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn repair_advanced_integration(
     state: State<'_, AppState>,
 ) -> AppResult<AdvancedIntegrationCapability> {
+    let _timer = crate::infrastructure::perf::track_command("repair_advanced_integration");
     state.advanced_integration.repair()
 }

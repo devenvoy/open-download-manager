@@ -21,6 +21,7 @@ pub async fn get_playlist_info(
     state: State<'_, AppState>,
     url: String,
 ) -> AppResult<PlaylistMetadata> {
+    let _timer = crate::infrastructure::perf::track_command("get_playlist_info");
     if MmsProtocolDetector::is_playlist_wrapper(&url) {
         let content = if url.starts_with("http://") || url.starts_with("https://") {
             let client = reqwest::Client::builder()
@@ -85,6 +86,7 @@ pub async fn get_playlist_info(
 pub async fn resolve_asx_playlist(
     url_or_content: String,
 ) -> AppResult<AsxPlaylist> {
+    let _timer = crate::infrastructure::perf::track_command("resolve_asx_playlist");
     if url_or_content.starts_with("http://") || url_or_content.starts_with("https://") {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -112,6 +114,7 @@ pub async fn get_video_formats(
     state: State<'_, AppState>,
     url: String,
 ) -> AppResult<Vec<YouTubeFormatChoice>> {
+    let _timer = crate::infrastructure::perf::track_command("get_video_formats");
     let ytdlp = state
         .ytdlp
         .clone()
@@ -124,8 +127,9 @@ pub async fn get_video_formats(
     ytdlp.fetch_formats(&url).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_media_tools_status() -> AppResult<Vec<MediaToolStatus>> {
+    let _timer = crate::infrastructure::perf::track_command("get_media_tools_status");
     let manager = MediaToolsManager::default_service();
     Ok(manager.status_all())
 }
@@ -134,6 +138,7 @@ pub fn get_media_tools_status() -> AppResult<Vec<MediaToolStatus>> {
 pub async fn install_media_tool(
     tool: MediaToolType,
 ) -> AppResult<MediaToolStatus> {
+    let _timer = crate::infrastructure::perf::track_command("install_media_tool");
     let manager = MediaToolsManager::default_service();
     manager.download_tool(tool).await
 }

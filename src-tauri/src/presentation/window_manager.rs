@@ -151,11 +151,15 @@ fn activate_existing_window(window: &WebviewWindow) -> AppResult<()> {
 
 #[tauri::command]
 pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_progress_window");
+    let start = std::time::Instant::now();
     let route = progress_route(&id)?;
     let label = progress_label(&id);
 
     if let Some(window) = app.get_webview_window(&label) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
+        return res;
     }
 
     let download_info = app.try_state::<AppState>().and_then(|state| {
@@ -189,6 +193,7 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let _ = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
 
     let app_handle = app.clone();
     let download_id = id.clone();
@@ -272,6 +277,7 @@ fn handle_progress_close(
 
 #[tauri::command]
 pub fn close_auxiliary_window(window: WebviewWindow) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("close_auxiliary_window");
     if window.label() == "main" {
         return Err(AppError::window(
             "The main window cannot be closed with this command.",
@@ -285,6 +291,7 @@ pub fn close_auxiliary_window(window: WebviewWindow) -> AppResult<()> {
 
 #[tauri::command]
 pub fn resize_progress_window(window: WebviewWindow, expanded: bool) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("resize_progress_window");
     if !window.label().starts_with(PROGRESS_WINDOW_PREFIX) && window.label() != "progress" {
         return Err(AppError::window(
             "Only the download details window can be resized with this command.",
@@ -319,6 +326,7 @@ pub fn resize_auxiliary_window(
     width: Option<f64>,
     height: Option<f64>,
 ) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("resize_auxiliary_window");
     if window.label() == "main" {
         return Err(AppError::window(
             "The main window cannot be resized with this command.",
@@ -346,8 +354,12 @@ pub fn resize_auxiliary_window(
 
 #[tauri::command]
 pub fn open_options_window(app: AppHandle) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_options_window");
+    let start = std::time::Instant::now();
     if let Some(window) = app.get_webview_window(OPTIONS_WINDOW_LABEL) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(OPTIONS_WINDOW_LABEL, start.elapsed());
+        return res;
     }
 
     let window = WebviewWindowBuilder::new(
@@ -362,8 +374,9 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
-    Ok(())
+    let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(OPTIONS_WINDOW_LABEL, start.elapsed());
+    res
 }
 
 #[tauri::command]
@@ -371,12 +384,16 @@ pub fn open_add_window(
     app: AppHandle,
     options: Option<OpenAddOptions>,
 ) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_add_window");
+    let start = std::time::Instant::now();
     if let Some(scheduler) = app.get_webview_window(SCHEDULER_WINDOW_LABEL) {
         let _ = scheduler.close();
     }
 
     if let Some(window) = app.get_webview_window(ADD_WINDOW_LABEL) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(ADD_WINDOW_LABEL, start.elapsed());
+        return res;
     }
 
     let route = add_route(options.as_ref());
@@ -393,14 +410,19 @@ pub fn open_add_window(
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
-    Ok(())
+    let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(ADD_WINDOW_LABEL, start.elapsed());
+    res
 }
 
 #[tauri::command]
 pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_scheduler_window");
+    let start = std::time::Instant::now();
     if let Some(window) = app.get_webview_window(SCHEDULER_WINDOW_LABEL) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(SCHEDULER_WINDOW_LABEL, start.elapsed());
+        return res;
     }
 
     let window = WebviewWindowBuilder::new(
@@ -415,14 +437,19 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
-    Ok(())
+    let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(SCHEDULER_WINDOW_LABEL, start.elapsed());
+    res
 }
 
 #[tauri::command]
 pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_integration_window");
+    let start = std::time::Instant::now();
     if let Some(window) = app.get_webview_window(INTEGRATION_WINDOW_LABEL) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(INTEGRATION_WINDOW_LABEL, start.elapsed());
+        return res;
     }
 
     let window = WebviewWindowBuilder::new(
@@ -437,14 +464,19 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .map_err(|error| AppError::window(error.to_string()))?;
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
-    Ok(())
+    let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(INTEGRATION_WINDOW_LABEL, start.elapsed());
+    res
 }
 
 #[tauri::command]
 pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("open_torrent_window");
+    let start = std::time::Instant::now();
     if let Some(window) = app.get_webview_window(TORRENT_WINDOW_LABEL) {
-        return activate_existing_window(&window);
+        let res = activate_existing_window(&window);
+        crate::infrastructure::perf::record_window_shown(TORRENT_WINDOW_LABEL, start.elapsed());
+        return res;
     }
 
     let window = WebviewWindowBuilder::new(
@@ -468,6 +500,7 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     });
 
     let _ = window.remove_menu();
-    let _ = activate_existing_window(&window);
-    Ok(())
+    let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_shown(TORRENT_WINDOW_LABEL, start.elapsed());
+    res
 }

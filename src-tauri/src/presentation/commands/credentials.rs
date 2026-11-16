@@ -10,25 +10,28 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_credential_rules(
     state: State<'_, AppState>,
 ) -> AppResult<Vec<CredentialRule>> {
+    let _timer = crate::infrastructure::perf::track_command("list_credential_rules");
     state.credentials.list_redacted()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_credential_rule(
     state: State<'_, AppState>,
     rule: CredentialRule,
 ) -> AppResult<CredentialRule> {
+    let _timer = crate::infrastructure::perf::track_command("save_credential_rule");
     state.credentials.save(rule)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_credential_rule(
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("delete_credential_rule");
     state.credentials.delete(&id)
 }

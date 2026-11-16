@@ -16,6 +16,8 @@ use crate::{
 
 #[tauri::command]
 pub fn snapshot(state: State<'_, AppState>) -> AppResult<Snapshot> {
+    let _timer = crate::infrastructure::perf::track_command("snapshot");
+    let start = std::time::Instant::now();
     let settings = state
         .settings
         .lock()
@@ -29,11 +31,32 @@ pub fn snapshot(state: State<'_, AppState>) -> AppResult<Snapshot> {
         let summaries: Vec<DownloadSummary> = records.iter().map(DownloadSummary::from).collect();
         (summaries, icons)
     })?;
-    Ok(Snapshot::with_summaries(
+    let item_count = summaries.len();
+    let icon_count = icons.len();
+    let snapshot_res = Snapshot::with_summaries(
         settings.settings().clone(),
         summaries,
         integration,
-    ).with_file_icons(icons))
+    ).with_file_icons(icons);
+    let build_elapsed = start.elapsed();
+
+    // Measure serialization overhead
+    let serialize_start = std::time::Instant::now();
+    let serialized_bytes = serde_json::to_vec(&snapshot_res).map(|v| v.len()).unwrap_or(0);
+    let serialize_elapsed = serialize_start.elapsed();
+    let total_elapsed = start.elapsed();
+
+    crate::infrastructure::perf::log_perf(
+        "SNAPSHOT",
+        &format!(
+            "Snapshot built in {:.2}ms, serialized in {:.2}ms (total: {:.2}ms) | items: {item_count}, icons: {icon_count}, size: {serialized_bytes} bytes",
+            build_elapsed.as_secs_f64() * 1000.0,
+            serialize_elapsed.as_secs_f64() * 1000.0,
+            total_elapsed.as_secs_f64() * 1000.0,
+        ),
+    );
+
+    Ok(snapshot_res)
 }
 
 #[tauri::command]
@@ -41,23 +64,27 @@ pub fn update_settings(
     state: State<'_, AppState>,
     patch: SettingsPatch,
 ) -> AppResult<Settings> {
+    let _timer = crate::infrastructure::perf::track_command("update_settings");
     state.update_settings(patch)
 }
 
 #[tauri::command]
 pub fn validate_directory(path: String) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("validate_directory");
     crate::infrastructure::fs_utils::validate_directory_writable(std::path::Path::new(&path))
         .map_err(AppError::invalid_settings)
 }
 
 #[tauri::command]
 pub fn show_about_dialog(app: tauri::AppHandle) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("show_about_dialog");
     crate::presentation::menu::show_about_dialog(&app);
     Ok(())
 }
 
 #[tauri::command]
 pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("check_for_updates");
     let service = state.update_service.clone();
     crate::presentation::updater_controller::run_update_check(
         &app,
@@ -66,4 +93,10 @@ pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>
     )
     .await;
     Ok(())
+}
+
+#[tauri::command]
+pub fn mark_ui_ready() {
+    let _timer = crate::infrastructure::perf::track_command("mark_ui_ready");
+    crate::infrastructure::perf::mark_ui_ready();
 }

@@ -119,6 +119,7 @@ pub fn tray_set_active_downloads(
     state: State<'_, TrayState>,
     count: u32,
 ) -> Result<(), String> {
+    let _timer = crate::infrastructure::perf::track_command("tray_set_active_downloads");
     *state.active_downloads.write().unwrap() = count;
     update_tray_tooltip(&app);
     Ok(())

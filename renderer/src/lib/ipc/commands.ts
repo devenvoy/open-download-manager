@@ -42,6 +42,9 @@ import {
  * a compile error rather than a runtime "command not found".
  */
 export interface CommandMap {
+  // Startup instrumentation
+  mark_ui_ready: { args: undefined; result: void };
+
   // Snapshot and downloads
   snapshot: { args: undefined; result: Snapshot };
   add_download: { args: { request: DownloadRequest }; result: string[] };

@@ -24,6 +24,7 @@ pub mod http_download_executor;
 pub mod media;
 pub mod metrics;
 pub mod mms;
+pub mod perf;
 pub mod proxy_discovery;
 pub mod queue_store;
 pub mod settings_store;
