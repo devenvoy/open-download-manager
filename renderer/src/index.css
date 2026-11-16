@@ -363,6 +363,9 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	outline: none;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	will-change: scroll-position;
 }
 .torrent-list:empty {
 	display: none;
@@ -1302,7 +1305,8 @@ textarea:focus-visible,
 	display: flex;
 	align-items: center;
 	padding: 2px 4px;
-	overflow: hidden;
+	overflow-x: auto;
+	overflow-y: hidden;
 }
 .tool {
 	height: 63px;
@@ -1345,45 +1349,18 @@ textarea:focus-visible,
 	background: #cfdfef;
 }
 .tool svg {
-	width: 30px;
-	height: 30px;
-	stroke: #52717c;
-	stroke-width: 1.1;
+	width: 22px;
+	height: 22px;
+	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
 	stroke-linecap: round;
 	stroke-linejoin: round;
-	fill: none;
-	flex-shrink: 0;
-}
-.tool[data-icon="add"] svg {
-	stroke: #7c7e65;
-}
-.tool[data-icon="resume"] svg,
-.tool[data-icon="startqueue"] svg {
-	stroke: #5f8761;
-}
-.tool[data-icon="stop"] svg,
-.tool[data-icon="stopall"] svg,
-.tool[data-icon="stopqueue"] svg {
-	stroke: #b56d67;
-}
-.tool[data-icon="delete"] svg,
-.tool[data-icon="clear"] svg {
-	stroke: #a36b59;
-}
-.tool[data-icon="clock"] svg {
-	stroke: #747c53;
 }
 .tool:disabled svg {
 	opacity: 0.36;
 	filter: grayscale(1);
-}
-.tool[data-icon="torrent"] svg {
-	width: 26px;
-	height: 26px;
-	stroke: #d97706;
-}
-[data-theme="dark"] .tool[data-icon="torrent"] svg {
-	stroke: #fbbf24;
 }
 .tool span {
 	font-size: 10px;
@@ -1639,7 +1616,7 @@ td {
 	vertical-align: middle;
 }
 .download-row {
-	height: 21px;
+	height: 24px;
 }
 .download-row.selected td {
 	background: #cce8ff;
@@ -2977,13 +2954,14 @@ td {
 	padding: 1px 5px;
 }
 .download-row {
-	height: 17px;
+	height: 24px;
 }
 .table-scroll {
 	background: #ffffff;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
+	will-change: scroll-position;
 }
 [data-theme="dark"] .table-scroll {
 	background: #1e1e1e !important;
@@ -3836,28 +3814,6 @@ body.scheduler-window {
 }
 [data-theme="dark"] .tool:disabled {
 	color: #666666;
-}
-[data-theme="dark"] .tool svg {
-	stroke: #4ec9b0;
-}
-[data-theme="dark"] .tool[data-icon="add"] svg {
-	stroke: #dcdcaa;
-}
-[data-theme="dark"] .tool[data-icon="resume"] svg,
-[data-theme="dark"] .tool[data-icon="startqueue"] svg {
-	stroke: #6a9955;
-}
-[data-theme="dark"] .tool[data-icon="stop"] svg,
-[data-theme="dark"] .tool[data-icon="stopall"] svg,
-[data-theme="dark"] .tool[data-icon="stopqueue"] svg {
-	stroke: #f48771;
-}
-[data-theme="dark"] .tool[data-icon="delete"] svg,
-[data-theme="dark"] .tool[data-icon="clear"] svg {
-	stroke: #ce9178;
-}
-[data-theme="dark"] .tool[data-icon="clock"] svg {
-	stroke: #9cdcfe;
 }
 [data-theme="dark"] .tool-divider {
 	background: #383838;

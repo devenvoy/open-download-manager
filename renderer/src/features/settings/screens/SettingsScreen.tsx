@@ -1,3 +1,4 @@
+import { useHydrateTheme } from "@/stores/theme-store";
 import { settingsApi } from "../api";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { useSettings, useUpdateSettings } from "../hooks/use-settings";
@@ -6,6 +7,8 @@ import { useSettings, useUpdateSettings } from "../hooks/use-settings";
 export function SettingsScreen() {
   const { data, isPending, isError, error } = useSettings();
   const updateSettings = useUpdateSettings();
+
+  useHydrateTheme(data?.settings?.theme);
 
   async function handleClose() {
     try {
@@ -17,8 +20,12 @@ export function SettingsScreen() {
 
   if (isPending) {
     return (
-      <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
-        <div className="dialog-body" style={{ padding: 20 }}>
+      <dialog
+        id="settings-dialog"
+        className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static bg-background text-foreground"
+        open
+      >
+        <div className="dialog-body p-6 text-xs text-muted-foreground bg-background">
           Loading options…
         </div>
       </dialog>
@@ -27,8 +34,12 @@ export function SettingsScreen() {
 
   if (isError) {
     return (
-      <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
-        <div className="dialog-body" style={{ padding: 20 }}>
+      <dialog
+        id="settings-dialog"
+        className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static bg-background text-foreground"
+        open
+      >
+        <div className="dialog-body p-6 text-xs text-rose-600 bg-background">
           Could not load settings: {error instanceof Error ? error.message : "Error"}
         </div>
       </dialog>
@@ -36,7 +47,11 @@ export function SettingsScreen() {
   }
 
   return (
-    <dialog id="settings-dialog" className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
+    <dialog
+      id="settings-dialog"
+      className="settings-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static bg-background text-foreground"
+      open
+    >
       <SettingsPanel
         settings={data.settings}
         saving={updateSettings.isPending}

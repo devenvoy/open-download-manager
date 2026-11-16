@@ -26,7 +26,8 @@
         "height": 560,
         "minWidth": 760,
         "minHeight": 450,
-        "visible": false
+        "visible": false,
+        "backgroundColor": [30, 30, 30, 255]
       }
     ],
     "security": {

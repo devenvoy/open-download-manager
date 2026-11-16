@@ -293,8 +293,15 @@ pub fn run() {
             crate::infrastructure::perf::record_window_open("main");
             if let Some(main_window) = app.get_webview_window("main") {
                 if !is_background && !is_browser_setup && !has_torrent_launch {
-                    let _ = main_window.show();
-                    crate::infrastructure::perf::mark_main_window_shown();
+                    let main_clone = main_window.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = crate::infrastructure::perf::wait_for_window_ui_ready("main", std::time::Duration::from_millis(1500)).await;
+                        let _ = main_clone.show();
+                        if !crate::infrastructure::smoke::is_smoke_test() {
+                            let _ = main_clone.set_focus();
+                        }
+                        crate::infrastructure::perf::mark_main_window_shown();
+                    });
                 }
                 let is_quitting_window = is_quitting.clone();
                 let main_window_clone = main_window.clone();

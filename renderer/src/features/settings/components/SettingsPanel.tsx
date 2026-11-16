@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { type Settings, type SettingsPatch } from "@/types/ipc";
+import { useThemeStore } from "@/stores/theme-store";
+import { type AppTheme, type Settings, type SettingsPatch } from "@/types/ipc";
 import {
   buildSettingsPatch,
   draftFromSettings,
@@ -45,6 +46,16 @@ export function SettingsPanel({
   ) {
     setDraft((prev) => ({ ...prev, [key]: value }));
     setError(null);
+    if (key === "theme") {
+      useThemeStore.getState().setTheme(value as AppTheme);
+    }
+  }
+
+  function handleCancel() {
+    if (draft.theme !== settings.theme) {
+      useThemeStore.getState().setTheme(settings.theme);
+    }
+    if (onClose) onClose();
   }
 
   async function handleSubmit(e: React.FormEvent, shouldClose = true) {
@@ -85,7 +96,7 @@ export function SettingsPanel({
           className="close-button text-muted-foreground hover:text-foreground p-1 rounded transition-colors text-lg leading-none"
           data-close
           aria-label="Close"
-          onClick={onClose}
+          onClick={handleCancel}
         >
           ×
         </button>
@@ -168,7 +179,7 @@ export function SettingsPanel({
           className="button px-4 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
           id="settings-cancel"
           data-close
-          onClick={onClose}
+          onClick={handleCancel}
         >
           Cancel
         </button>
