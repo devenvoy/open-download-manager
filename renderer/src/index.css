@@ -2358,6 +2358,42 @@ progress::-webkit-progress-value {
 	border: 1px solid #8999ad;
 	margin-bottom: 8px;
 	overflow: hidden;
+	position: relative;
+}
+.continuous-segment-bar {
+	position: relative;
+	width: 100%;
+}
+.segment-extent {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	background: #dedede;
+	border-right: 1px solid #8999ad;
+	overflow: hidden;
+}
+.segment-fill {
+	height: 100%;
+	background: linear-gradient(#54cbcd, #294ea2, #4dc0d5);
+	transition: width 0.15s ease-out;
+}
+.segment-active-head {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	margin-left: -2px;
+	background: #ffffff;
+	box-shadow: 0 0 6px 1px #54cbcd;
+	animation: pulse-head 1s infinite alternate;
+}
+@keyframes pulse-head {
+	from { opacity: 0.6; }
+	to { opacity: 1; }
+}
+.segment-range-cell {
+	font-family: monospace;
+	font-size: 10px;
 }
 .segment-map progress {
 	flex: 1;
@@ -4026,6 +4062,21 @@ body.scheduler-window {
 [data-theme="dark"] .segment-map {
 	background: #282828;
 	border: 1px solid #454545;
+}
+[data-theme="dark"] .continuous-segment-bar {
+	background: #252526;
+	border-color: #454545;
+}
+[data-theme="dark"] .segment-extent {
+	background: #2d2d30;
+	border-right-color: #383838;
+}
+[data-theme="dark"] .segment-fill {
+	background: linear-gradient(#0078d4, #005a9e);
+}
+[data-theme="dark"] .segment-active-head {
+	background: #ffffff;
+	box-shadow: 0 0 6px 1px #0078d4;
 }
 [data-theme="dark"] .segment-map progress {
 	border-right: 1px solid #383838;
