@@ -17,6 +17,7 @@ export interface BrowserDetailProps {
   busy: boolean;
   onBack: () => void;
   onSetup: (action: string) => void;
+  onUnregister?: () => void;
 }
 
 export function BrowserDetail({
@@ -24,6 +25,7 @@ export function BrowserDetail({
   busy,
   onBack,
   onSetup,
+  onUnregister,
 }: BrowserDetailProps) {
   const [copied, setCopied] = useState(false);
   const resetCopied = useCallback(() => setCopied(false), []);
@@ -94,6 +96,17 @@ export function BrowserDetail({
             onClick={() => onSetup("download")}
           >
             Download extension
+          </button>
+        )}
+        {browser.installed && onUnregister && (
+          <button
+            className="button"
+            id="browser-unregister-action"
+            type="button"
+            disabled={busy}
+            onClick={onUnregister}
+          >
+            Remove integration
           </button>
         )}
       </div>

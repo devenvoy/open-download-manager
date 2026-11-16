@@ -13,6 +13,7 @@ import {
   useAdvancedIntegrationActions,
   useBrowserSetup,
   useIntegrationInfo,
+  useUnregisterBrowser,
 } from "../api";
 import { AdvancedIntegrationSection } from "../components/AdvancedIntegrationSection";
 import { BrowserDetail } from "../components/BrowserDetail";
@@ -23,6 +24,7 @@ export function IntegrationScreen() {
   const info = useIntegrationInfo();
   const advanced = useAdvancedIntegration();
   const setup = useBrowserSetup();
+  const unregister = useUnregisterBrowser();
   const advancedActions = useAdvancedIntegrationActions();
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -46,6 +48,23 @@ export function IntegrationScreen() {
           if (action === "download") {
             toast.success("Extension saved in your Downloads folder.");
           }
+        },
+      },
+    );
+  }
+
+  function runUnregister() {
+    if (!current) return;
+    unregister.mutate(
+      { browser: current.name },
+      {
+        onSuccess: () => {
+          toast.success(`${current.name} integration removed.`);
+        },
+        onError: (err) => {
+          toast.error(
+            `Failed to remove integration: ${err instanceof Error ? err.message : String(err)}`
+          );
         },
       },
     );
@@ -84,9 +103,10 @@ export function IntegrationScreen() {
         ) : current ? (
           <BrowserDetail
             browser={current}
-            busy={setup.isPending}
+            busy={setup.isPending || unregister.isPending}
             onBack={() => setSelected(null)}
             onSetup={runSetup}
+            onUnregister={runUnregister}
           />
         ) : (
           <>
