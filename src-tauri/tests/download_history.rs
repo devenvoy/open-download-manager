@@ -8,7 +8,7 @@ use std::fs;
 
 use open_download_manager_lib::{
     application::download_history_service::DownloadHistoryService,
-    domain::{settings::Settings, snapshot::Snapshot},
+    domain::{download::DownloadStatus, settings::Settings, snapshot::Snapshot},
     infrastructure::download_history_store::DownloadHistoryStore,
 };
 
@@ -125,4 +125,54 @@ fn malformed_or_unsupported_history_returns_an_error() {
         Err(error) => error,
     };
     assert_eq!(unsupported.code, "storage_error");
+}
+
+#[test]
+fn legacy_segment_purge_marks_history_records_as_needs_restart() {
+    let temp = temporary_directory();
+    let directory = temp.path();
+    let history_path = directory.join("downloads.json");
+
+    // Write a download record that was paused/downloading in legacy format
+    let history_json = serde_json::json!({
+        "version": 1,
+        "downloads": [{
+            "id": "legacy-purge-test",
+            "url": "https://example.test/bigfile.bin",
+            "filename": "bigfile.bin",
+            "status": "downloading",
+            "downloaded": 500000,
+            "total": 1000000,
+            "directory": directory.to_str().unwrap(),
+            "createdAt": "2026-11-01T00:00:00Z"
+        }]
+    });
+    fs::write(&history_path, serde_json::to_vec_pretty(&history_json).unwrap()).unwrap();
+
+    // Create stale legacy segment files
+    let part_0 = directory.join(".odm.legacy-purge-test.segment-0.part");
+    let part_1 = directory.join(".odm.legacy-purge-test.segment-1.part");
+    fs::write(&part_0, b"legacy-segment-0-data").unwrap();
+    fs::write(&part_1, b"legacy-segment-1-data").unwrap();
+    assert!(part_0.exists());
+    assert!(part_1.exists());
+
+    // Initialize history store
+    let history = DownloadHistoryService::new(DownloadHistoryStore::new(directory)).unwrap();
+    let records = history.downloads().unwrap();
+    assert_eq!(records.len(), 1);
+
+    let record = &records[0];
+    assert_eq!(record.id, "legacy-purge-test");
+    // Verify stale segment files were deleted
+    assert!(!part_0.exists(), "Legacy segment-0 file must be purged");
+    assert!(!part_1.exists(), "Legacy segment-1 file must be purged");
+
+    // Verify record was marked needs restart
+    assert_eq!(record.status, DownloadStatus::Failed);
+    assert_eq!(record.downloaded, 0, "Downloaded counter must be reset to 0");
+    assert!(
+        record.error.as_deref().unwrap_or("").contains("needs restart"),
+        "Error message must indicate download needs restart"
+    );
 }

@@ -83,6 +83,21 @@ impl DownloadHistoryStore {
                     AppError::storage(format!("{message} History file: {}", path.display()))
                 })?;
                 download.prepare_for_restart();
+                if !matches!(download.status, crate::domain::download::DownloadStatus::Completed | crate::domain::download::DownloadStatus::Cancelled) {
+                    let temp_dir = download
+                        .temp_directory
+                        .as_deref()
+                        .or(download.directory.as_deref())
+                        .map(std::path::Path::new);
+                    if let Some(td) = temp_dir {
+                        if let Ok(true) = crate::infrastructure::http_download_executor::assembler::remove_all_segment_parts_sync(td, &download.id) {
+                            download.status = crate::domain::download::DownloadStatus::Failed;
+                            download.error = Some("Legacy segment download needs restart: multi-part format migrated to sparse single-part engine.".to_string());
+                            download.downloaded = 0;
+                            download.connections_progress.clear();
+                        }
+                    }
+                }
                 Ok(download)
             })
             .collect()
