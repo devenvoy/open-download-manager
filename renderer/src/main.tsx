@@ -8,7 +8,20 @@ import "@/index.css";
 
 let windowLabel: string | undefined;
 try {
-  windowLabel = getCurrentWebviewWindow().label;
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__?: {
+        metadata?: {
+          currentWebview?: { label?: string };
+          currentWindow?: { label?: string };
+        };
+      };
+    }
+  ).__TAURI_INTERNALS__;
+  windowLabel =
+    internals?.metadata?.currentWebview?.label ??
+    internals?.metadata?.currentWindow?.label ??
+    getCurrentWebviewWindow().label;
 } catch {
   // Running in non-Tauri browser context or test runner
 }

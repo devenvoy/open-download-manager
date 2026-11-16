@@ -87,6 +87,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-changed=../renderer/dist");
     tauri_build::build()
 }
 

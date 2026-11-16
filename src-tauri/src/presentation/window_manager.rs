@@ -100,27 +100,71 @@ pub fn progress_route(id: &str) -> AppResult<String> {
         return Err(AppError::window("The download identifier is invalid."));
     }
 
-    Ok("index.html".to_string())
+    #[cfg(target_os = "windows")]
+    {
+        Ok("index.html".to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(format!("index.html?progress={id}"))
+    }
 }
 
+#[cfg(target_os = "windows")]
 pub fn options_route() -> &'static str {
     "index.html"
 }
+#[cfg(not(target_os = "windows"))]
+pub fn options_route() -> &'static str {
+    "index.html?options=1"
+}
 
+#[cfg(target_os = "windows")]
 pub fn torrent_route() -> &'static str {
     "index.html"
 }
+#[cfg(not(target_os = "windows"))]
+pub fn torrent_route() -> &'static str {
+    "torrents.html"
+}
 
+#[cfg(target_os = "windows")]
 pub fn scheduler_route() -> &'static str {
     "index.html"
 }
+#[cfg(not(target_os = "windows"))]
+pub fn scheduler_route() -> &'static str {
+    "index.html?scheduler=1"
+}
 
+#[cfg(target_os = "windows")]
 pub fn integration_route() -> &'static str {
     "index.html"
 }
+#[cfg(not(target_os = "windows"))]
+pub fn integration_route() -> &'static str {
+    "index.html?integration=1"
+}
 
+#[cfg(target_os = "windows")]
 pub fn add_route(_options: Option<&OpenAddOptions>) -> String {
     "index.html".to_string()
+}
+#[cfg(not(target_os = "windows"))]
+pub fn add_route(options: Option<&OpenAddOptions>) -> String {
+    let mut parts = vec!["add=1".to_string()];
+    if let Some(opts) = options {
+        if opts.paste.unwrap_or(false) {
+            parts.push("paste=1".to_string());
+        }
+        if let Some(scheduled) = &opts.scheduled {
+            if !scheduled.is_empty() {
+                let encoded = url::form_urlencoded::byte_serialize(scheduled.as_bytes()).collect::<String>();
+                parts.push(format!("scheduled={encoded}"));
+            }
+        }
+    }
+    format!("index.html?{}", parts.join("&"))
 }
 
 pub fn needs_close_choice(status: &DownloadStatus, needs_review: bool) -> bool {
@@ -147,6 +191,10 @@ pub fn activate_existing_window(window: &WebviewWindow) -> AppResult<()> {
     Ok(())
 }
 
+fn initial_aux_window_visibility() -> bool {
+    !cfg!(target_os = "windows")
+}
+
 pub async fn show_window_on_ready_or_fallback(
     window: WebviewWindow,
     label: String,
@@ -154,7 +202,10 @@ pub async fn show_window_on_ready_or_fallback(
 ) {
     let fallback = std::time::Duration::from_millis(1500);
     let _ = crate::infrastructure::perf::wait_for_window_ui_ready(&label, fallback).await;
-    let _ = window.show();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = window.show();
+    }
     if !crate::infrastructure::smoke::is_smoke_test() {
         let _ = window.set_focus();
     }
@@ -191,15 +242,16 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
         ("Download details".to_string(), PROGRESS_WINDOW_WIDTH, PROGRESS_WINDOW_EXPANDED_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT)
     };
 
+    let route = progress_route(&id)?;
     let window = WebviewWindowBuilder::new(
         &app,
         &label,
-        WebviewUrl::App(PathBuf::from("index.html")),
+        WebviewUrl::App(PathBuf::from(route)),
     )
     .title(&title)
     .inner_size(width, height)
     .min_inner_size(min_w, min_h)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
@@ -388,7 +440,7 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .title("Options")
     .inner_size(OPTIONS_WINDOW_WIDTH, OPTIONS_WINDOW_HEIGHT)
     .min_inner_size(OPTIONS_WINDOW_MIN_WIDTH, OPTIONS_WINDOW_MIN_HEIGHT)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
@@ -414,8 +466,8 @@ pub fn open_add_window(
         let _ = scheduler.close();
     }
 
-    if let Some(opts) = options {
-        *PENDING_ADD_OPTIONS.lock().unwrap() = Some(opts);
+    if let Some(ref opts) = options {
+        *PENDING_ADD_OPTIONS.lock().unwrap() = Some(opts.clone());
     }
 
     if let Some(window) = app.get_webview_window(ADD_WINDOW_LABEL) {
@@ -424,15 +476,16 @@ pub fn open_add_window(
         return res;
     }
 
+    let route = add_route(options.as_ref());
     let window = WebviewWindowBuilder::new(
         &app,
         ADD_WINDOW_LABEL,
-        WebviewUrl::App(PathBuf::from(add_route(None))),
+        WebviewUrl::App(PathBuf::from(route)),
     )
     .title("Download File Info")
     .inner_size(ADD_WINDOW_WIDTH, ADD_WINDOW_HEIGHT)
     .min_inner_size(ADD_WINDOW_MIN_WIDTH, ADD_WINDOW_MIN_HEIGHT)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
@@ -465,7 +518,7 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .title("Scheduler")
     .inner_size(SCHEDULER_WINDOW_WIDTH, SCHEDULER_WINDOW_HEIGHT)
     .min_inner_size(SCHEDULER_WINDOW_MIN_WIDTH, SCHEDULER_WINDOW_MIN_HEIGHT)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
@@ -498,7 +551,7 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .title("Browser integration")
     .inner_size(INTEGRATION_WINDOW_WIDTH, INTEGRATION_WINDOW_HEIGHT)
     .min_inner_size(INTEGRATION_WINDOW_MIN_WIDTH, INTEGRATION_WINDOW_MIN_HEIGHT)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
@@ -531,7 +584,7 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     .title("Torrents")
     .inner_size(TORRENT_WINDOW_WIDTH, TORRENT_WINDOW_HEIGHT)
     .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
-    .visible(false)
+    .visible(initial_aux_window_visibility())
     .background_color(tauri::webview::Color(9, 9, 11, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
