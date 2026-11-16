@@ -87,5 +87,13 @@ block2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWorkspace", "block2"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["NSURL", "NSString", "NSError"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Ioctl",
+    "Win32_Storage_FileSystem",
+] }
+
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
