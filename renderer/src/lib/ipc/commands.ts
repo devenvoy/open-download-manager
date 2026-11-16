@@ -43,7 +43,7 @@ import {
  */
 export interface CommandMap {
   // Startup instrumentation
-  mark_ui_ready: { args: undefined; result: void };
+  mark_ui_ready: { args: { label?: string } | undefined; result: void };
 
   // Snapshot and downloads
   snapshot: { args: undefined; result: Snapshot };

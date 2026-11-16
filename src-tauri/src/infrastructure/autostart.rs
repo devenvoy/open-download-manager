@@ -10,6 +10,9 @@ use crate::application::error::{AppError, AppResult};
 pub const AUTOSTART_KEY_NAME: &str = "Open Download Manager";
 
 pub fn sync_autostart(enabled: bool) -> AppResult<()> {
+    if crate::infrastructure::smoke::is_smoke_test() {
+        return Ok(());
+    }
     #[cfg(windows)]
     {
         let current_exe = std::env::current_exe()

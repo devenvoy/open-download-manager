@@ -8,7 +8,7 @@ use std::{
     io::Write,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex, OnceLock, RwLock,
     },
     time::{Duration, Instant},
@@ -343,6 +343,136 @@ pub fn mark_ui_ready() {
     }
 }
 
+// Window open and UI ready tracking
+#[derive(Debug, Clone)]
+pub struct WindowOpenRecord {
+    pub open_time: Instant,
+    pub notified: bool,
+    pub timeout: bool,
+}
+
+static PENDING_WINDOW_OPENS: OnceLock<RwLock<HashMap<String, WindowOpenRecord>>> = OnceLock::new();
+static WINDOW_READY_NOTIFIERS: OnceLock<RwLock<HashMap<String, Vec<tokio::sync::oneshot::Sender<Duration>>>>> = OnceLock::new();
+static WINDOW_TIMEOUT_OCCURRED: AtomicBool = AtomicBool::new(false);
+static WATCHDOG_STALL_COUNT: AtomicU64 = AtomicU64::new(0);
+
+fn window_opens_map() -> &'static RwLock<HashMap<String, WindowOpenRecord>> {
+    PENDING_WINDOW_OPENS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn window_notifiers_map() -> &'static RwLock<HashMap<String, Vec<tokio::sync::oneshot::Sender<Duration>>>> {
+    WINDOW_READY_NOTIFIERS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn record_window_open(label: &str) {
+    let now = Instant::now();
+    let label_str = label.to_string();
+    if let Ok(mut map) = window_opens_map().write() {
+        map.insert(
+            label_str.clone(),
+            WindowOpenRecord {
+                open_time: now,
+                notified: false,
+                timeout: false,
+            },
+        );
+    }
+
+    let label_for_timeout = label_str;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        if let Ok(mut map) = window_opens_map().write() {
+            if let Some(record) = map.get_mut(&label_for_timeout) {
+                if !record.notified && !record.timeout {
+                    record.timeout = true;
+                    WINDOW_TIMEOUT_OCCURRED.store(true, Ordering::SeqCst);
+                    log_warn(
+                        "UI_READY",
+                        &format!("[UI_READY] window={label_for_timeout} TIMEOUT after 10000ms"),
+                    );
+                }
+            }
+        }
+    });
+}
+
+pub fn mark_window_ui_ready(label: &str) -> Option<Duration> {
+    let now = Instant::now();
+    let mut duration_opt = None;
+    let mut was_timeout = false;
+
+    if let Ok(mut map) = window_opens_map().write() {
+        if let Some(record) = map.get_mut(label) {
+            record.notified = true;
+            was_timeout = record.timeout;
+            duration_opt = Some(now.saturating_duration_since(record.open_time));
+        }
+    }
+
+    let elapsed = if let Some(duration) = duration_opt {
+        let elapsed_ms = duration.as_secs_f64() * 1000.0;
+        if was_timeout {
+            log_warn(
+                "UI_READY",
+                &format!("[UI_READY] window={label} +{elapsed_ms:.1}ms since open (reported AFTER 10s TIMEOUT)"),
+            );
+        } else {
+            log_info(
+                "UI_READY",
+                &format!("[UI_READY] window={label} +{elapsed_ms:.1}ms since open"),
+            );
+        }
+        duration
+    } else {
+        let process_elapsed = get_process_start().elapsed();
+        let elapsed_ms = process_elapsed.as_secs_f64() * 1000.0;
+        log_info(
+            "UI_READY",
+            &format!("[UI_READY] window={label} +{elapsed_ms:.1}ms since open"),
+        );
+        process_elapsed
+    };
+
+    // Notify any smoke test listener waiting for this window's ui_ready
+    if let Ok(mut notifiers) = window_notifiers_map().write() {
+        if let Some(senders) = notifiers.remove(label) {
+            for sender in senders {
+                let _ = sender.send(elapsed);
+            }
+        }
+    }
+
+    if label == "main" {
+        mark_ui_ready();
+    }
+
+    Some(elapsed)
+}
+
+pub async fn wait_for_window_ui_ready(label: &str, timeout: Duration) -> Result<Duration, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    {
+        let mut notifiers = window_notifiers_map().write().map_err(|e| e.to_string())?;
+        notifiers.entry(label.to_string()).or_default().push(tx);
+    }
+    match tokio::time::timeout(timeout, rx).await {
+        Ok(Ok(dur)) => Ok(dur),
+        Ok(Err(_)) => Err("Receiver channel closed unexpectedly".to_string()),
+        Err(_) => {
+            WINDOW_TIMEOUT_OCCURRED.store(true, Ordering::SeqCst);
+            Err(format!("Window '{label}' timed out waiting for ui_ready after {}ms", timeout.as_millis()))
+        }
+    }
+}
+
+pub fn has_window_timed_out() -> bool {
+    WINDOW_TIMEOUT_OCCURRED.load(Ordering::SeqCst)
+}
+
+pub fn get_watchdog_stalls_count() -> u64 {
+    WATCHDOG_STALL_COUNT.load(Ordering::SeqCst)
+}
+
 // Auxiliary Window open->shown timing
 pub fn record_window_shown(label: &str, elapsed: Duration) {
     let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
@@ -371,6 +501,7 @@ pub fn start_main_thread_watchdog(app: tauri::AppHandle) {
                     Ok(Ok(latency)) => {
                         let latency_ms = latency.as_secs_f64() * 1000.0;
                         if latency.as_millis() as u64 >= MAIN_THREAD_STALL_THRESHOLD_MS {
+                            WATCHDOG_STALL_COUNT.fetch_add(1, Ordering::Relaxed);
                             let in_flight = get_in_flight_commands();
                             let in_flight_desc = if in_flight.is_empty() {
                                 "none".to_string()
@@ -388,6 +519,7 @@ pub fn start_main_thread_watchdog(app: tauri::AppHandle) {
                         }
                     }
                     _ => {
+                        WATCHDOG_STALL_COUNT.fetch_add(1, Ordering::Relaxed);
                         let in_flight = get_in_flight_commands();
                         let in_flight_desc = if in_flight.is_empty() {
                             "none".to_string()

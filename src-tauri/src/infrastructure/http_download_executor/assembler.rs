@@ -28,7 +28,7 @@ pub(crate) fn segment_path(directory: &Path, id: &str, index: usize) -> PathBuf 
     ))
 }
 
-pub(crate) fn remove_partial_file(path: &Path) -> AppResult<()> {
+pub fn remove_partial_file(path: &Path) -> AppResult<()> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -55,7 +55,7 @@ pub(crate) async fn has_segment_parts(directory: &Path, id: &str) -> AppResult<b
     Ok(false)
 }
 
-pub(crate) async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
+pub async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
     let mut entries = match fs::read_dir(directory).await {
         Ok(entries) => entries,
         Err(_) => return Ok(()),
@@ -87,7 +87,7 @@ pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppRe
     Ok(())
 }
 
-pub(crate) async fn concat_segments(
+pub async fn concat_segments(
     id: &str,
     segments: &[DownloadSegmentProgress],
     directory: &Path,
@@ -166,7 +166,7 @@ pub(crate) async fn concat_segments(
     Ok(())
 }
 
-pub(crate) async fn finalize(
+pub async fn finalize(
     _id: &str,
     temporary: PathBuf,
     destination: PathBuf,

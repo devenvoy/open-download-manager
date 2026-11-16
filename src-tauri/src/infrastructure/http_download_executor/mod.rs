@@ -33,14 +33,14 @@ use crate::{
     },
 };
 
-pub(crate) mod assembler;
+pub mod assembler;
 pub(crate) mod auth;
 pub(crate) mod client;
 pub(crate) mod policy;
 pub mod retry;
-pub(crate) mod segmented;
+pub mod segmented;
 pub(crate) mod single_stream;
-pub(crate) mod validator;
+pub mod validator;
 
 pub use client::{
     build_reqwest_proxy, create_http_client, sanitize_proxy_error, test_proxy_connection,

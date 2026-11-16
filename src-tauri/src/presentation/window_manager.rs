@@ -193,6 +193,7 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let _ = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(&label);
     crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
 
     let app_handle = app.clone();
@@ -375,6 +376,7 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(OPTIONS_WINDOW_LABEL);
     crate::infrastructure::perf::record_window_shown(OPTIONS_WINDOW_LABEL, start.elapsed());
     res
 }
@@ -411,6 +413,7 @@ pub fn open_add_window(
 
     let _ = window.remove_menu();
     let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(ADD_WINDOW_LABEL);
     crate::infrastructure::perf::record_window_shown(ADD_WINDOW_LABEL, start.elapsed());
     res
 }
@@ -438,6 +441,7 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(SCHEDULER_WINDOW_LABEL);
     crate::infrastructure::perf::record_window_shown(SCHEDULER_WINDOW_LABEL, start.elapsed());
     res
 }
@@ -465,6 +469,7 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(INTEGRATION_WINDOW_LABEL);
     crate::infrastructure::perf::record_window_shown(INTEGRATION_WINDOW_LABEL, start.elapsed());
     res
 }
@@ -501,6 +506,7 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
 
     let _ = window.remove_menu();
     let res = activate_existing_window(&window);
+    crate::infrastructure::perf::record_window_open(TORRENT_WINDOW_LABEL);
     crate::infrastructure::perf::record_window_shown(TORRENT_WINDOW_LABEL, start.elapsed());
     res
 }

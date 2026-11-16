@@ -115,7 +115,15 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let data_directory = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let data_directory = if let Ok(custom) = std::env::var("ODM_DATA_DIR") {
+                std::path::PathBuf::from(custom)
+            } else if crate::infrastructure::smoke::is_smoke_test() {
+                let temp = std::env::temp_dir().join("odm-smoke-data");
+                let _ = std::fs::create_dir_all(&temp);
+                temp
+            } else {
+                home_directory.join(USER_DATA_DIRECTORY_NAME)
+            };
             crate::infrastructure::perf::init_logger(&data_directory);
             let settings_store = SettingsStore::new(data_directory.clone());
             let settings = SettingsService::new(
@@ -274,6 +282,7 @@ pub fn run() {
             let is_browser_setup = launch_args.iter().any(|arg| arg == "--browser-setup");
 
             crate::infrastructure::perf::mark_main_window_created();
+            crate::infrastructure::perf::record_window_open("main");
             if let Some(main_window) = app.get_webview_window("main") {
                 if !is_background && !is_browser_setup && !has_torrent_launch {
                     let _ = main_window.show();
@@ -419,6 +428,13 @@ pub fn run() {
 
             crate::infrastructure::perf::start_main_thread_watchdog(app.handle().clone());
             crate::infrastructure::perf::mark_setup_done();
+
+            if crate::infrastructure::smoke::is_smoke_test() {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::infrastructure::smoke::run_smoke_tests(app_handle).await;
+                });
+            }
 
             Ok(())
         })

@@ -18,10 +18,10 @@ export function App({ route }: { route: WindowRoute }) {
   useDocumentTitle(ROUTE_TITLES[route.mode]);
 
   useEffect(() => {
-    if (route.mode === "main") {
-      void call("mark_ui_ready").catch(() => {});
-    }
-  }, [route.mode]);
+    const label =
+      route.mode === "progress" ? `progress-${route.downloadId}` : route.mode;
+    void call("mark_ui_ready", { label }).catch(() => {});
+  }, [route.mode, route.mode === "progress" ? route.downloadId : ""]);
 
   return <WindowRouter route={route} />;
 }

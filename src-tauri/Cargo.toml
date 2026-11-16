@@ -26,6 +26,11 @@ path = "src/bin/perf_benchmark.rs"
 # are disabled, so the benchmark never ends up in a shipped installer.
 required-features = ["bench"]
 
+[[bin]]
+name = "engine_benchmark"
+path = "src/bin/engine_benchmark.rs"
+required-features = ["bench"]
+
 [features]
 bench = []
 

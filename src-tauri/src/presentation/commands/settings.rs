@@ -96,7 +96,8 @@ pub async fn check_for_updates(app: tauri::AppHandle, state: State<'_, AppState>
 }
 
 #[tauri::command]
-pub fn mark_ui_ready() {
+pub fn mark_ui_ready(label: Option<String>) {
+    let target = label.as_deref().unwrap_or("main");
     let _timer = crate::infrastructure::perf::track_command("mark_ui_ready");
-    crate::infrastructure::perf::mark_ui_ready();
+    crate::infrastructure::perf::mark_window_ui_ready(target);
 }

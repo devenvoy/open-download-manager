@@ -12,39 +12,39 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct SegmentValidator {
-    pub(crate) validator: Option<TransferValidator>,
-    pub(crate) total: u64,
+pub struct SegmentValidator {
+    pub validator: Option<TransferValidator>,
+    pub total: u64,
 }
 
 impl SegmentValidator {
-    pub(crate) fn new(validator: TransferValidator, total: u64) -> Self {
+    pub fn new(validator: TransferValidator, total: u64) -> Self {
         Self {
             validator: Some(validator),
             total,
         }
     }
 
-    pub(crate) fn without_validator(total: u64) -> Self {
+    pub fn without_validator(total: u64) -> Self {
         Self {
             validator: None,
             total,
         }
     }
 
-    pub(crate) fn header(&self) -> HeaderName {
+    pub fn header(&self) -> HeaderName {
         reqwest::header::IF_RANGE
     }
 
-    pub(crate) fn entity_header(&self) -> Option<HeaderName> {
+    pub fn entity_header(&self) -> Option<HeaderName> {
         self.validator.as_ref().map(|v| v.entity_header_name())
     }
 
-    pub(crate) fn value(&self) -> Option<&str> {
+    pub fn value(&self) -> Option<&str> {
         self.validator.as_ref().map(|v| v.value())
     }
 
-    pub(crate) fn if_range_value(&self) -> Option<&str> {
+    pub fn if_range_value(&self) -> Option<&str> {
         self.validator.as_ref().map(|v| v.if_range_value())
     }
 }

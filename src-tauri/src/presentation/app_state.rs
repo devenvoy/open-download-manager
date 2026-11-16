@@ -33,19 +33,19 @@ use crate::{
 };
 
 pub struct AppState {
-    pub(super) settings: Mutex<SettingsService>,
-    pub(super) download_history: DownloadHistoryService,
-    pub(super) download_transfer: DownloadTransferService,
-    pub(super) credentials: Arc<CredentialService>,
-    pub(super) integration: IntegrationService,
-    pub(super) file_icons: FileIconProvider,
-    pub(super) update_service: UpdateService,
-    pub(super) ytdlp: Option<Arc<YtDlpTools>>,
-    pub(super) clipboard: Option<Arc<ClipboardMonitoringService>>,
-    pub(super) advanced_integration: Arc<AdvancedIntegrationService>,
-    pub(super) proxy_discovery: Arc<ProxyDiscoveryService>,
-    pub(super) queue_service: Option<Arc<crate::application::queue_service::QueueService>>,
-    pub(super) torrents: Arc<TorrentService>,
+    pub(crate) settings: Mutex<SettingsService>,
+    pub(crate) download_history: DownloadHistoryService,
+    pub(crate) download_transfer: DownloadTransferService,
+    pub(crate) credentials: Arc<CredentialService>,
+    pub(crate) integration: IntegrationService,
+    pub(crate) file_icons: FileIconProvider,
+    pub(crate) update_service: UpdateService,
+    pub(crate) ytdlp: Option<Arc<YtDlpTools>>,
+    pub(crate) clipboard: Option<Arc<ClipboardMonitoringService>>,
+    pub(crate) advanced_integration: Arc<AdvancedIntegrationService>,
+    pub(crate) proxy_discovery: Arc<ProxyDiscoveryService>,
+    pub(crate) queue_service: Option<Arc<crate::application::queue_service::QueueService>>,
+    pub(crate) torrents: Arc<TorrentService>,
 }
 
 impl AppState {

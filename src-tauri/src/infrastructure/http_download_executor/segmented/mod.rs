@@ -31,12 +31,12 @@ pub mod discovery;
 pub mod progress;
 pub mod worker;
 
-pub(crate) use discovery::{discover_ranges, segment_ranges};
+pub use discovery::{discover_ranges, segment_ranges};
 pub(crate) use worker::run_segment_worker;
 
 pub const MIN_CHUNK_REASSIGN_BYTES: u64 = 2 * 1024 * 1024; // 2 MB minimum remaining to split a chunk
 
-pub(crate) async fn download_segments(
+pub async fn download_segments(
     client: reqwest::Client,
     id: &str,
     url: Url,

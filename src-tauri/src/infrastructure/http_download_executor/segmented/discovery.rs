@@ -27,7 +27,7 @@ pub struct RangeDiscovery {
     pub auth_header: Option<String>,
 }
 
-pub(crate) async fn discover_ranges(
+pub async fn discover_ranges(
     client: &reqwest::Client,
     url: Url,
     control: &mut DownloadControl,
@@ -100,7 +100,7 @@ pub(crate) async fn discover_ranges(
     }))
 }
 
-pub(crate) async fn segment_ranges(
+pub async fn segment_ranges(
     total: u64,
     requested_connections: u8,
     directory: &Path,

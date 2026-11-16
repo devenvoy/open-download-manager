@@ -28,6 +28,7 @@ pub mod perf;
 pub mod proxy_discovery;
 pub mod queue_store;
 pub mod settings_store;
+pub mod smoke;
 pub mod system_shell;
 pub mod torrent;
 pub mod updater;
