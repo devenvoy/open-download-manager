@@ -1,17 +1,14 @@
-// Created: 2026-11-10
-// Reason: refactor: modularize segmented download engine into discovery, worker, progress submodules
-// Description: Segment worker task and chunk streaming engine with dynamic range rebalancing.
+// Copyright (c) 2026 Open Download Manager contributors
+// SPDX-License-Identifier: MIT
+// Reason: feat(engine): sparse file segmented worker with positional writes and safe range flushing (W3)
 
 use std::{
+    fs::File,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use tokio::{
-    fs::OpenOptions,
-    io::AsyncWriteExt,
-};
 use url::Url;
 
 use crate::{
@@ -28,20 +25,25 @@ use crate::{
 
 use super::{
     super::{
-        assembler::segment_path,
         policy::{MAX_TRANSIENT_RETRIES, READ_TIMEOUT_SECONDS},
+        range_map::RangeMap,
         retry::{retry_delay, send_with_retry, wait_before_retry},
+        sparse_file::{open_worker_handle, sync_worker_data, write_at},
         validator::{content_range, SegmentValidator},
     },
     progress::{stop_status, update_segment_progress},
     MIN_CHUNK_REASSIGN_BYTES,
 };
 
+const SYNC_INTERVAL_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB flush buffer
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_segment_worker(
     client: reqwest::Client,
     url: Url,
-    directory: PathBuf,
-    id: String,
+    part_path: PathBuf,
+    range_map: Arc<Mutex<RangeMap>>,
+    ranges_path: PathBuf,
     worker_id: usize,
     segments: Arc<Mutex<Vec<DownloadSegmentProgress>>>,
     validator: SegmentValidator,
@@ -54,6 +56,11 @@ pub(crate) async fn run_segment_worker(
     request_headers: Arc<crate::domain::download::BrowserRequestHeaders>,
     initial_host: Arc<str>,
 ) -> AppResult<()> {
+    // Open dedicated, independent file handle for this worker
+    let worker_file = Arc::new(open_worker_handle(&part_path).map_err(|e| {
+        AppError::download(format!("Could not open sparse worker file handle: {e}"))
+    })?);
+
     loop {
         if let Some(reason) = control.current_stop_reason() {
             return Err(stopped_error(reason));
@@ -160,11 +167,12 @@ pub(crate) async fn run_segment_worker(
 
         match chunk_assignment {
             Some(chunk_idx) => {
-                let path = segment_path(&directory, &id, chunk_idx);
                 download_chunk(
                     client.clone(),
                     url.clone(),
-                    path,
+                    worker_file.clone(),
+                    range_map.clone(),
+                    ranges_path.clone(),
                     chunk_idx,
                     &segments,
                     &validator,
@@ -188,10 +196,13 @@ pub(crate) async fn run_segment_worker(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_chunk(
     client: reqwest::Client,
     url: Url,
-    path: PathBuf,
+    worker_file: Arc<File>,
+    range_map: Arc<Mutex<RangeMap>>,
+    ranges_path: PathBuf,
     index: usize,
     segments: &Arc<Mutex<Vec<DownloadSegmentProgress>>>,
     validator: &SegmentValidator,
@@ -307,17 +318,6 @@ async fn download_chunk(
         ));
     }
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(downloaded_init > 0)
-        .truncate(downloaded_init == 0)
-        .open(&path)
-        .await
-        .map_err(|error| {
-            AppError::download(format!("Could not create a partial segment: {error}"))
-        })?;
-
     update_segment_progress(
         segments,
         index,
@@ -330,6 +330,7 @@ async fn download_chunk(
     )?;
 
     let mut downloaded = downloaded_init;
+    let mut last_synced = downloaded_init;
     let mut midstream_retries = 0_u8;
 
     'chunk_stream: loop {
@@ -346,7 +347,13 @@ async fn download_chunk(
 
         let chunk = tokio::select! {
             reason = control.stopped() => {
-                let _ = file.sync_all().await;
+                let _ = sync_worker_data(&worker_file);
+                if downloaded > last_synced {
+                    if let Ok(mut rm) = range_map.lock() {
+                        rm.add_range(start_offset + last_synced, start_offset + downloaded.saturating_sub(1));
+                        let _ = rm.save_atomic(&ranges_path);
+                    }
+                }
                 update_segment_progress(
                     segments,
                     index,
@@ -382,8 +389,14 @@ async fn download_chunk(
                         && control.current_stop_reason().is_none()
                     {
                         midstream_retries += 1;
-                        let _ = file.flush().await;
-                        let _ = file.sync_all().await;
+                        let _ = sync_worker_data(&worker_file);
+                        if downloaded > last_synced {
+                            if let Ok(mut rm) = range_map.lock() {
+                                rm.add_range(start_offset + last_synced, start_offset + downloaded.saturating_sub(1));
+                                let _ = rm.save_atomic(&ranges_path);
+                            }
+                            last_synced = downloaded;
+                        }
                         wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
                         let (cur_start, cur_end) = {
                             let guard = segments
@@ -433,7 +446,7 @@ async fn download_chunk(
                                                 .and_then(|hdr| hdr.to_str().ok())
                                                 .map_or(true, |actual| actual == expected_val),
                                             _ => true,
-                                        };
+                                         };
                                         let encoding_ok = !new_resp
                                             .headers()
                                             .get(reqwest::header::CONTENT_ENCODING)
@@ -469,8 +482,14 @@ async fn download_chunk(
                     && control.current_stop_reason().is_none()
                 {
                     midstream_retries += 1;
-                    let _ = file.flush().await;
-                    let _ = file.sync_all().await;
+                    let _ = sync_worker_data(&worker_file);
+                    if downloaded > last_synced {
+                        if let Ok(mut rm) = range_map.lock() {
+                            rm.add_range(start_offset + last_synced, start_offset + downloaded.saturating_sub(1));
+                            let _ = rm.save_atomic(&ranges_path);
+                        }
+                        last_synced = downloaded;
+                    }
                     wait_before_retry(control, retry_delay(midstream_retries, None)).await?;
                     let (cur_start, cur_end) = {
                         let guard = segments
@@ -570,7 +589,13 @@ async fn download_chunk(
             () = rate_limiter.throttle(to_write) => Ok(()),
         };
         if let Err(error) = throttled {
-            let _ = file.sync_all().await;
+            let _ = sync_worker_data(&worker_file);
+            if downloaded > last_synced {
+                if let Ok(mut rm) = range_map.lock() {
+                    rm.add_range(start_offset + last_synced, start_offset + downloaded.saturating_sub(1));
+                    let _ = rm.save_atomic(&ranges_path);
+                }
+            }
             let reason = control
                 .current_stop_reason()
                 .unwrap_or(DownloadStopReason::Cancel);
@@ -587,12 +612,21 @@ async fn download_chunk(
             return Err(error);
         }
 
-        file.write_all(&chunk[..to_write as usize])
-            .await
-            .map_err(|error| {
-                AppError::download(format!("Could not write a partial segment: {error}"))
-            })?;
+        let write_offset = start_offset + downloaded;
+        write_at(&worker_file, write_offset, &chunk[..to_write as usize]).map_err(|error| {
+            AppError::download(format!("Could not write to sparse file: {error}"))
+        })?;
         downloaded += to_write;
+
+        // Periodic range map flush
+        if downloaded.saturating_sub(last_synced) >= SYNC_INTERVAL_BYTES {
+            let _ = sync_worker_data(&worker_file);
+            if let Ok(mut rm) = range_map.lock() {
+                rm.add_range(start_offset + last_synced, write_offset + to_write - 1);
+                let _ = rm.save_atomic(&ranges_path);
+            }
+            last_synced = downloaded;
+        }
 
         if let Ok(mut guard) = segments.lock() {
             if let Some(segment) = guard.get_mut(index) {
@@ -605,12 +639,12 @@ async fn download_chunk(
         }
     }
 
-    file.flush().await.map_err(|error| {
-        AppError::download(format!("Could not finalize a partial segment: {error}"))
-    })?;
-    file.sync_all().await.map_err(|error| {
-        AppError::download(format!("Could not finalize a partial segment: {error}"))
-    })?;
+    // Final sync for completed chunk
+    let _ = sync_worker_data(&worker_file);
+    if let Ok(mut rm) = range_map.lock() {
+        rm.add_range(start_offset, end_offset);
+        let _ = rm.save_atomic(&ranges_path);
+    }
 
     update_segment_progress(
         segments,

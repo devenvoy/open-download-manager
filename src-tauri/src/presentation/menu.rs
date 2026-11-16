@@ -199,7 +199,10 @@ pub fn handle_menu_event(app: &AppHandle, menu_id: &str) {
 
     match menu_id {
         "cmd_torrents" => {
-            let _ = crate::presentation::window_manager::open_torrent_window(app.clone());
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = crate::presentation::window_manager::open_torrent_window(app_clone);
+            });
         }
         "export_txt" => {
             export_downloads_flow(app);

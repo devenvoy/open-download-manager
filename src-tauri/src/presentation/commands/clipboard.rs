@@ -9,11 +9,12 @@ use crate::{
     presentation::app_state::AppState,
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dismiss_clipboard_candidate(
     state: State<'_, AppState>,
     url: String,
 ) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("dismiss_clipboard_candidate");
     if let Some(ref clipboard) = state.clipboard {
         clipboard.dismiss(&url);
     }

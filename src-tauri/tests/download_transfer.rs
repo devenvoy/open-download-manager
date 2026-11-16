@@ -1057,7 +1057,10 @@ async fn segmented_download_resumes_partial_ranges_after_pause() {
     let partial_segments = fs::read_dir(&directory)
         .unwrap()
         .filter_map(Result::ok)
-        .filter(|entry| entry.file_name().to_string_lossy().contains(".segment-"))
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.contains(".segment-") || name.ends_with(".part") || name.ends_with(".ranges")
+        })
         .count();
     assert!(partial_segments > 0);
 

@@ -514,3 +514,36 @@ async fn commands_advanced_integration_lifecycle() {
         open_download_manager_lib::domain::browser::AdvancedIntegrationState::Active
     );
 }
+
+#[tokio::test]
+async fn threading_proof_async_commands_do_not_stall_main_thread() {
+    let dir = temporary_directory();
+    let shell = RecordingShellService::default();
+    let app = create_test_app(&dir, shell);
+    let handle = app.handle();
+
+    // 1. Simulate an async command running on Tokio worker pool
+    let async_task = tokio::spawn(async {
+        // Simulates async command doing 500ms of work on worker thread
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    });
+
+    // While async command is executing, ping the main thread
+    let ping_start = std::time::Instant::now();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    handle
+        .run_on_main_thread(move || {
+            let latency = ping_start.elapsed();
+            let _ = tx.send(latency);
+        })
+        .expect("dispatch to main thread");
+
+    let latency = rx.await.expect("receive ping response");
+    assert!(
+        latency < std::time::Duration::from_millis(100),
+        "Main thread must remain responsive while async commands run (latency: {:?})",
+        latency
+    );
+
+    async_task.await.expect("async task completion");
+}

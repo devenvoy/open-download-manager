@@ -33,14 +33,17 @@ use crate::{
     },
 };
 
-pub(crate) mod assembler;
+pub mod assembler;
 pub(crate) mod auth;
 pub(crate) mod client;
+pub mod host_limiter;
 pub(crate) mod policy;
+pub mod range_map;
 pub mod retry;
-pub(crate) mod segmented;
+pub mod segmented;
 pub(crate) mod single_stream;
-pub(crate) mod validator;
+pub mod sparse_file;
+pub mod validator;
 
 pub use client::{
     build_reqwest_proxy, create_http_client, sanitize_proxy_error, test_proxy_connection,
@@ -57,6 +60,7 @@ pub struct HttpDownloadExecutor {
     allocator: DestinationAllocator,
     credential_store: Option<Arc<CredentialStore>>,
     connection_overrides: Arc<RwLock<Vec<ConnectionOverride>>>,
+    host_limiter: Arc<host_limiter::HostLimiter>,
 }
 
 impl HttpDownloadExecutor {
@@ -72,6 +76,7 @@ impl HttpDownloadExecutor {
             allocator: DestinationAllocator::new(),
             credential_store: None,
             connection_overrides: Arc::new(RwLock::new(Vec::new())),
+            host_limiter: Arc::new(host_limiter::HostLimiter::new()),
         }
     }
 
@@ -82,6 +87,7 @@ impl HttpDownloadExecutor {
             allocator: DestinationAllocator::new(),
             credential_store: None,
             connection_overrides: Arc::new(RwLock::new(Vec::new())),
+            host_limiter: Arc::new(host_limiter::HostLimiter::new()),
         }
     }
 
@@ -95,6 +101,7 @@ impl HttpDownloadExecutor {
             allocator,
             credential_store: None,
             connection_overrides: Arc::new(RwLock::new(Vec::new())),
+            host_limiter: Arc::new(host_limiter::HostLimiter::new()),
         }
     }
 
@@ -122,8 +129,9 @@ impl HttpDownloadExecutor {
     }
 
     pub fn resolve_connections(&self, host: &str, fallback: u8) -> u8 {
+        let desired = self.host_limiter.resolve_concurrency(host, fallback);
         let guard = self.connection_overrides.read().unwrap();
-        crate::domain::settings::resolve_connections_for_host(&guard, host, fallback)
+        crate::domain::settings::resolve_connections_for_host(&guard, host, desired)
     }
 
     async fn transfer(
@@ -239,16 +247,14 @@ impl HttpDownloadExecutor {
             self.resolve_connections(&initial_host, download.connections);
 
         let temporary = temp_dir.join(format!("{TEMPORARY_DOWNLOAD_PREFIX}{}.part", download.id));
-        if effective_connections > 1
-            && !fs::try_exists(&temporary).await.map_err(|error| {
-                AppError::download(format!("Could not check the partial download: {error}"))
-            })?
+        let ranges_path_probe = range_map::range_map_path(&temporary);
+        let has_ranges = fs::try_exists(&ranges_path_probe).await.unwrap_or(false);
+        let existing_parts = assembler::has_segment_parts(&temp_dir, &download.id).await?;
+        let temp_exists = fs::try_exists(&temporary).await.unwrap_or(false);
+        let is_segmented_candidate = effective_connections > 1 && (!temp_exists || has_ranges || existing_parts);
+
+        if is_segmented_candidate
         {
-            let existing_parts = assembler::has_segment_parts(
-                &temp_dir,
-                &download.id,
-            )
-            .await?;
             let range_info =
                 segmented::discover_ranges(
                     &self.client(),
@@ -319,15 +325,19 @@ impl HttpDownloadExecutor {
                                 })
                         });
                     let mut restart_notice = None;
-                    if existing_parts {
+                    if existing_parts || has_ranges {
                         if previous.is_none() {
                             assembler::remove_segment_parts(&temp_dir, &download.id).await?;
+                            let _ = fs::remove_file(&ranges_path_probe).await;
+                            let _ = fs::remove_file(&temporary).await;
                             restart_notice = Some(
                                 "The download could not be verified with a saved validator; restarted download from the beginning."
                                     .to_owned(),
                             );
                         } else if previous.as_ref() != Some(&validator) {
                             assembler::remove_segment_parts(&temp_dir, &download.id).await?;
+                            let _ = fs::remove_file(&ranges_path_probe).await;
+                            let _ = fs::remove_file(&temporary).await;
                             restart_notice = Some(
                                 "The remote file changed on the server; restarted download from the beginning."
                                     .to_owned(),
@@ -352,6 +362,13 @@ impl HttpDownloadExecutor {
                             filename: None,
                         });
                     }
+                    let ranges_path = range_map::range_map_path(&temporary);
+                    let etag_h = range_map::hash_etag(validator.value());
+                    let loaded_map = range_map::RangeMap::load(&ranges_path, validator.total, etag_h).ok().flatten();
+                    let range_map_instance = loaded_map.unwrap_or_else(|| range_map::RangeMap::new(validator.total, etag_h));
+                    let range_map_snapshot = range_map_instance.clone();
+                    let range_map_shared = Arc::new(Mutex::new(range_map_instance));
+
                     let segments = segmented::segment_ranges(
                         validator.total,
                         effective_connections,
@@ -362,6 +379,7 @@ impl HttpDownloadExecutor {
                         } else {
                             Some(&download.connections_progress)
                         },
+                        Some(&range_map_snapshot),
                     )
                     .await?;
                     let download_res = segmented::download_segments(
@@ -372,6 +390,9 @@ impl HttpDownloadExecutor {
                         segments,
                         effective_connections,
                         &temp_dir,
+                        &temporary,
+                        range_map_shared.clone(),
+                        &ranges_path,
                         &mut control,
                         rate_limiter.clone(),
                         &progress_handler,
@@ -383,15 +404,7 @@ impl HttpDownloadExecutor {
                     .await;
 
                     match download_res {
-                        Ok(completed_segments) => {
-                            assembler::concat_segments(
-                                &download.id,
-                                &completed_segments,
-                                &temp_dir,
-                                &temporary,
-                                &mut control,
-                            )
-                            .await?;
+                        Ok(_completed_segments) => {
                             self.segment_validators
                                 .lock()
                                 .map_err(|_| AppError::storage("Download resume state is unavailable."))?
@@ -415,6 +428,7 @@ impl HttpDownloadExecutor {
                                     download.id, error.message
                                 );
                             }
+                            self.host_limiter.record_success(&initial_host);
                             metrics.record_completion(result.downloaded);
                             return Ok(result);
                         }
@@ -425,12 +439,14 @@ impl HttpDownloadExecutor {
                             // Safe Segmented Fallback (IDM-style):
                             // On range inconsistency or mid-stream segment failure, clean up
                             // incomplete segment parts and seamlessly fall back to single stream from byte 0.
+                            self.host_limiter.record_penalty(&initial_host, effective_connections);
                             metrics.set_fallback(format!("segmented_range_failed: {}", error.message));
                             let _ = assembler::remove_segment_parts(
                                 &temp_dir,
                                 &download.id,
                             )
                             .await;
+                            let _ = fs::remove_file(&ranges_path).await;
                             progress_handler(DownloadProgress {
                                 downloaded: 0,
                                 total: Some(validator.total),

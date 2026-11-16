@@ -581,6 +581,16 @@ impl DownloadHistoryService {
         Ok(())
     }
 
+    #[cfg(feature = "dev-tools")]
+    pub fn seed_downloads(&self, records: Vec<DownloadRecord>) -> AppResult<()> {
+        let mut downloads = self
+            .downloads
+            .lock()
+            .map_err(|_| AppError::storage("Download history is unavailable."))?;
+        *downloads = records;
+        self.repository.save(&downloads)
+    }
+
     fn publish_change(&self) {
         if let Some(events) = &self.events {
             if let Err(error) = events.publish_change() {

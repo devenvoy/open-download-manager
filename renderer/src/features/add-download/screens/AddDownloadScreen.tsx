@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
+import { call } from "@/lib/ipc/client";
 import { useHydrateTheme } from "@/stores/theme-store";
 import { type YouTubeFormatChoice } from "@/types/ipc";
 import {
@@ -45,6 +46,20 @@ export function AddDownloadScreen({ paste, scheduledAt }: AddDownloadScreenProps
   const [videoLabel, setVideoLabel] = useState<string | null>(null);
 
   useHydrateTheme(defaults.data?.settings.theme);
+
+  useEffect(() => {
+    void call("take_add_window_options", undefined)
+      .then((opts) => {
+        if (!opts) return;
+        if (opts.scheduled) {
+          setValues((cur) => ({
+            ...cur,
+            scheduledAt: opts.scheduled ?? cur.scheduledAt,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Start in the configured folder; a picked category can override it.
   useEffect(() => {

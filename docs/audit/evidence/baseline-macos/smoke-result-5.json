@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-11-16T11:02:39.971703+00:00",
+  "snapshots": [
+    {
+      "count": 100,
+      "iterations": 30,
+      "median_ms": 0.158083,
+      "min_ms": 0.147292,
+      "max_ms": 2.3882090000000002,
+      "p95_ms": 1.229083,
+      "payload_bytes": 66597
+    },
+    {
+      "count": 1000,
+      "iterations": 30,
+      "median_ms": 1.112792,
+      "min_ms": 1.036625,
+      "max_ms": 1.449541,
+      "p95_ms": 1.384792,
+      "payload_bytes": 634258
+    },
+    {
+      "count": 5000,
+      "iterations": 30,
+      "median_ms": 5.226458,
+      "min_ms": 4.95125,
+      "max_ms": 5.827083,
+      "p95_ms": 5.790834,
+      "payload_bytes": 3182238
+    }
+  ],
+  "windows": [
+    {
+      "mode": "options",
+      "iterations": 10,
+      "median_ms": 84.63791699999999,
+      "min_ms": 79.70724999999999,
+      "max_ms": 143.120542,
+      "p95_ms": 143.120542,
+      "timed_out": false
+    },
+    {
+      "mode": "add",
+      "iterations": 10,
+      "median_ms": 96.624667,
+      "min_ms": 83.484584,
+      "max_ms": 145.973125,
+      "p95_ms": 145.973125,
+      "timed_out": false
+    },
+    {
+      "mode": "scheduler",
+      "iterations": 10,
+      "median_ms": 87.56075000000001,
+      "min_ms": 79.863666,
+      "max_ms": 119.675084,
+      "p95_ms": 119.675084,
+      "timed_out": false
+    },
+    {
+      "mode": "integration",
+      "iterations": 10,
+      "median_ms": 102.901333,
+      "min_ms": 86.856458,
+      "max_ms": 115.386459,
+      "p95_ms": 115.386459,
+      "timed_out": false
+    },
+    {
+      "mode": "torrents",
+      "iterations": 10,
+      "median_ms": 102.085333,
+      "min_ms": 89.16779199999999,
+      "max_ms": 148.586625,
+      "p95_ms": 148.586625,
+      "timed_out": false
+    },
+    {
+      "mode": "progress",
+      "iterations": 10,
+      "median_ms": 95.32095799999999,
+      "min_ms": 82.634625,
+      "max_ms": 113.218375,
+      "p95_ms": 113.218375,
+      "timed_out": false
+    }
+  ],
+  "magnet": {
+    "magnet": "magnet:?xt=urn:btih:2b6c31677c447e5b9d3b84ef6f530e1590fb3b34&dn=ubuntu-24.04.1-desktop-amd64.iso",
+    "name": "Ubuntu 24.04.1 Desktop AMD64 ISO",
+    "add_return_ms": 45005.22629200001,
+    "row_visible_ms": 45005.22629200001,
+    "success": false,
+    "error": "error adding torrent: magnet metadata resolution timed out after 45s: deadline has elapsed"
+  },
+  "idle": {
+    "duration_seconds": 60,
+    "stall_count": 0
+  },
+  "all_windows_passed": true
+}

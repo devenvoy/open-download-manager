@@ -216,11 +216,20 @@ bun run test
 
 ### Packaging Release Bundles
 ```bash
-bun run build:mac        # Build macOS DMG & .app
-bun run build:win        # Build Windows NSIS installer (x64)
-bun run build:linux      # Build Linux .deb & .AppImage
-bun run pack:extension   # Build Chrome & Firefox extension packages
+bun tauri build --no-bundle # Build standalone release binary with embedded assets
+bun run build:mac           # Build macOS DMG & .app
+bun run build:win           # Build Windows NSIS installer (x64)
+bun run build:linux         # Build Linux .deb & .AppImage
+bun run pack:extension      # Build Chrome & Firefox extension packages
 ```
+
+### Windows Code Verification (Local & CI)
+To check Windows-specific code paths (`FSCTL_SET_SPARSE`, Win32 API, `seek_write`) locally on a development host with the MSVC toolchain:
+```bash
+rustup target add x86_64-pc-windows-msvc
+cargo check --target x86_64-pc-windows-msvc
+```
+Continuous integration automatically validates Windows NTFS sparse behavior and builds on `windows-latest` via `.github/workflows/windows-check.yml`.
 
 ---
 

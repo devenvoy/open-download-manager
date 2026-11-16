@@ -6,21 +6,14 @@
 
 use std::path::{Path, PathBuf};
 
-use tokio::{
-    fs::{self, OpenOptions},
-    io::{AsyncReadExt, AsyncWriteExt},
+use tokio::fs;
+
+use crate::application::{
+    download_result::DownloadResult,
+    error::{AppError, AppResult},
 };
 
-use crate::{
-    application::{
-        download_executor::{stopped_error, DownloadControl},
-        download_result::DownloadResult,
-        error::{AppError, AppResult},
-    },
-    domain::download::DownloadSegmentProgress,
-};
-
-use super::policy::{CONCAT_BUFFER_SIZE, TEMPORARY_DOWNLOAD_PREFIX};
+use super::policy::TEMPORARY_DOWNLOAD_PREFIX;
 
 pub(crate) fn segment_path(directory: &Path, id: &str, index: usize) -> PathBuf {
     directory.join(format!(
@@ -28,7 +21,7 @@ pub(crate) fn segment_path(directory: &Path, id: &str, index: usize) -> PathBuf 
     ))
 }
 
-pub(crate) fn remove_partial_file(path: &Path) -> AppResult<()> {
+pub fn remove_partial_file(path: &Path) -> AppResult<()> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -55,7 +48,7 @@ pub(crate) async fn has_segment_parts(directory: &Path, id: &str) -> AppResult<b
     Ok(false)
 }
 
-pub(crate) async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
+pub async fn remove_segment_parts(directory: &Path, id: &str) -> AppResult<()> {
     let mut entries = match fs::read_dir(directory).await {
         Ok(entries) => entries,
         Err(_) => return Ok(()),
@@ -71,102 +64,25 @@ pub(crate) async fn remove_segment_parts(directory: &Path, id: &str) -> AppResul
     Ok(())
 }
 
-pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppResult<()> {
+pub(crate) fn remove_all_segment_parts_sync(directory: &Path, id: &str) -> AppResult<bool> {
     let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
-        Err(_) => return Ok(()),
+        Err(_) => return Ok(false),
     };
-    let prefix = format!("{TEMPORARY_DOWNLOAD_PREFIX}{id}.segment-");
+    let marker = format!("{id}.segment-");
+    let mut removed_any = false;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.starts_with(&prefix) && name_str.ends_with(".part") {
+        if name_str.contains(&marker) && name_str.ends_with(".part") {
             let _ = std::fs::remove_file(entry.path());
+            removed_any = true;
         }
     }
-    Ok(())
+    Ok(removed_any)
 }
 
-pub(crate) async fn concat_segments(
-    id: &str,
-    segments: &[DownloadSegmentProgress],
-    directory: &Path,
-    temporary: &Path,
-    control: &mut DownloadControl,
-) -> AppResult<()> {
-    let mut sorted_chunks: Vec<(usize, &DownloadSegmentProgress)> =
-        segments.iter().enumerate().collect();
-    sorted_chunks.sort_by_key(|(_, s)| s.start);
-
-    let mut expected_start = 0_u64;
-    for (_, s) in &sorted_chunks {
-        if s.start != expected_start {
-            return Err(AppError::download(format!(
-                "Inconsistent chunk boundary during assembly: expected start {expected_start}, found {}",
-                s.start
-            )));
-        }
-        expected_start = s.end + 1;
-    }
-
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(temporary)
-        .await
-        .map_err(|error| {
-            AppError::download(format!("Could not assemble the download file: {error}"))
-        })?;
-
-    let mut buffer = vec![0; CONCAT_BUFFER_SIZE];
-    for (segment_index, _) in sorted_chunks {
-        let path = segment_path(directory, id, segment_index);
-        let mut input = fs::File::open(path).await.map_err(|error| {
-            AppError::download(format!("Could not read a completed segment: {error}"))
-        })?;
-        loop {
-            let count = input.read(&mut buffer).await.map_err(|error| {
-                AppError::download(format!("Could not read a completed segment: {error}"))
-            })?;
-            if count == 0 {
-                break;
-            }
-            if let Some(reason) = control.current_stop_reason() {
-                output.sync_all().await.map_err(|error| {
-                    AppError::download(format!("Could not save the partial assembly: {error}"))
-                })?;
-                drop(output);
-                fs::remove_file(temporary).await.map_err(|error| {
-                    AppError::download(format!("Could not discard the partial assembly: {error}"))
-                })?;
-                return Err(stopped_error(reason));
-            }
-            output.write_all(&buffer[..count]).await.map_err(|error| {
-                AppError::download(format!("Could not assemble the download file: {error}"))
-            })?;
-        }
-    }
-    if let Some(reason) = control.current_stop_reason() {
-        output.sync_all().await.map_err(|error| {
-            AppError::download(format!("Could not save the partial assembly: {error}"))
-        })?;
-        drop(output);
-        fs::remove_file(temporary).await.map_err(|error| {
-            AppError::download(format!("Could not discard the partial assembly: {error}"))
-        })?;
-        return Err(stopped_error(reason));
-    }
-    output.flush().await.map_err(|error| {
-        AppError::download(format!("Could not finalize the assembled file: {error}"))
-    })?;
-    output.sync_all().await.map_err(|error| {
-        AppError::download(format!("Could not finalize the assembled file: {error}"))
-    })?;
-    Ok(())
-}
-
-pub(crate) async fn finalize(
+pub async fn finalize(
     _id: &str,
     temporary: PathBuf,
     destination: PathBuf,
@@ -189,8 +105,30 @@ pub(crate) async fn finalize(
         })?;
     }
 
-    match fs::rename(&temporary, &destination).await {
-        Ok(()) => {}
+    // Completeness check: if total length is known, ensure full range coverage before rename
+    if let Some(expected_total) = total {
+        if downloaded < expected_total {
+            return Err(AppError::download(format!(
+                "Cannot finalize incomplete download: received {downloaded} of {expected_total} bytes."
+            )));
+        }
+        let ranges_path = super::range_map::range_map_path(&temporary);
+        if fs::try_exists(&ranges_path).await.unwrap_or(false) {
+            if let Ok(Some(map)) = super::range_map::RangeMap::load(&ranges_path, expected_total, 0) {
+                if !map.is_complete() {
+                    return Err(AppError::download(
+                        "Cannot finalize incomplete download: sparse range map has gaps.",
+                    ));
+                }
+            }
+        }
+    }
+
+    match super::sparse_file::rename_with_av_retry(&temporary, &destination).await {
+        Ok(()) => {
+            let ranges_path = super::range_map::range_map_path(&temporary);
+            let _ = fs::remove_file(ranges_path).await;
+        }
         Err(err)
             if err.kind() == std::io::ErrorKind::CrossesDevices
                 || err.raw_os_error() == Some(18)
@@ -207,6 +145,8 @@ pub(crate) async fn finalize(
                 _id,
             )
             .await?;
+            let ranges_path = super::range_map::range_map_path(&temporary);
+            let _ = fs::remove_file(ranges_path).await;
         }
         Err(error) => {
             return Err(AppError::download(format!(

@@ -63,7 +63,9 @@ impl Clone for IntegrationService {
 impl IntegrationService {
     pub fn new(data_directory: PathBuf, resource_dir: PathBuf) -> Self {
         let host_exe = resolve_host_exe();
-        sync_browser_manifests(&data_directory, &host_exe);
+        if !crate::infrastructure::smoke::is_smoke_test() {
+            sync_browser_manifests(&data_directory, &host_exe);
+        }
         Self {
             data_directory,
             resource_dir,
@@ -117,6 +119,9 @@ impl IntegrationService {
     }
 
     pub fn sync_manifests(&self) -> Vec<BrowserType> {
+        if crate::infrastructure::smoke::is_smoke_test() {
+            return Vec::new();
+        }
         let host_exe = resolve_host_exe();
         sync_browser_manifests(&self.data_directory, &host_exe)
     }

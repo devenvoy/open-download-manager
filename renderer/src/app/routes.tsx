@@ -5,6 +5,7 @@ import { IntegrationScreen } from "@/features/integration";
 import { ProgressScreen } from "@/features/progress";
 import { SchedulerScreen } from "@/features/scheduler";
 import { SettingsScreen } from "@/features/settings";
+import { TorrentsScreen } from "@/features/torrents";
 import { type WindowMode, type WindowRoute } from "./window-mode";
 
 const ROUTE_WINDOW_CLASS: Record<WindowMode, string | null> = {
@@ -14,6 +15,7 @@ const ROUTE_WINDOW_CLASS: Record<WindowMode, string | null> = {
   integration: "integration-window",
   scheduler: "scheduler-window",
   add: "add-window",
+  torrents: "torrents-window",
 };
 
 /** Declaratively syncs window-level styling for auxiliary windows. */
@@ -41,6 +43,8 @@ function renderScreen(route: WindowRoute): React.ReactElement {
       return <IntegrationScreen />;
     case "scheduler":
       return <SchedulerScreen />;
+    case "torrents":
+      return <TorrentsScreen />;
     case "add":
       return (
         <AddDownloadScreen

@@ -24,9 +24,19 @@ pub mod http_download_executor;
 pub mod media;
 pub mod metrics;
 pub mod mms;
+pub mod perf;
 pub mod proxy_discovery;
 pub mod queue_store;
 pub mod settings_store;
+#[cfg(feature = "dev-tools")]
+pub mod smoke;
+#[cfg(not(feature = "dev-tools"))]
+pub mod smoke {
+    #[inline(always)]
+    pub fn is_smoke_test() -> bool {
+        false
+    }
+}
 pub mod system_shell;
 pub mod torrent;
 pub mod updater;

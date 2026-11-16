@@ -75,7 +75,7 @@ fn tray_tooltip_matches_specification() {
 
 #[test]
 fn torrent_window_uses_a_dedicated_shell() {
-    assert_eq!(torrent_route(), "torrents.html");
+    assert_eq!(torrent_route(), "index.html");
 }
 
 #[test]

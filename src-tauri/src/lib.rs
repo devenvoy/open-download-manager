@@ -37,14 +37,15 @@ use presentation::{
         remove_completed, reorder_queue_items, repair_advanced_integration, resolve_asx_playlist,
         retry_download_actions, review_download, save_credential_rule, show_about_dialog, snapshot,
         start_queue, test_proxy_connection, update_download_completion_actions, update_queue,
-        update_settings, validate_directory,
+        update_settings, validate_directory, mark_ui_ready, window_ready,
+        test_sleep_sync, test_sleep_async,
     },
     download_event_publisher::TauriDownloadEventPublisher,
     tray::tray_set_active_downloads,
     window_manager::{
         close_auxiliary_window, open_add_window, open_integration_window, open_options_window,
         open_progress_window, open_scheduler_window, open_torrent_window, resize_auxiliary_window,
-        resize_progress_window,
+        resize_progress_window, take_add_window_options,
     },
 };
 use presentation::commands::torrents::{
@@ -60,8 +61,15 @@ pub mod domain;
 pub mod infrastructure;
 pub mod presentation;
 
+static START_TIME: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+pub fn init_process_start() {
+    START_TIME.get_or_init(std::time::Instant::now);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_process_start();
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -93,12 +101,19 @@ pub fn run() {
                 return;
             }
             if argv.iter().any(|arg| arg == "--browser-setup") {
-                let _ = presentation::window_manager::open_integration_window(app.app_handle().clone());
+                let app_handle = app.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = presentation::window_manager::open_integration_window(app_handle);
+                });
             } else if !argv.iter().any(|arg| arg == "--background" || arg == "--browser-download") {
-                presentation::tray::show_main_window(app.app_handle());
+                let app_handle = app.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    presentation::tray::show_main_window(&app_handle);
+                });
             }
         }))
         .setup(|app| {
+            crate::infrastructure::perf::mark_setup_start();
             let home_directory = app
                 .path()
                 .home_dir()
@@ -107,7 +122,16 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let data_directory = home_directory.join(USER_DATA_DIRECTORY_NAME);
+            let data_directory = if let Ok(custom) = std::env::var("ODM_DATA_DIR") {
+                std::path::PathBuf::from(custom)
+            } else if crate::infrastructure::smoke::is_smoke_test() {
+                let temp = std::env::temp_dir().join("odm-smoke-data");
+                let _ = std::fs::create_dir_all(&temp);
+                temp
+            } else {
+                home_directory.join(USER_DATA_DIRECTORY_NAME)
+            };
+            crate::infrastructure::perf::init_logger(&data_directory);
             let settings_store = SettingsStore::new(data_directory.clone());
             let settings = SettingsService::new(
                 settings_store.clone(),
@@ -184,6 +208,7 @@ pub fn run() {
             });
 
             // Create torrent service once so bridge and IPC share the same engine.
+            crate::infrastructure::perf::mark_engine_start();
             let torrents = {
                 {
                     TorrentService::start(
@@ -202,17 +227,17 @@ pub fn run() {
             let on_torrent = std::sync::Arc::new(
                 move |review: crate::domain::torrent::TorrentReviewRequest| {
                     let app = bridge_app.clone();
-                    let app_for_thread = app.clone();
-                    let _ = app.run_on_main_thread(move || {
-                        let _ = presentation::window_manager::open_torrent_window(app_for_thread);
+                    let review_torrents = review_torrents.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = presentation::window_manager::open_torrent_window(app.clone());
+                        // The review is delivered exactly once: while no window
+                        // listens it stays pending, afterwards it is gone.
+                        crate::application::torrent_os_integration::deliver_review(
+                            &app,
+                            &review_torrents,
+                            review,
+                        );
                     });
-                    // The review is delivered exactly once: while no window
-                    // listens it stays pending, afterwards it is gone.
-                    crate::application::torrent_os_integration::deliver_review(
-                        &app,
-                        &review_torrents,
-                        review,
-                    );
                 },
             );
 
@@ -247,10 +272,10 @@ pub fn run() {
             );
 
             let is_quitting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let _tray = presentation::tray::setup_system_tray(&app.handle(), is_quitting.clone())
+            presentation::tray::setup_system_tray(app.handle(), is_quitting.clone())
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
 
-            let menu = presentation::menu::build_application_menu(&app.handle())
+            let menu = presentation::menu::build_application_menu(app.handle())
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             let _ = app.set_menu(menu);
 
@@ -258,12 +283,17 @@ pub fn run() {
                 presentation::menu::handle_menu_event(app, event.id().as_ref());
             });
 
-            let is_background = std::env::args().any(|arg| arg == "--background");
-            let is_browser_setup = std::env::args().any(|arg| arg == "--browser-setup");
+            let launch_args: Vec<String> = std::env::args().collect();
+            let has_torrent_launch = !crate::application::torrent_os_integration::extract_torrent_launch_args(&launch_args).is_empty();
+            let is_background = launch_args.iter().any(|arg| arg == "--background");
+            let is_browser_setup = launch_args.iter().any(|arg| arg == "--browser-setup");
 
+            crate::infrastructure::perf::mark_main_window_created();
+            crate::infrastructure::perf::record_window_open("main");
             if let Some(main_window) = app.get_webview_window("main") {
-                if !is_background && !is_browser_setup {
+                if !is_background && !is_browser_setup && !has_torrent_launch {
                     let _ = main_window.show();
+                    crate::infrastructure::perf::mark_main_window_shown();
                 }
                 let is_quitting_window = is_quitting.clone();
                 let main_window_clone = main_window.clone();
@@ -278,7 +308,10 @@ pub fn run() {
             }
 
             if is_browser_setup {
-                let _ = presentation::window_manager::open_integration_window(app.handle().clone());
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = presentation::window_manager::open_integration_window(app_handle);
+                });
             }
 
             let file_icons = crate::infrastructure::file_icons::FileIconProvider::new(
@@ -403,6 +436,17 @@ pub fn run() {
                 &launch_args,
             );
 
+            crate::infrastructure::perf::start_main_thread_watchdog(app.handle().clone());
+            crate::infrastructure::perf::mark_setup_done();
+
+            #[cfg(feature = "dev-tools")]
+            if crate::infrastructure::smoke::is_smoke_test() {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::infrastructure::smoke::run_smoke_tests(app_handle).await;
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -416,6 +460,7 @@ pub fn run() {
             close_auxiliary_window,
             resize_auxiliary_window,
             resize_progress_window,
+            take_add_window_options,
             get_integration_info,
             register_browser,
             browser_setup_action,
@@ -471,6 +516,10 @@ pub fn run() {
             torrent_take_review,
             torrent_tracker_status,
             tray_set_active_downloads,
+            mark_ui_ready,
+            window_ready,
+            test_sleep_sync,
+            test_sleep_async,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Open Download Manager")
