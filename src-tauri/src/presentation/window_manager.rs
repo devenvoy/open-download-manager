@@ -100,71 +100,27 @@ pub fn progress_route(id: &str) -> AppResult<String> {
         return Err(AppError::window("The download identifier is invalid."));
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        Ok("index.html".to_string())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(format!("index.html?progress={id}"))
-    }
+    Ok("index.html".to_string())
 }
 
-#[cfg(target_os = "windows")]
 pub fn options_route() -> &'static str {
     "index.html"
 }
-#[cfg(not(target_os = "windows"))]
-pub fn options_route() -> &'static str {
-    "index.html?options=1"
-}
 
-#[cfg(target_os = "windows")]
 pub fn torrent_route() -> &'static str {
     "index.html"
 }
-#[cfg(not(target_os = "windows"))]
-pub fn torrent_route() -> &'static str {
-    "torrents.html"
-}
 
-#[cfg(target_os = "windows")]
 pub fn scheduler_route() -> &'static str {
     "index.html"
 }
-#[cfg(not(target_os = "windows"))]
-pub fn scheduler_route() -> &'static str {
-    "index.html?scheduler=1"
-}
 
-#[cfg(target_os = "windows")]
 pub fn integration_route() -> &'static str {
     "index.html"
 }
-#[cfg(not(target_os = "windows"))]
-pub fn integration_route() -> &'static str {
-    "index.html?integration=1"
-}
 
-#[cfg(target_os = "windows")]
 pub fn add_route(_options: Option<&OpenAddOptions>) -> String {
     "index.html".to_string()
-}
-#[cfg(not(target_os = "windows"))]
-pub fn add_route(options: Option<&OpenAddOptions>) -> String {
-    let mut parts = vec!["add=1".to_string()];
-    if let Some(opts) = options {
-        if opts.paste.unwrap_or(false) {
-            parts.push("paste=1".to_string());
-        }
-        if let Some(scheduled) = &opts.scheduled {
-            if !scheduled.is_empty() {
-                let encoded = url::form_urlencoded::byte_serialize(scheduled.as_bytes()).collect::<String>();
-                parts.push(format!("scheduled={encoded}"));
-            }
-        }
-    }
-    format!("index.html?{}", parts.join("&"))
 }
 
 pub fn needs_close_choice(status: &DownloadStatus, needs_review: bool) -> bool {

@@ -26,15 +26,9 @@ use open_download_manager_lib::{
 
 #[test]
 fn progress_route_validates_download_id_and_returns_valid_route() {
-    #[cfg(target_os = "windows")]
     assert_eq!(
         progress_route("download-123_ab").unwrap(),
         "index.html"
-    );
-    #[cfg(not(target_os = "windows"))]
-    assert_eq!(
-        progress_route("download-123_ab").unwrap(),
-        "index.html?progress=download-123_ab"
     );
 }
 
@@ -61,41 +55,21 @@ fn dynamic_progress_window_labels_prevent_overwriting() {
 }
 
 #[test]
-fn auxiliary_window_routes_return_platform_appropriate_routes() {
-    // Windows WebView2 routes to index.html without query strings to prevent blank window issues
-    #[cfg(target_os = "windows")]
-    {
-        assert_eq!(options_route(), "index.html");
-        assert_eq!(scheduler_route(), "index.html");
-        assert_eq!(integration_route(), "index.html");
-        assert_eq!(torrent_route(), "index.html");
-        assert_eq!(add_route(None), "index.html");
-        assert_eq!(
-            add_route(Some(&OpenAddOptions {
-                paste: Some(true),
-                scheduled: None,
-            })),
-            "index.html"
-        );
-        assert_eq!(progress_route("dl-123").unwrap(), "index.html");
-    }
-    // macOS WebKit avoids duplicate custom scheme URL stalls by using distinct URLs
-    #[cfg(not(target_os = "windows"))]
-    {
-        assert_eq!(options_route(), "index.html?options=1");
-        assert_eq!(scheduler_route(), "index.html?scheduler=1");
-        assert_eq!(integration_route(), "index.html?integration=1");
-        assert_eq!(torrent_route(), "torrents.html");
-        assert_eq!(add_route(None), "index.html?add=1");
-        assert_eq!(
-            add_route(Some(&OpenAddOptions {
-                paste: Some(true),
-                scheduled: None,
-            })),
-            "index.html?add=1&paste=1"
-        );
-        assert_eq!(progress_route("dl-123").unwrap(), "index.html?progress=dl-123");
-    }
+fn auxiliary_window_routes_return_plain_index_html_on_all_platforms() {
+    // All platforms route via synchronous window label metadata to plain index.html
+    assert_eq!(options_route(), "index.html");
+    assert_eq!(scheduler_route(), "index.html");
+    assert_eq!(integration_route(), "index.html");
+    assert_eq!(torrent_route(), "index.html");
+    assert_eq!(add_route(None), "index.html");
+    assert_eq!(
+        add_route(Some(&OpenAddOptions {
+            paste: Some(true),
+            scheduled: None,
+        })),
+        "index.html"
+    );
+    assert_eq!(progress_route("dl-123").unwrap(), "index.html");
 
     // Verify dimension constants
     assert_eq!(OPTIONS_WINDOW_WIDTH, 540.0);
