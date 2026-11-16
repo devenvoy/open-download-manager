@@ -214,6 +214,7 @@ fn sabr_handoff_accepts_only_a_bounded_captured_googlevideo_session() {
         output_format: Some("mp4".to_owned()),
         urls: None,
         filename: None,
+        directory: None,
         referer: None,
         canonical_url: None,
         video_id: None,
