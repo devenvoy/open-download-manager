@@ -216,10 +216,11 @@ bun run test
 
 ### Packaging Release Bundles
 ```bash
-bun run build:mac        # Build macOS DMG & .app
-bun run build:win        # Build Windows NSIS installer (x64)
-bun run build:linux      # Build Linux .deb & .AppImage
-bun run pack:extension   # Build Chrome & Firefox extension packages
+bun tauri build --no-bundle # Build standalone release binary with embedded assets
+bun run build:mac           # Build macOS DMG & .app
+bun run build:win           # Build Windows NSIS installer (x64)
+bun run build:linux         # Build Linux .deb & .AppImage
+bun run pack:extension      # Build Chrome & Firefox extension packages
 ```
 
 ---
