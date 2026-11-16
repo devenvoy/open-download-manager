@@ -15,7 +15,9 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::{
-    domain::download::{BrowserRequestHeaders, DownloadRecord, DownloadStatus},
+    domain::download::{
+        BrowserRequestHeaders, DownloadAction, DownloadRecord, DownloadRequest, DownloadStatus,
+    },
     presentation::app_state::AppState,
 };
 
@@ -70,12 +72,22 @@ pub struct IdleWatchdogResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveLoadResult {
+    pub concurrent_downloads: usize,
+    pub duration_seconds: u64,
+    pub watchdog_stalls: u64,
+    pub ui_responsiveness_ms: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SmokeTestResults {
     pub timestamp: String,
     pub snapshots: Vec<SnapshotBenchmarkResult>,
     pub windows: Vec<WindowBenchmarkResult>,
     pub magnet: MagnetBenchmarkResult,
     pub idle: IdleWatchdogResult,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_load: Option<ActiveLoadResult>,
     pub all_windows_passed: bool,
 }
 
@@ -373,6 +385,82 @@ pub async fn run_smoke_tests(app: AppHandle) {
     };
 
     // -------------------------------------------------------------
+    // Part 5: Active Load Scenario (5 simultaneous downloads for 60s)
+    // -------------------------------------------------------------
+    println!("\n[SMOKE] 5/5: Active Load Scenario (5 concurrent streams for 60s)...");
+    let server_health_url = "http://127.0.0.1:8999/health";
+    let is_bench_server_up = reqwest::Client::new()
+        .get(server_health_url)
+        .timeout(Duration::from_millis(500))
+        .send()
+        .await
+        .is_ok();
+
+    let active_load_result = if is_bench_server_up {
+        let temp_download_dir = std::env::temp_dir().join("odm-smoke-active-load");
+        let _ = std::fs::create_dir_all(&temp_download_dir);
+        let settings = state
+            .settings
+            .lock()
+            .map(|s| s.settings().clone())
+            .unwrap_or_else(|e| e.into_inner().settings().clone());
+
+        let mut active_download_ids = Vec::new();
+        for i in 1..=5 {
+            let req = DownloadRequest {
+                urls: vec![format!("http://127.0.0.1:8999/bytes?size=10737418240&stream={i}")],
+                directory: Some(temp_download_dir.to_string_lossy().to_string()),
+                filename: Some(format!("active_load_stream_{i}.bin")),
+                ..Default::default()
+            };
+            if let Ok(ids) = state.download_transfer.add(req, &settings) {
+                active_download_ids.extend(ids);
+            }
+        }
+
+        let start_active_stalls = crate::infrastructure::perf::get_watchdog_stalls_count();
+        let active_start = Instant::now();
+
+        let mut snapshot_latencies = Vec::new();
+        while active_start.elapsed() < Duration::from_secs(60) {
+            let snap_start = Instant::now();
+            let _ = crate::presentation::commands::settings::snapshot(app.state::<AppState>());
+            snapshot_latencies.push(snap_start.elapsed().as_secs_f64() * 1000.0);
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+
+        let end_active_stalls = crate::infrastructure::perf::get_watchdog_stalls_count();
+        let active_stalls = end_active_stalls.saturating_sub(start_active_stalls);
+
+        for id in active_download_ids {
+            let _ = state.download_transfer.action(&id, DownloadAction::Cancel);
+            let _ = state.download_transfer.action(&id, DownloadAction::Remove);
+        }
+        let _ = std::fs::remove_dir_all(&temp_download_dir);
+
+        snapshot_latencies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let median_ui_latency = if snapshot_latencies.is_empty() {
+            0.0
+        } else {
+            snapshot_latencies[snapshot_latencies.len() / 2]
+        };
+
+        println!(
+            "  Active load (5 downloads, 60s) completed: Watchdog stalls = {active_stalls} | UI snapshot median = {median_ui_latency:.2}ms"
+        );
+
+        Some(ActiveLoadResult {
+            concurrent_downloads: 5,
+            duration_seconds: 60,
+            watchdog_stalls: active_stalls,
+            ui_responsiveness_ms: median_ui_latency,
+        })
+    } else {
+        println!("  Notice: Synthetic benchmark server not reachable at 127.0.0.1:8999, skipping active load.");
+        None
+    };
+
+    // -------------------------------------------------------------
     // Output Generation & Exit
     // -------------------------------------------------------------
     let final_results = SmokeTestResults {
@@ -381,6 +469,7 @@ pub async fn run_smoke_tests(app: AppHandle) {
         windows: window_results,
         magnet: magnet_result,
         idle: idle_result,
+        active_load: active_load_result,
         all_windows_passed,
     };
 
