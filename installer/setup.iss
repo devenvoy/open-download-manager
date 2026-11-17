@@ -8,6 +8,7 @@
 #define MyAppURL "https://github.com/devansh-pc/open-download-manager"
 #define MyAppExeName "open-download-manager.exe"
 #define MyNativeHostExeName "open-download-manager-native-host.exe"
+#define MyCliExeName "open-download-manager-cli.exe"
 #define MyAppId "{{C24A4B69-7F3A-4F8A-9A83-E8D5F6A529B1}}"
 
 [Setup]
@@ -46,6 +47,7 @@ Name: "assoctorrent"; Description: "Associate with .torrent files"; GroupDescrip
 [Files]
 Source: "..\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\release\{#MyNativeHostExeName}"; DestDir: "{app}"; Flags: ignoreversion optional
+Source: "..\target\release\{#MyCliExeName}"; DestDir: "{app}"; Flags: ignoreversion optional
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 

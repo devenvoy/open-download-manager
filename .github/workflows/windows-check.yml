@@ -38,3 +38,7 @@ jobs:
 
       - name: Build standalone app binary with embedded assets
         run: bun tauri build --no-bundle
+
+      - name: Compile Inno Setup installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
