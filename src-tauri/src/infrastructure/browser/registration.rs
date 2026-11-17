@@ -167,27 +167,21 @@ pub async fn register_browser_manifest(
 
     #[cfg(windows)]
     {
-        let key = format!(
-            r"HKCU\Software\{}\NativeMessagingHosts\{}",
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE};
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let subkey_path = format!(
+            r"Software\{}\NativeMessagingHosts\{}",
             browser.registry_key(),
             NATIVE_HOST_NAME
         );
-        let status = tokio::process::Command::new("reg.exe")
-            .arg("ADD")
-            .arg(&key)
-            .arg("/ve")
-            .arg("/t")
-            .arg("REG_SZ")
-            .arg("/d")
-            .arg(&manifest_path)
-            .arg("/f")
-            .status()
-            .await
-            .map_err(|e| AppError::browser(format!("Could not run reg.exe: {e}")))?;
-
-        if !status.success() {
-            return Err(AppError::browser("Could not register native messaging host in Windows registry."));
-        }
+        let (key, _disp) = hkcu
+            .create_subkey_with_flags(&subkey_path, KEY_WRITE)
+            .map_err(|e| AppError::browser(format!("Could not create registry key: {e}")))?;
+        key.set_value("", &manifest_path.to_string_lossy().to_string())
+            .map_err(|e| AppError::browser(format!("Could not write registry value: {e}")))?;
+        eprintln!("[odm] successfully registered native host in HKCU\\{subkey_path}");
     }
 
     #[cfg(not(windows))]
