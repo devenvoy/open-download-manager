@@ -170,6 +170,13 @@ impl IntegrationService {
         Ok(())
     }
 
+    pub async fn unregister_browser(&self, browser_name: &str) -> AppResult<()> {
+        let browser = BrowserType::parse(browser_name)
+            .ok_or_else(|| AppError::browser("Choose Chrome, Edge, Brave, Opera, or Firefox."))?;
+
+        crate::infrastructure::browser::unregister_browser_manifest(browser, &self.data_directory).await
+    }
+
     pub async fn browser_setup(&self, action: &str, browser_name: &str) -> AppResult<BrowserSetupResult> {
         let browser = BrowserType::parse(browser_name)
             .ok_or_else(|| AppError::browser("Choose Chrome, Edge, Brave, Opera, or Firefox."))?;
