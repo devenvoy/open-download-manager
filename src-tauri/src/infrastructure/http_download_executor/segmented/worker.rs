@@ -28,21 +28,12 @@ use super::{
         policy::{MAX_TRANSIENT_RETRIES, READ_TIMEOUT_SECONDS},
         range_map::RangeMap,
         retry::{retry_delay, send_with_retry, wait_before_retry},
-        sparse_file::{open_worker_handle, sync_worker_data, write_at},
+        sparse_file::{flush_cadence_bytes, open_worker_handle, sync_worker_data, write_at, SYNC_MAX_INTERVAL},
         validator::{content_range, SegmentValidator},
     },
     progress::{stop_status, update_segment_progress},
     MIN_CHUNK_REASSIGN_BYTES,
 };
-
-const DEFAULT_SYNC_INTERVAL_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB default flush buffer
-
-fn flush_cadence_bytes() -> u64 {
-    std::env::var("ODM_FLUSH_CADENCE_BYTES")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_SYNC_INTERVAL_BYTES)
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_segment_worker(
@@ -339,7 +330,9 @@ async fn download_chunk(
 
     let mut downloaded = downloaded_init;
     let mut last_synced = downloaded_init;
+    let mut last_synced_instant = std::time::Instant::now();
     let mut midstream_retries = 0_u8;
+    let cadence = flush_cadence_bytes(Some(validator.total));
 
     'chunk_stream: loop {
         let current_target = {
@@ -626,15 +619,20 @@ async fn download_chunk(
         })?;
         downloaded += to_write;
 
-        // Periodic range map flush
-        let cadence = flush_cadence_bytes();
-        if cadence > 0 && downloaded.saturating_sub(last_synced) >= cadence {
+        // Periodic range map flush (adaptive byte cadence or 30s elapsed time)
+        let elapsed = last_synced_instant.elapsed();
+        let bytes_since_sync = downloaded.saturating_sub(last_synced);
+        if cadence > 0
+            && (bytes_since_sync >= cadence
+                || (bytes_since_sync > 0 && elapsed >= SYNC_MAX_INTERVAL))
+        {
             let _ = sync_worker_data(&worker_file);
             if let Ok(mut rm) = range_map.lock() {
                 rm.add_range(start_offset + last_synced, write_offset + to_write - 1);
                 let _ = rm.save_atomic(&ranges_path);
             }
             last_synced = downloaded;
+            last_synced_instant = std::time::Instant::now();
         }
 
         if let Ok(mut guard) = segments.lock() {

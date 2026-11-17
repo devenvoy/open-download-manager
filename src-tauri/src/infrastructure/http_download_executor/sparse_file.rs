@@ -7,13 +7,21 @@ use std::{
     io,
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
-#[cfg(windows)]
-use std::time::Duration;
 
 use crate::application::error::{AppError, AppResult};
 
 pub const FOUR_GIBIBYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Minimum flush cadence in bytes (1 MiB).
+pub const SYNC_BYTES_MIN: u64 = 1 * 1024 * 1024;
+
+/// Maximum flush cadence in bytes (64 MiB).
+pub const SYNC_BYTES_MAX: u64 = 64 * 1024 * 1024;
+
+/// Maximum interval between flushes on slow or stalled streams (30 seconds).
+pub const SYNC_MAX_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Global atomic counter for measuring fsync invocations during benchmark and runtime.
 static FSYNC_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -24,6 +32,30 @@ pub fn reset_fsync_count() -> u64 {
 
 pub fn get_fsync_count() -> u64 {
     FSYNC_COUNT.load(Ordering::Relaxed)
+}
+
+/// Adaptive cadence calculation:
+/// Scales cadence proportionally to file size (1/16 of total size),
+/// clamped between 1 MiB and 64 MiB.
+pub fn adaptive_flush_cadence_bytes(total_size: u64) -> u64 {
+    (total_size / 16).clamp(SYNC_BYTES_MIN, SYNC_BYTES_MAX)
+}
+
+/// Computes the effective flush cadence in bytes.
+/// If `ODM_FLUSH_CADENCE_BYTES` environment variable is set and parseable, it takes precedence.
+/// Otherwise, if `total_size` is available and > 0, returns the adaptive cadence.
+/// Otherwise, defaults to 4 MiB.
+pub fn flush_cadence_bytes(total_size: Option<u64>) -> u64 {
+    if let Some(explicit) = std::env::var("ODM_FLUSH_CADENCE_BYTES")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+    {
+        return explicit;
+    }
+    match total_size {
+        Some(size) if size > 0 => adaptive_flush_cadence_bytes(size),
+        _ => 4 * 1024 * 1024,
+    }
 }
 
 /// Allocates a single-part sparse file on disk for the given total byte size.
@@ -290,5 +322,33 @@ mod tests {
         assert!(check_fat32_size_limit(true, FOUR_GIBIBYTES + 1024).is_err());
         assert!(check_fat32_size_limit(true, 1024 * 1024).is_ok());
         assert!(check_fat32_size_limit(false, FOUR_GIBIBYTES * 2).is_ok());
+    }
+
+    #[test]
+    fn test_adaptive_flush_cadence_calculation() {
+        // Files <= 16 MiB clamp to SYNC_BYTES_MIN (1 MiB)
+        assert_eq!(adaptive_flush_cadence_bytes(1024 * 1024), 1024 * 1024);
+        assert_eq!(adaptive_flush_cadence_bytes(16 * 1024 * 1024), 1024 * 1024);
+
+        // 64 MiB file -> 64 / 16 = 4 MiB
+        assert_eq!(adaptive_flush_cadence_bytes(64 * 1024 * 1024), 4 * 1024 * 1024);
+
+        // 512 MiB file -> 512 / 16 = 32 MiB
+        assert_eq!(adaptive_flush_cadence_bytes(512 * 1024 * 1024), 32 * 1024 * 1024);
+
+        // Files >= 1 GiB clamp to SYNC_BYTES_MAX (64 MiB)
+        assert_eq!(adaptive_flush_cadence_bytes(1024 * 1024 * 1024), 64 * 1024 * 1024);
+        assert_eq!(adaptive_flush_cadence_bytes(2 * 1024 * 1024 * 1024), 64 * 1024 * 1024);
+        assert_eq!(adaptive_flush_cadence_bytes(10 * 1024 * 1024 * 1024), 64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_flush_cadence_fallback_and_override() {
+        // Fallback when size is missing
+        assert_eq!(flush_cadence_bytes(None), 4 * 1024 * 1024);
+        assert_eq!(flush_cadence_bytes(Some(0)), 4 * 1024 * 1024);
+
+        // Uses adaptive when size is known
+        assert_eq!(flush_cadence_bytes(Some(1024 * 1024 * 1024)), 64 * 1024 * 1024);
     }
 }
