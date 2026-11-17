@@ -39,6 +39,19 @@ jobs:
       - name: Build standalone app binary with embedded assets
         run: bun tauri build --no-bundle
 
+      - name: Verify Windows GUI window mounting and lifecycle
+        run: |
+          $env:ODM_SMOKE = "1"
+          & target\release\open-download-manager.exe --smoke-test
+
+      - name: Upload Smoke Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-result
+          path: smoke-result.json
+          if-no-files-found: ignore
+
       - name: Compile Inno Setup installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
