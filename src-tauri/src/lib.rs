@@ -50,8 +50,9 @@ use presentation::{
 };
 use presentation::commands::torrents::{
     torrent_action, torrent_add_file, torrent_add_magnet, torrent_files, torrent_list,
-    torrent_restart_engine, torrent_set_files, torrent_set_watching, torrent_settings_get,
-    torrent_settings_set, torrent_status, torrent_take_review, torrent_tracker_status,
+    torrent_peers, torrent_pieces, torrent_restart_engine, torrent_set_files, torrent_set_watching,
+    torrent_settings_get, torrent_settings_set, torrent_status, torrent_take_review,
+    torrent_tracker_status,
 };
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -292,8 +293,15 @@ pub fn run() {
             crate::infrastructure::perf::record_window_open("main");
             if let Some(main_window) = app.get_webview_window("main") {
                 if !is_background && !is_browser_setup && !has_torrent_launch {
-                    let _ = main_window.show();
-                    crate::infrastructure::perf::mark_main_window_shown();
+                    let main_clone = main_window.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = crate::infrastructure::perf::wait_for_window_ui_ready("main", std::time::Duration::from_millis(1500)).await;
+                        let _ = main_clone.show();
+                        if !crate::infrastructure::smoke::is_smoke_test() {
+                            let _ = main_clone.set_focus();
+                        }
+                        crate::infrastructure::perf::mark_main_window_shown();
+                    });
                 }
                 let is_quitting_window = is_quitting.clone();
                 let main_window_clone = main_window.clone();
@@ -515,6 +523,8 @@ pub fn run() {
             torrent_restart_engine,
             torrent_take_review,
             torrent_tracker_status,
+            torrent_peers,
+            torrent_pieces,
             tray_set_active_downloads,
             mark_ui_ready,
             window_ready,

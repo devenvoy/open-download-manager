@@ -7,6 +7,8 @@ import {
   torrentFilesQuery,
   torrentKeys,
   torrentListQuery,
+  torrentPeersQuery,
+  torrentPiecesQuery,
   torrentSettingsQuery,
   torrentStatusQuery,
   torrentTrackersQuery,
@@ -65,6 +67,20 @@ export function useTorrentFiles(id: number | null) {
 export function useTorrentTrackers(id: number | null, enabled: boolean) {
   return useQuery({
     ...torrentTrackersQuery(id ?? 0),
+    enabled: id !== null && enabled,
+  });
+}
+
+export function useTorrentPeers(id: number | null, enabled: boolean) {
+  return useQuery({
+    ...torrentPeersQuery(id ?? 0),
+    enabled: id !== null && enabled,
+  });
+}
+
+export function useTorrentPieces(id: number | null, enabled: boolean) {
+  return useQuery({
+    ...torrentPiecesQuery(id ?? 0),
     enabled: id !== null && enabled,
   });
 }

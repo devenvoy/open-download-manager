@@ -14,16 +14,47 @@ interface ThemeState {
   toggle: () => void;
 }
 
+const themeChannel =
+  typeof window !== "undefined" && typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel("odm-theme-sync")
+    : null;
+
+function getStoredTheme(): AppTheme {
+  if (typeof window === "undefined" || !window.localStorage) return "system";
+  try {
+    const val = localStorage.getItem("odm-theme");
+    if (val === "light" || val === "dark" || val === "system") return val;
+  } catch {
+    // Ignore storage errors
+  }
+  return "system";
+}
+
+const initialTheme = getStoredTheme();
+const initialEffective = typeof document !== "undefined" ? applyTheme(initialTheme) : "light";
+
 /**
  * The one owner of the theme (plan §6.2). The Rust settings are the source of
  * truth; `hydrate` copies them in once the snapshot arrives.
  */
 export const useThemeStore = create<ThemeState>()((set, get) => ({
-  theme: "system",
-  effective: "light",
-  setTheme: (theme) => set({ theme, effective: applyTheme(theme) }),
+  theme: initialTheme,
+  effective: initialEffective,
+  setTheme: (theme) => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("odm-theme", theme);
+      }
+      themeChannel?.postMessage({ type: "THEME_CHANGE", theme });
+    } catch {
+      // Ignore broadcast or storage errors
+    }
+    set({ theme, effective: applyTheme(theme) });
+  },
   hydrate: (theme) => {
-    if (theme !== get().theme) get().setTheme(theme);
+    if (theme && theme !== get().theme) {
+      get().setTheme(theme);
+    }
   },
   toggle: () =>
     get().setTheme(get().effective === "dark" ? "light" : "dark"),
@@ -35,6 +66,25 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
  */
 export function useThemeSync(): void {
   const theme = useThemeStore((state) => state.theme);
+
+  useEffect(() => {
+    if (!themeChannel) return;
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === "THEME_CHANGE" && e.data.theme) {
+        const newTheme = e.data.theme as AppTheme;
+        if (newTheme !== useThemeStore.getState().theme) {
+          useThemeStore.setState({
+            theme: newTheme,
+            effective: applyTheme(newTheme),
+          });
+        }
+      }
+    };
+    themeChannel.addEventListener("message", handleMessage);
+    return () => {
+      themeChannel.removeEventListener("message", handleMessage);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {

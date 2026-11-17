@@ -90,6 +90,68 @@ fn extract_from_zip(archive: &Path, exe_name: &str, destination: &Path) -> AppRe
     let mut zip = zip::ZipArchive::new(file)
         .map_err(|error| AppError::download(format!("Could not read zip archive: {error}")))?;
 
+    let mut is_bundle = false;
+    for index in 0..zip.len() {
+        if let Ok(entry) = zip.by_index(index) {
+            if let Some(enclosed) = entry.enclosed_name() {
+                if enclosed.components().any(|c| c.as_os_str() == "_internal") {
+                    is_bundle = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    let dest_dir = destination.parent().unwrap_or_else(|| Path::new("."));
+
+    if is_bundle {
+        let mut found_exe = false;
+        for index in 0..zip.len() {
+            let mut entry = zip
+                .by_index(index)
+                .map_err(|error| AppError::download(format!("Could not read zip entry: {error}")))?;
+
+            let Some(enclosed) = entry.enclosed_name().map(|p| p.to_path_buf()) else {
+                continue;
+            };
+
+            let target_rel = if enclosed.starts_with("yt-dlp") && enclosed != Path::new("yt-dlp") {
+                enclosed.strip_prefix("yt-dlp").unwrap_or(&enclosed).to_path_buf()
+            } else {
+                enclosed
+            };
+
+            let out_path = dest_dir.join(&target_rel);
+
+            if entry.is_dir() {
+                let _ = std::fs::create_dir_all(&out_path);
+            } else if entry.is_file() {
+                if let Some(parent) = out_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                write_reader_to_file(&mut entry, &out_path)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(0o755));
+                }
+                if target_rel.file_name().and_then(|n| n.to_str()) == Some(exe_name) {
+                    found_exe = true;
+                    if out_path != destination {
+                        let _ = std::fs::copy(&out_path, destination);
+                    }
+                }
+            }
+        }
+
+        if found_exe || destination.exists() {
+            return Ok(());
+        }
+        return Err(AppError::download(format!(
+            "Could not find executable '{exe_name}' inside extracted bundle archive"
+        )));
+    }
+
     for index in 0..zip.len() {
         let mut entry = zip
             .by_index(index)

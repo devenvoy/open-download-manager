@@ -55,7 +55,7 @@ impl MediaToolAdapter for MacosAdapter {
         // static macOS ARM64 FFmpeg build is available upstream.
         let url = match tool {
             MediaToolType::YtDlp => {
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos.zip"
             }
             MediaToolType::Ffmpeg => "https://evermeet.cx/ffmpeg/getrelease/zip",
         };
@@ -105,6 +105,22 @@ impl MediaToolAdapter for MacosAdapter {
             .map(PathBuf::from)
             .collect()
     }
+
+    fn finalize_binary(&self, path: &Path) -> AppResult<()> {
+        crate::infrastructure::media::tools::binary::make_executable(path)?;
+        // Strip macOS Gatekeeper quarantine attribute if present so execution
+        // of downloaded media tool binaries or unpacked dependencies is not
+        // blocked by Gatekeeper.
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("/usr/bin/xattr")
+                .arg("-d")
+                .arg("com.apple.quarantine")
+                .arg(path)
+                .output();
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -117,7 +133,7 @@ mod tests {
             let ytdlp = adapter
                 .download_spec(MediaToolType::YtDlp)
                 .expect("macOS yt-dlp spec");
-            assert!(ytdlp.url.ends_with("/yt-dlp_macos"));
+            assert!(ytdlp.url.ends_with("/yt-dlp_macos.zip"));
             assert_eq!(ytdlp.binary_name, "yt-dlp");
 
             let ffmpeg = adapter

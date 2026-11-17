@@ -27,6 +27,8 @@ import {
   type TorrentEngineStatus,
   type TorrentFileItem,
   type TorrentListItem,
+  type TorrentPeerItem,
+  type TorrentPiecesInfo,
   type TorrentReviewRequest,
   type TorrentSettings,
   type TorrentTrackerStatus,
@@ -226,6 +228,14 @@ export interface CommandMap {
   torrent_tracker_status: {
     args: { id: number };
     result: TorrentTrackerStatus[];
+  };
+  torrent_peers: {
+    args: { id: number };
+    result: TorrentPeerItem[];
+  };
+  torrent_pieces: {
+    args: { id: number };
+    result: TorrentPiecesInfo;
   };
   torrent_settings_get: { args: undefined; result: TorrentSettings };
   torrent_settings_set: {

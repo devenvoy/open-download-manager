@@ -52,10 +52,10 @@ impl MediaToolAdapter for WindowsAdapter {
     fn download_spec(&self, tool: MediaToolType) -> AppResult<ToolDownloadSpec> {
         let url = match (tool, self.platform) {
             (MediaToolType::YtDlp, ToolPlatform::WindowsX64) => {
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_win.zip"
             }
             (MediaToolType::YtDlp, ToolPlatform::WindowsArm64) => {
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_arm64.exe"
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_win_arm64.zip"
             }
             (MediaToolType::Ffmpeg, ToolPlatform::WindowsX64) => {
                 "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip"
@@ -98,7 +98,7 @@ mod tests {
         let ytdlp_arm64 = arm64
             .download_spec(MediaToolType::YtDlp)
             .expect("ARM64 yt-dlp spec");
-        assert!(ytdlp_arm64.url.ends_with("/yt-dlp_arm64.exe"));
+        assert!(ytdlp_arm64.url.ends_with("/yt-dlp_win_arm64.zip"));
         assert_eq!(ytdlp_arm64.binary_name, "yt-dlp.exe");
         assert_eq!(arm64.executable_name(MediaToolType::YtDlp), "yt-dlp.exe");
 
@@ -112,7 +112,7 @@ mod tests {
         let ytdlp_x64 = x64
             .download_spec(MediaToolType::YtDlp)
             .expect("x64 yt-dlp spec");
-        assert!(ytdlp_x64.url.ends_with("/yt-dlp.exe"));
+        assert!(ytdlp_x64.url.ends_with("/yt-dlp_win.zip"));
         assert!(!ytdlp_x64.url.contains("arm64"));
 
         let ffmpeg_x64 = x64

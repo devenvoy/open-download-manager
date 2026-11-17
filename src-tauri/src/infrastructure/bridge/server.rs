@@ -336,8 +336,17 @@ async fn handle_bridge_connection(
         return;
     }
 
-    if method != "POST" || !matches!(path, "/downloads" | "/formats" | "/torrents") {
+    if method != "POST" || !matches!(path, "/downloads" | "/formats" | "/torrents" | "/queue/start") {
         let _ = send_json_response(socket, 404, &serde_json::json!({"error": "Not found."})).await;
+        return;
+    }
+
+    if path == "/queue/start" {
+        if let Some(qs) = transfer_service.queue_service() {
+            let _ = qs.start_queue(crate::domain::queue::DEFAULT_QUEUE_ID);
+        }
+        transfer_service.pump_queue();
+        let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true})).await;
         return;
     }
 
@@ -420,6 +429,12 @@ async fn handle_bridge_connection(
                 Err(_) => {
                     let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
                 }
+            }
+        } else if parsed.url.contains(".m3u8") {
+            if let Ok(items) = crate::infrastructure::media::ytdlp::YtDlpTools::sniff_hls_formats(&parsed.url).await {
+                let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": items})).await;
+            } else {
+                let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
             }
         } else {
             let _ = send_json_response(socket, 200, &serde_json::json!({"ok": true, "items": []})).await;
@@ -507,7 +522,7 @@ async fn handle_bridge_connection(
         let download_req = DownloadRequest {
             urls: valid_browser.urls.unwrap_or_else(|| vec![primary_url]),
             filename: valid_browser.filename,
-            directory: None,
+            directory: valid_browser.directory,
             temp_directory: None,
             category: None,
             description: Some("Added via browser extension".to_owned()),

@@ -20,6 +20,10 @@ name = "open-download-manager-native-host"
 path = "src/bin/native_host.rs"
 
 [[bin]]
+name = "open-download-manager-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
 name = "perf_benchmark"
 path = "src/bin/perf_benchmark.rs"
 # Development-only tool. The Tauri CLI skips binaries whose required features

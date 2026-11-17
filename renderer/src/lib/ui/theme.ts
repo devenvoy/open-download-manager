@@ -24,8 +24,13 @@ export function applyTheme(
   prefersDark: boolean = systemPrefersDark(),
 ): EffectiveTheme {
   const effective = getEffectiveTheme(theme, prefersDark);
-  const root = document.documentElement;
-  root.setAttribute("data-theme", effective);
-  root.style.colorScheme = effective;
+  if (typeof document !== "undefined") {
+    const root = document.documentElement;
+    root.setAttribute("data-theme", effective);
+    root.style.colorScheme = effective;
+    if (document.body) {
+      document.body.setAttribute("data-theme", effective);
+    }
+  }
   return effective;
 }

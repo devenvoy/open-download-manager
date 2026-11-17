@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type TorrentTab = "general" | "files" | "trackers";
+export type TorrentTab = "general" | "files" | "peers" | "trackers" | "pieces";
 
 interface TorrentsState {
   /** UI state only: what the window shows, never the engine's truth. */

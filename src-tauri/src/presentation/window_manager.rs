@@ -46,10 +46,10 @@ pub const COMPLETE_WINDOW_HEIGHT: f64 = 230.0;
 pub const COMPLETE_WINDOW_MIN_WIDTH: f64 = 460.0;
 pub const COMPLETE_WINDOW_MIN_HEIGHT: f64 = 190.0;
 
-pub const OPTIONS_WINDOW_WIDTH: f64 = 540.0;
-pub const OPTIONS_WINDOW_HEIGHT: f64 = 650.0;
-pub const OPTIONS_WINDOW_MIN_WIDTH: f64 = 500.0;
-pub const OPTIONS_WINDOW_MIN_HEIGHT: f64 = 500.0;
+pub const OPTIONS_WINDOW_WIDTH: f64 = 720.0;
+pub const OPTIONS_WINDOW_HEIGHT: f64 = 560.0;
+pub const OPTIONS_WINDOW_MIN_WIDTH: f64 = 640.0;
+pub const OPTIONS_WINDOW_MIN_HEIGHT: f64 = 480.0;
 
 pub const ADD_WINDOW_WIDTH: f64 = 565.0;
 pub const ADD_WINDOW_HEIGHT: f64 = 370.0;
@@ -205,7 +205,7 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     .inner_size(width, height)
     .min_inner_size(min_w, min_h)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -394,7 +394,7 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .inner_size(OPTIONS_WINDOW_WIDTH, OPTIONS_WINDOW_HEIGHT)
     .min_inner_size(OPTIONS_WINDOW_MIN_WIDTH, OPTIONS_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -439,7 +439,7 @@ pub fn open_add_window(
     .inner_size(ADD_WINDOW_WIDTH, ADD_WINDOW_HEIGHT)
     .min_inner_size(ADD_WINDOW_MIN_WIDTH, ADD_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -472,7 +472,7 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .inner_size(SCHEDULER_WINDOW_WIDTH, SCHEDULER_WINDOW_HEIGHT)
     .min_inner_size(SCHEDULER_WINDOW_MIN_WIDTH, SCHEDULER_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -505,7 +505,7 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .inner_size(INTEGRATION_WINDOW_WIDTH, INTEGRATION_WINDOW_HEIGHT)
     .min_inner_size(INTEGRATION_WINDOW_MIN_WIDTH, INTEGRATION_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -538,7 +538,7 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     .inner_size(TORRENT_WINDOW_WIDTH, TORRENT_WINDOW_HEIGHT)
     .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(9, 9, 11, 255))
+    .background_color(tauri::webview::Color(30, 30, 30, 255))
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 

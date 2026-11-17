@@ -135,3 +135,26 @@ pub struct TorrentAddResult {
     pub already_managed: bool,
     pub output_folder: String,
 }
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentPeerItem {
+    pub address: String,
+    pub client: Option<String>,
+    pub download_speed: u64,
+    pub upload_speed: u64,
+    pub progress_percent: f64,
+    pub flags: String,
+    pub connection_type: String,
+    pub fetched_bytes: u64,
+    pub uploaded_bytes: u64,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentPiecesInfo {
+    pub total_pieces: u32,
+    pub piece_length: u32,
+    pub completed_pieces: u32,
+    pub piece_states: Vec<u8>,
+}

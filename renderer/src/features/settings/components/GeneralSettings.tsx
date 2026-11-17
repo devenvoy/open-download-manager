@@ -1,4 +1,3 @@
-import { type AppTheme } from "@/types/ipc";
 import { type SettingsDraft } from "../model/settings-draft";
 
 export interface GeneralSettingsProps {
@@ -11,47 +10,33 @@ export interface GeneralSettingsProps {
 
 export function GeneralSettings({ draft, onChange }: GeneralSettingsProps) {
   return (
-    <>
-      <fieldset>
-        <legend>Appearance</legend>
-        <div className="form-line">
-          <label htmlFor="app-theme">Theme:</label>
-          <select
-            id="app-theme"
-            value={draft.theme}
-            onChange={(e) => onChange("theme", e.target.value as AppTheme)}
-          >
-            <option value="system">System (Match OS)</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-        <p className="field-help">
-          System dynamically tracks your operating system light/dark mode. Light
-          and Dark use a fixed high-contrast palette.
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-1">General Application Behavior</h3>
+        <p className="text-xs text-muted-foreground">
+          Configure startup options, system tray persistence, and automatic clipboard link monitoring.
         </p>
-      </fieldset>
+      </div>
 
-      <fieldset>
-        <legend>General</legend>
-        <label className="checkbox-label" htmlFor="start-with-windows">
+      <fieldset className="rounded-lg border border-border p-4 bg-muted/20">
+        <legend className="text-xs font-medium px-1 text-foreground">System Integration</legend>
+        <label className="checkbox-label flex items-center gap-2 cursor-pointer text-xs" htmlFor="start-with-windows">
           <input
             type="checkbox"
             id="start-with-windows"
             checked={draft.startWithWindows}
             onChange={(e) => onChange("startWithWindows", e.target.checked)}
           />
-          Start Open Download Manager with Windows and keep it in the system tray
+          Start Open Download Manager on system startup and minimize to tray
         </label>
-        <p className="field-help">
-          Automatic startup stays in the tray until you open the app or start a
-          download.
+        <p className="field-help text-[11px] text-muted-foreground mt-1.5 ml-5">
+          The application will run silently in the system tray until a download starts or you open the main window.
         </p>
       </fieldset>
 
-      <fieldset>
-        <legend>Clipboard Monitoring</legend>
-        <label className="checkbox-label" htmlFor="clipboard-monitoring-enabled">
+      <fieldset className="rounded-lg border border-border p-4 bg-muted/20">
+        <legend className="text-xs font-medium px-1 text-foreground">Clipboard Link Monitoring</legend>
+        <label className="checkbox-label flex items-center gap-2 cursor-pointer text-xs" htmlFor="clipboard-monitoring-enabled">
           <input
             type="checkbox"
             id="clipboard-monitoring-enabled"
@@ -62,13 +47,11 @@ export function GeneralSettings({ draft, onChange }: GeneralSettingsProps) {
           />
           Monitor clipboard for downloadable links (HTTP / HTTPS)
         </label>
-        <p className="field-help">
-          When enabled, Open Download Manager detects copied download links and
-          prompts you to add them. Clipboard contents are never logged, stored,
-          or sent across the network.
+        <p className="field-help text-[11px] text-muted-foreground mt-1.5 ml-5">
+          When enabled, Open Download Manager detects copied links matching download categories and offers to download them. Clipboard contents are never logged or sent to any remote server.
         </p>
-        <div id="clipboard-suboptions" style={{ marginLeft: 20, marginTop: 6 }}>
-          <label className="checkbox-label" htmlFor="clipboard-auto-enqueue">
+        <div id="clipboard-suboptions" className="ml-5 mt-3 pt-2 border-t border-border/50">
+          <label className="checkbox-label flex items-center gap-2 cursor-pointer text-xs" htmlFor="clipboard-auto-enqueue">
             <input
               type="checkbox"
               id="clipboard-auto-enqueue"
@@ -77,10 +60,10 @@ export function GeneralSettings({ draft, onChange }: GeneralSettingsProps) {
                 onChange("clipboardAutoEnqueue", e.target.checked)
               }
             />
-            Automatically add detected links without confirmation prompt
+            Automatically enqueue detected links without a confirmation prompt
           </label>
         </div>
       </fieldset>
-    </>
+    </div>
   );
 }

@@ -11,6 +11,8 @@ export const torrentsApi = {
   list: () => ipc.torrentList(),
   files: (id: number) => ipc.torrentFiles(id),
   trackers: (id: number) => ipc.torrentTrackerStatus(id),
+  peers: (id: number) => ipc.torrentPeers(id),
+  pieces: (id: number) => ipc.torrentPieces(id),
   settings: () => ipc.torrentSettingsGet(),
   saveSettings: (settings: TorrentSettings) => ipc.torrentSettingsSet(settings),
   addMagnet: (magnet: string, options?: Parameters<typeof ipc.torrentAddMagnet>[1]) =>
@@ -34,6 +36,8 @@ export const torrentKeys = {
   settings: ["torrents", "settings"] as const,
   files: (id: number) => ["torrents", "files", id] as const,
   trackers: (id: number) => ["torrents", "trackers", id] as const,
+  peers: (id: number) => ["torrents", "peers", id] as const,
+  pieces: (id: number) => ["torrents", "pieces", id] as const,
   review: ["torrents", "review"] as const,
 };
 
@@ -75,4 +79,20 @@ export const torrentTrackersQuery = (id: number) =>
     queryFn: () => torrentsApi.trackers(id),
     staleTime: 4_000,
     refetchInterval: 5_000,
+  });
+
+export const torrentPeersQuery = (id: number) =>
+  queryOptions({
+    queryKey: torrentKeys.peers(id),
+    queryFn: () => torrentsApi.peers(id),
+    staleTime: 2_000,
+    refetchInterval: 3_000,
+  });
+
+export const torrentPiecesQuery = (id: number) =>
+  queryOptions({
+    queryKey: torrentKeys.pieces(id),
+    queryFn: () => torrentsApi.pieces(id),
+    staleTime: 2_000,
+    refetchInterval: 3_000,
   });
