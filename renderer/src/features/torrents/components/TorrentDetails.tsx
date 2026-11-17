@@ -1,3 +1,4 @@
+import { Info, FolderTree, Users, Radio, LayoutGrid } from "lucide-react";
 import { formatBytes, formatDate, formatSpeed } from "@/lib/format";
 import {
   type TorrentFileItem,
@@ -102,48 +103,53 @@ export function TorrentDetails({
       >
         <button
           type="button"
-          className={`torrent-tab ${tab === "general" ? "active-tab" : ""}`}
+          className={`torrent-tab flex items-center gap-1.5 ${tab === "general" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "general"}
           onClick={() => setTab("general")}
         >
-          General
+          <Info size={13} className="shrink-0 text-blue-500 dark:text-blue-400" aria-hidden="true" />
+          <span>General</span>
         </button>
         <button
           type="button"
-          className={`torrent-tab ${tab === "files" ? "active-tab" : ""}`}
+          className={`torrent-tab flex items-center gap-1.5 ${tab === "files" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "files"}
           onClick={() => setTab("files")}
         >
-          Files{files.length ? ` (${files.length})` : ""}
+          <FolderTree size={13} className="shrink-0 text-amber-500 dark:text-amber-400" aria-hidden="true" />
+          <span>Files{files.length ? ` (${files.length})` : ""}</span>
         </button>
         <button
           type="button"
-          className={`torrent-tab ${tab === "peers" ? "active-tab" : ""}`}
+          className={`torrent-tab flex items-center gap-1.5 ${tab === "peers" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "peers"}
           onClick={() => setTab("peers")}
         >
-          Peers{peers.length ? ` (${peers.length})` : ""}
+          <Users size={13} className="shrink-0 text-emerald-500 dark:text-emerald-400" aria-hidden="true" />
+          <span>Peers{peers.length ? ` (${peers.length})` : ""}</span>
         </button>
         <button
           type="button"
-          className={`torrent-tab ${tab === "trackers" ? "active-tab" : ""}`}
+          className={`torrent-tab flex items-center gap-1.5 ${tab === "trackers" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "trackers"}
           onClick={() => setTab("trackers")}
         >
-          Trackers
+          <Radio size={13} className="shrink-0 text-sky-500 dark:text-sky-400" aria-hidden="true" />
+          <span>Trackers</span>
         </button>
         <button
           type="button"
-          className={`torrent-tab ${tab === "pieces" ? "active-tab" : ""}`}
+          className={`torrent-tab flex items-center gap-1.5 ${tab === "pieces" ? "active-tab" : ""}`}
           role="tab"
           aria-selected={tab === "pieces"}
           onClick={() => setTab("pieces")}
         >
-          Pieces{piecesInfo?.totalPieces ? ` (${piecesInfo.completedPieces}/${piecesInfo.totalPieces})` : ""}
+          <LayoutGrid size={13} className="shrink-0 text-purple-500 dark:text-purple-400" aria-hidden="true" />
+          <span>Pieces{piecesInfo?.totalPieces ? ` (${piecesInfo.completedPieces}/${piecesInfo.totalPieces})` : ""}</span>
         </button>
       </div>
 

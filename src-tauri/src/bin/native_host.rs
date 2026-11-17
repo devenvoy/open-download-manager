@@ -246,6 +246,33 @@ async fn ensure_bridge_config(may_launch_desktop: bool) -> Result<BridgeConfig, 
     ))
 }
 
+fn is_process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            CloseHandle, GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() {
+                return false;
+            }
+            let mut exit_code: u32 = 0;
+            let ok = GetExitCodeProcess(handle, &mut exit_code);
+            CloseHandle(handle);
+            ok != 0 && exit_code == 259 // STILL_ACTIVE
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        true
+    }
+}
+
 fn load_bridge_config() -> Result<BridgeConfig, String> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -254,8 +281,21 @@ fn load_bridge_config() -> Result<BridgeConfig, String> {
     let path = home.join(".open-download-manager").join("bridge.json");
     let content = std::fs::read_to_string(&path)
         .map_err(|_| "Open Download Manager is not running. Launch the desktop app first.".to_owned())?;
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Invalid bridge.json: {e}"))
+    let config: BridgeConfig = serde_json::from_str(&content)
+        .map_err(|e| format!("Invalid bridge.json: {e}"))?;
+    if let Some(pid) = config.pid {
+        if !is_process_alive(pid) {
+            let _ = std::fs::remove_file(&path);
+            return Err("Open Download Manager is not running (stale process session). Launch the desktop app first.".to_owned());
+        }
+    } else if std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
+        std::time::Duration::from_millis(150),
+    ).is_err() {
+        let _ = std::fs::remove_file(&path);
+        return Err("Open Download Manager is not running. Launch the desktop app first.".to_owned());
+    }
+    Ok(config)
 }
 
 fn read_message() -> Result<serde_json::Value, String> {

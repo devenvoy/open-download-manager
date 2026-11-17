@@ -193,7 +193,6 @@
 	width: 22px;
 	height: 22px;
 	fill: none;
-	stroke: currentColor;
 	stroke-width: 2;
 	stroke-linecap: round;
 	stroke-linejoin: round;
@@ -1367,10 +1366,12 @@ textarea:focus-visible,
 	line-height: 14px;
 }
 .tool.wide {
-	min-width: 95px;
+	min-width: max-content;
+	padding-inline: 8px;
 }
 .integration-tool {
-	min-width: 104px;
+	min-width: max-content;
+	padding-inline: 8px;
 }
 .tool-divider {
 	width: 1px;
@@ -2834,10 +2835,12 @@ code {
 		padding-inline: 4px;
 	}
 	.tool.wide {
-		min-width: 89px;
+		min-width: max-content;
+		padding-inline: 6px;
 	}
 	.integration-tool {
-		min-width: 96px;
+		min-width: max-content;
+		padding-inline: 6px;
 	}
 	.tool span {
 		font-size: 9px;
@@ -2874,10 +2877,12 @@ code {
 	line-height: 1.2;
 }
 .toolbar .tool.wide {
-	min-width: 82px;
+	min-width: max-content;
+	padding-inline: 8px;
 }
 .toolbar .integration-tool {
-	min-width: 90px;
+	min-width: max-content;
+	padding-inline: 8px;
 }
 .tool-divider {
 	display: block;
@@ -2961,7 +2966,7 @@ td {
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
-	will-change: scroll-position;
+	transform: translateZ(0);
 }
 [data-theme="dark"] .table-scroll {
 	background: #1e1e1e !important;
@@ -3658,7 +3663,8 @@ body.progress-window #add-dialog > form > .dialog-title {
 
 /* Options is a movable native desktop window; the native title bar owns Close. */
 body.options-window {
-	background: #f0f0f0;
+	background: var(--color-background);
+	color: var(--color-foreground);
 }
 .options-window .app-shell,
 .options-window #toast,
@@ -3698,14 +3704,15 @@ body.options-window {
 }
 .options-window #settings-dialog > form > .dialog-footer {
 	flex: 0 0 48px;
-	border-top: 1px solid #ccc;
-	background: #f0f0f0;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-background);
 }
 
 /* Add URL and Scheduler are movable native windows; only Windows draws their title bars. */
 body.add-window,
 body.scheduler-window {
-	background: #f0f0f0;
+	background: var(--color-background);
+	color: var(--color-foreground);
 }
 .add-window .app-shell,
 .add-window #toast,

@@ -40,6 +40,8 @@ use crate::{
 pub struct BridgeConfig {
     pub port: u16,
     pub token: String,
+    #[serde(default)]
+    pub pid: Option<u32>,
 }
 
 pub type OnDownloadCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
@@ -74,6 +76,7 @@ impl LoopbackBridge {
         let config = BridgeConfig {
             port,
             token: token.clone(),
+            pid: Some(std::process::id()),
         };
 
         tokio::fs::create_dir_all(&data_directory)

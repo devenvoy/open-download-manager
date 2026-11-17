@@ -47,7 +47,7 @@ export function TorrentToolbar({
         onClick={() => onOpenAdd("magnet")}
       >
         <Magnet
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-orange-500 dark:text-orange-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -63,7 +63,7 @@ export function TorrentToolbar({
         onClick={() => onOpenAdd("file")}
       >
         <FilePlus
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-blue-600 dark:text-blue-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -82,7 +82,7 @@ export function TorrentToolbar({
         onClick={() => onAction("pause")}
       >
         <Pause
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-amber-600 dark:text-amber-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -99,7 +99,7 @@ export function TorrentToolbar({
         onClick={() => onAction("resume")}
       >
         <Play
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-emerald-600 dark:text-emerald-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -116,7 +116,7 @@ export function TorrentToolbar({
         onClick={() => onAction("recheck")}
       >
         <RotateCw
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-sky-600 dark:text-sky-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -133,7 +133,7 @@ export function TorrentToolbar({
         onClick={onOpenRemove}
       >
         <Trash2
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-rose-600 dark:text-rose-400 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"
@@ -151,7 +151,7 @@ export function TorrentToolbar({
         onClick={onOpenSettings}
       >
         <Settings2
-          size={20}
+          size={22}
           strokeWidth={2}
           className="shrink-0 text-slate-700 dark:text-slate-300 transition-transform duration-100 group-hover:scale-105"
           aria-hidden="true"

@@ -165,6 +165,23 @@ pub async fn show_window_on_ready_or_fallback(
     crate::infrastructure::perf::record_window_shown(&label, start.elapsed());
 }
 
+pub fn get_window_theme_context(app: &AppHandle) -> (&'static str, tauri::webview::Color, String) {
+    let theme = app
+        .try_state::<AppState>()
+        .and_then(|state| state.settings.lock().ok().map(|s| s.settings().theme))
+        .unwrap_or_default();
+    let theme_str = theme.as_str();
+    let bg_color = match theme {
+        crate::domain::settings::AppTheme::Dark => tauri::webview::Color(30, 30, 30, 255),
+        crate::domain::settings::AppTheme::Light => tauri::webview::Color(240, 240, 240, 255),
+        crate::domain::settings::AppTheme::System => tauri::webview::Color(30, 30, 30, 255),
+    };
+    let script = format!(
+        r#"(function(){{window.__INITIAL_THEME__="{theme_str}";try{{localStorage.setItem("odm-theme","{theme_str}");}}catch(_){{}}var prefDark=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;var eff="{theme_str}"==="dark"||("{theme_str}"!=="light"&&prefDark)?"dark":"light";document.documentElement.setAttribute("data-theme",eff);document.documentElement.style.colorScheme=eff;if(document.body){{document.body.setAttribute("data-theme",eff);}}}})();"#
+    );
+    (theme_str, bg_color, script)
+}
+
 #[tauri::command(async)]
 pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     let _timer = crate::infrastructure::perf::track_command("open_progress_window");
@@ -196,6 +213,7 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     };
 
     let route = progress_route(&id)?;
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         &label,
@@ -205,7 +223,8 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
     .inner_size(width, height)
     .min_inner_size(min_w, min_h)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -385,6 +404,7 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
         return res;
     }
 
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         OPTIONS_WINDOW_LABEL,
@@ -394,7 +414,8 @@ pub fn open_options_window(app: AppHandle) -> AppResult<()> {
     .inner_size(OPTIONS_WINDOW_WIDTH, OPTIONS_WINDOW_HEIGHT)
     .min_inner_size(OPTIONS_WINDOW_MIN_WIDTH, OPTIONS_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -430,6 +451,7 @@ pub fn open_add_window(
     }
 
     let route = add_route(options.as_ref());
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         ADD_WINDOW_LABEL,
@@ -439,7 +461,8 @@ pub fn open_add_window(
     .inner_size(ADD_WINDOW_WIDTH, ADD_WINDOW_HEIGHT)
     .min_inner_size(ADD_WINDOW_MIN_WIDTH, ADD_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -463,6 +486,7 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
         return res;
     }
 
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         SCHEDULER_WINDOW_LABEL,
@@ -472,7 +496,8 @@ pub fn open_scheduler_window(app: AppHandle) -> AppResult<()> {
     .inner_size(SCHEDULER_WINDOW_WIDTH, SCHEDULER_WINDOW_HEIGHT)
     .min_inner_size(SCHEDULER_WINDOW_MIN_WIDTH, SCHEDULER_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -496,6 +521,7 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
         return res;
     }
 
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         INTEGRATION_WINDOW_LABEL,
@@ -505,7 +531,8 @@ pub fn open_integration_window(app: AppHandle) -> AppResult<()> {
     .inner_size(INTEGRATION_WINDOW_WIDTH, INTEGRATION_WINDOW_HEIGHT)
     .min_inner_size(INTEGRATION_WINDOW_MIN_WIDTH, INTEGRATION_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 
@@ -529,6 +556,7 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
         return res;
     }
 
+    let (_theme_str, bg_color, init_script) = get_window_theme_context(&app);
     let window = WebviewWindowBuilder::new(
         &app,
         TORRENT_WINDOW_LABEL,
@@ -538,7 +566,8 @@ pub fn open_torrent_window(app: AppHandle) -> AppResult<()> {
     .inner_size(TORRENT_WINDOW_WIDTH, TORRENT_WINDOW_HEIGHT)
     .min_inner_size(TORRENT_WINDOW_MIN_WIDTH, TORRENT_WINDOW_MIN_HEIGHT)
     .visible(initial_aux_window_visibility())
-    .background_color(tauri::webview::Color(30, 30, 30, 255))
+    .background_color(bg_color)
+    .initialization_script(&init_script)
     .build()
     .map_err(|error| AppError::window(error.to_string()))?;
 

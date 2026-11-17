@@ -20,12 +20,19 @@ const themeChannel =
     : null;
 
 function getStoredTheme(): AppTheme {
-  if (typeof window === "undefined" || !window.localStorage) return "system";
-  try {
-    const val = localStorage.getItem("odm-theme");
-    if (val === "light" || val === "dark" || val === "system") return val;
-  } catch {
-    // Ignore storage errors
+  if (typeof window !== "undefined") {
+    const initial = (window as unknown as { __INITIAL_THEME__?: string }).__INITIAL_THEME__;
+    if (initial === "light" || initial === "dark" || initial === "system") {
+      return initial;
+    }
+    if (window.localStorage) {
+      try {
+        const val = localStorage.getItem("odm-theme");
+        if (val === "light" || val === "dark" || val === "system") return val;
+      } catch {
+        // Ignore storage errors
+      }
+    }
   }
   return "system";
 }
@@ -42,8 +49,11 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   effective: initialEffective,
   setTheme: (theme) => {
     try {
-      if (typeof window !== "undefined" && window.localStorage) {
-        localStorage.setItem("odm-theme", theme);
+      if (typeof window !== "undefined") {
+        (window as unknown as { __INITIAL_THEME__?: string }).__INITIAL_THEME__ = theme;
+        if (window.localStorage) {
+          localStorage.setItem("odm-theme", theme);
+        }
       }
       themeChannel?.postMessage({ type: "THEME_CHANGE", theme });
     } catch {

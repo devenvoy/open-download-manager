@@ -117,7 +117,7 @@ export function DownloadsToolbar({
 
       <button
         id="remove-completed"
-        className={`${TOOL_BTN_CLS} wide min-w-[95px]`}
+        className={`${TOOL_BTN_CLS} wide min-w-max px-2.5`}
         data-icon="clear"
         disabled={!canDeleteCompleted}
         onClick={onDeleteCompleted}
@@ -177,7 +177,7 @@ export function DownloadsToolbar({
 
       <button
         id="integration-button"
-        className={`${TOOL_BTN_CLS} integration-tool min-w-[104px]`}
+        className={`${TOOL_BTN_CLS} integration-tool min-w-max px-2.5`}
         data-icon="browser"
         onClick={onOpenIntegration}
         type="button"
