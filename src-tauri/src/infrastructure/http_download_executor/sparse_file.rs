@@ -74,6 +74,19 @@ pub fn allocate_sparse_file(path: &Path, total_size: u64) -> AppResult<File> {
         ));
     }
 
+    // Pre-flight check: Disk space availability
+    if let Ok(free) = crate::infrastructure::fs_utils::available_space(path) {
+        let current_len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        let needed = total_size.saturating_sub(current_len);
+        if needed > free {
+            return Err(AppError::download(format!(
+                "Insufficient disk space: {} required, but only {} available on disk.",
+                crate::infrastructure::fs_utils::format_bytes(needed),
+                crate::infrastructure::fs_utils::format_bytes(free),
+            )));
+        }
+    }
+
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -350,5 +363,17 @@ mod tests {
 
         // Uses adaptive when size is known
         assert_eq!(flush_cadence_bytes(Some(1024 * 1024 * 1024)), 64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_preflight_space_insufficient_rejection() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("enormous.part");
+        // 500 Petabytes will exceed available space on any standard test machine
+        let enormous_size: u64 = 500 * 1024 * 1024 * 1024 * 1024 * 1024;
+        let res = allocate_sparse_file(&path, enormous_size);
+        assert!(res.is_err());
+        let err = res.err().unwrap().message;
+        assert!(err.contains("Insufficient disk space"), "unexpected err: {err}");
     }
 }

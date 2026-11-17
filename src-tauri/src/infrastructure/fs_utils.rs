@@ -127,6 +127,26 @@ pub fn available_space(path: &Path) -> Result<u64, String> {
     }
 }
 
+/// Formats a byte quantity into a human-readable string (B, KB, MB, GB, TB).
+pub fn format_bytes(bytes: u64) -> String {
+    const KIB: u64 = 1024;
+    const MIB: u64 = 1024 * KIB;
+    const GIB: u64 = 1024 * MIB;
+    const TIB: u64 = 1024 * GIB;
+
+    if bytes >= TIB {
+        format!("{:.2} TB", bytes as f64 / TIB as f64)
+    } else if bytes >= GIB {
+        format!("{:.2} GB", bytes as f64 / GIB as f64)
+    } else if bytes >= MIB {
+        format!("{:.2} MB", bytes as f64 / MIB as f64)
+    } else if bytes >= KIB {
+        format!("{:.2} KB", bytes as f64 / KIB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
 /// Safely moves a file across volumes using a verified copy/flush/rename strategy.
 ///
 /// 1. Validates that the destination volume has sufficient free space.
@@ -156,7 +176,9 @@ pub async fn verified_cross_volume_copy(
     if let Ok(free) = available_space(dest_parent) {
         if free < expected_len {
             return Err(AppError::download(format!(
-                "Insufficient disk space on destination volume: {expected_len} bytes required, but only {free} bytes available."
+                "Insufficient disk space on destination volume: {} required, but only {} available.",
+                format_bytes(expected_len),
+                format_bytes(free),
             )));
         }
     }
@@ -265,5 +287,15 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let free = available_space(temp.path()).unwrap();
         assert!(free > 0);
+    }
+
+    #[test]
+    fn test_format_bytes() {
+        assert_eq!(format_bytes(500), "500 B");
+        assert_eq!(format_bytes(1024), "1.00 KB");
+        assert_eq!(format_bytes(1536), "1.50 KB");
+        assert_eq!(format_bytes(1048576), "1.00 MB");
+        assert_eq!(format_bytes(1073741824), "1.00 GB");
+        assert_eq!(format_bytes(1099511627776), "1.00 TB");
     }
 }

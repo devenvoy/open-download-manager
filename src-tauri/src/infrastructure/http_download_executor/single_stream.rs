@@ -222,6 +222,19 @@ pub(crate) async fn download_single_stream(
         .as_ref()
         .unwrap_or(progress_handler);
 
+    if let Some(total_bytes) = total {
+        if let Ok(free) = crate::infrastructure::fs_utils::available_space(&temporary) {
+            let needed = total_bytes.saturating_sub(downloaded);
+            if needed > free {
+                return Err(AppError::download(format!(
+                    "Insufficient disk space: {} required, but only {} available on disk.",
+                    crate::infrastructure::fs_utils::format_bytes(needed),
+                    crate::infrastructure::fs_utils::format_bytes(free),
+                )));
+            }
+        }
+    }
+
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
