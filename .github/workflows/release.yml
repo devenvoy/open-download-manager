@@ -32,7 +32,7 @@ jobs:
           - target: x86_64-apple-darwin
             arch: x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -121,7 +121,7 @@ jobs:
             echo "Packaged App tar: $app_path"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}-assets
           path: dist/artifacts/*
@@ -140,7 +140,7 @@ jobs:
           - target: aarch64-pc-windows-msvc
             arch: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -195,7 +195,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.arch }}-assets
           path: dist/artifacts/*
@@ -203,7 +203,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         run: |
@@ -259,7 +259,7 @@ jobs:
             echo "Packaged AppImage: ${appimage_files[0]}"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-x64-assets
           path: dist/artifacts/*
@@ -268,7 +268,7 @@ jobs:
     needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         run: |
@@ -281,7 +281,7 @@ jobs:
           bun run pack:extension
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: dist/collected_artifacts
 

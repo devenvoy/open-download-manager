@@ -45,3 +45,6 @@ issues/
 pr/
 scripts/
 .agents/
+
+# Local smoke-test output (CI uploads it as an artifact; never commit it).
+smoke-result.json
