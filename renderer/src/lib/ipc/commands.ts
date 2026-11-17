@@ -2,6 +2,7 @@ import {
   type AdvancedIntegrationCapability,
   type AsxPlaylist,
   type BrowserSetupResult,
+  type ChecksumVerificationReport,
   type CompletionAction,
   type ConflictResolutionOutcome,
   type CredentialRule,
@@ -251,6 +252,16 @@ export interface CommandMap {
   torrent_take_review: {
     args: undefined;
     result: TorrentReviewRequest | null;
+  };
+
+  // Checksums
+  verify_checksum: {
+    args: { path: string; expected: string };
+    result: ChecksumVerificationReport;
+  };
+  calculate_checksum: {
+    args: { path: string; algorithm: string };
+    result: string;
   };
 }
 

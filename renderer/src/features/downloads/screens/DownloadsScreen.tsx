@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { formatSpeed } from "@/lib/format";
 import { useHydrateTheme } from "@/stores/theme-store";
 import { type DownloadActionKind } from "@/types/ipc";
 import { downloadsApi } from "../api";
 import { CategorySidebar } from "../components/CategorySidebar";
+import { ChecksumDialog } from "../components/ChecksumDialog";
 import { DownloadsTable } from "../components/DownloadsTable";
 import { DownloadsToolbar } from "../components/DownloadsToolbar";
 import {
@@ -27,6 +28,7 @@ export function DownloadsScreen() {
   const clearSelection = useDownloadsStore((state) => state.clearSelection);
   const action = useDownloadAction();
   const remove = useRemoveDownloads();
+  const [checksumTarget, setChecksumTarget] = useState<{ filePath: string; fileName: string } | null>(null);
 
   useHydrateTheme(data?.settings.theme);
 
@@ -102,6 +104,16 @@ export function DownloadsScreen() {
     downloadsApi.removeCompleted();
   }, []);
 
+  const handleVerifyChecksum = useCallback(
+    (id: string) => {
+      const d = data?.downloads.find((item) => item.id === id);
+      if (d?.path) {
+        setChecksumTarget({ filePath: d.path, fileName: d.filename || "file" });
+      }
+    },
+    [data?.downloads],
+  );
+
   const activeDownloading = (data?.downloads ?? []).some(
     (d) => d.status === "downloading",
   );
@@ -161,7 +173,16 @@ export function DownloadsScreen() {
         onAction={handleAction}
         onOpenProperties={(id) => downloadsApi.openProgressWindow(id)}
         onOpenFolder={(id) => handleAction(id, "reveal")}
+        onVerifyChecksum={handleVerifyChecksum}
       />
+      {checksumTarget && (
+        <ChecksumDialog
+          open={Boolean(checksumTarget)}
+          filePath={checksumTarget.filePath}
+          fileName={checksumTarget.fileName}
+          onClose={() => setChecksumTarget(null)}
+        />
+      )}
     </AppShell>
   );
 }

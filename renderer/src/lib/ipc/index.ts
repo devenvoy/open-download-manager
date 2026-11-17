@@ -170,6 +170,12 @@ export const ipc = {
   torrentRestartEngine: () => call("torrent_restart_engine"),
   torrentTakeReview: () => call("torrent_take_review"),
 
+  // Checksums
+  verifyChecksum: (path: string, expected: string) =>
+    call("verify_checksum", { path, expected }),
+  calculateChecksum: (path: string, algorithm: string) =>
+    call("calculate_checksum", { path, algorithm }),
+
   chooseDirectory,
   chooseFile,
   readClipboard,

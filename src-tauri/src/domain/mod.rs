@@ -9,6 +9,7 @@
 
 pub mod browser;
 pub mod category;
+pub mod checksum;
 pub mod clipboard;
 pub mod completion;
 pub mod credentials;

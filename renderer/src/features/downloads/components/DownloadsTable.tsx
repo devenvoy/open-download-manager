@@ -25,6 +25,7 @@ export interface DownloadsTableProps {
   onAction: (id: string, action: DownloadActionKind) => void;
   onOpenProperties?: (id: string) => void;
   onOpenFolder?: (id: string) => void;
+  onVerifyChecksum?: (id: string) => void;
 }
 
 export function DownloadsTable({
@@ -37,6 +38,7 @@ export function DownloadsTable({
   onAction,
   onOpenProperties,
   onOpenFolder,
+  onVerifyChecksum,
 }: DownloadsTableProps) {
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [ascending, setAscending] = useState(false);
@@ -272,6 +274,16 @@ export function DownloadsTable({
           type="button"
         >
           Properties
+        </button>
+        <button
+          id="checksum-selected"
+          className="small-button"
+          disabled={!canOpen}
+          onClick={() => firstSelected && onVerifyChecksum?.(firstSelected)}
+          type="button"
+          title="Verify file checksum against SHA-256, SHA-512, or CRC32"
+        >
+          Verify checksum…
         </button>
       </div>
     </>

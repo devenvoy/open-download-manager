@@ -10,6 +10,7 @@
 // Description: Module definitions and exports for the application service orchestration layer.
 
 pub mod advanced_integration_service;
+pub mod checksum_service;
 pub mod clipboard_service;
 pub mod credential_service;
 mod download_concurrency_limiter;

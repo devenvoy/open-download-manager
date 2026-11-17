@@ -24,3 +24,11 @@ export interface Snapshot {
   integration: IntegrationStatus;
   fileIcons: Record<string, string>;
 }
+
+export interface ChecksumVerificationReport {
+  matched: boolean;
+  algorithm: string;
+  expectedHex: string;
+  actualHex: string;
+  fileBytes: number;
+}

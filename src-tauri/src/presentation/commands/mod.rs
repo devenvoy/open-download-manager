@@ -5,6 +5,7 @@
 // Description: Tauri IPC command handlers processing frontend requests, decomposed into domain modules.
 
 pub mod browser;
+pub mod checksum;
 pub mod clipboard;
 pub mod credentials;
 pub mod downloads;
@@ -19,6 +20,7 @@ pub use browser::{
     get_advanced_integration_capability, get_integration_info, register_browser,
     repair_advanced_integration, unregister_browser,
 };
+pub use checksum::{calculate_checksum, verify_checksum};
 pub use clipboard::dismiss_clipboard_candidate;
 pub use credentials::{delete_credential_rule, list_credential_rules, save_credential_rule};
 pub use downloads::{
