@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useInstallMediaTool } from "../api";
 import { errorKind, errorTitle } from "../model/progress-view";
 
@@ -22,9 +23,10 @@ export function ErrorCard({ error, busy, onRetry }: ErrorCardProps) {
     if (!tool) return;
     try {
       await install.mutateAsync(tool);
+      toast.success(`${tool} installed successfully. Retrying download…`);
       onRetry();
     } catch {
-      // `useInstallMediaTool` already reports the failure.
+      // `useInstallMediaTool` already reports the failure via toast.
     }
   }
 

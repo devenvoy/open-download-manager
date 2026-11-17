@@ -35,7 +35,12 @@ impl HttpToolDownloaderClient {
 
 impl Default for HttpToolDownloaderClient {
     fn default() -> Self {
-        Self::new(reqwest::Client::new())
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .timeout(std::time::Duration::from_secs(180))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self::new(client)
     }
 }
 

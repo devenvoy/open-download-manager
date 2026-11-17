@@ -419,7 +419,7 @@ fn test_download_specs_cover_other_arm64_platforms_and_fail_loudly() {
 
     let ytdlp_macos_arm64 = download_spec_for(MediaToolType::YtDlp, ToolPlatform::MacosArm64)
         .expect("macOS ARM64 yt-dlp spec");
-    assert!(ytdlp_macos_arm64.url.ends_with("/yt-dlp_macos.zip"));
+    assert!(ytdlp_macos_arm64.url.ends_with("/yt-dlp_macos"));
 
     let ffmpeg_linux_arm64 = download_spec_for(MediaToolType::Ffmpeg, ToolPlatform::LinuxArm64)
         .expect_err("Linux ARM64 ffmpeg must not silently use an x64 binary");

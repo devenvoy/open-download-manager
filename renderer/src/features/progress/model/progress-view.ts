@@ -220,8 +220,14 @@ export type ErrorKind = "ffmpeg" | "yt-dlp" | "expired" | "other";
 
 export function errorKind(error: string | null | undefined): ErrorKind {
   const text = error ?? "";
-  if (/ffmpeg/i.test(text)) return "ffmpeg";
-  if (/yt-dlp/i.test(text)) return "yt-dlp";
+  if (/ffmpeg/i.test(text)) {
+    if (/ffmpeg: error|unrecognized option/i.test(text)) return "other";
+    return "ffmpeg";
+  }
+  if (/yt-dlp/i.test(text)) {
+    if (/wrong OPTS|unrecognized arguments|usage: yt-dlp/i.test(text)) return "other";
+    return "yt-dlp";
+  }
   if (/expired|HTTP 401|HTTP 403|HTTP 410/i.test(text)) return "expired";
   return "other";
 }

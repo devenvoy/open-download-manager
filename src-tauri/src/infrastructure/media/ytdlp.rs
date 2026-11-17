@@ -315,8 +315,7 @@ impl YtDlpTools {
             .arg("--write-subs")
             .arg("--sub-langs")
             .arg("all")
-            .arg("--compat-options")
-            .arg("no-abort-on-error");
+            .arg("--no-abort-on-error");
 
         if let Some(ffmpeg_path) = super::tools::find_tool_path("ffmpeg") {
             command.arg("--ffmpeg-location").arg(ffmpeg_path);
