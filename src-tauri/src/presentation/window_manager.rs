@@ -200,16 +200,19 @@ pub fn open_progress_window(app: AppHandle, id: String) -> AppResult<()> {
         }).ok().flatten()
     });
 
-    let (title, width, height, min_w, min_h) = if let Some(d) = &download_info {
-        if d.needs_review {
-            ("Download File Info".to_string(), PROGRESS_WINDOW_WIDTH, REVIEW_WINDOW_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, REVIEW_WINDOW_MIN_HEIGHT)
-        } else if d.status == DownloadStatus::Completed {
-            ("Download complete".to_string(), COMPLETE_WINDOW_WIDTH, COMPLETE_WINDOW_HEIGHT, COMPLETE_WINDOW_MIN_WIDTH, COMPLETE_WINDOW_MIN_HEIGHT)
-        } else {
-            (d.filename.clone(), PROGRESS_WINDOW_WIDTH, PROGRESS_WINDOW_EXPANDED_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT)
-        }
+    // The row can disappear between the UI action and this command (removal,
+    // migration, or a stale notification). Building the window anyway would
+    // only surface a "no longer in the list" orphan on top of other windows.
+    let Some(d) = download_info else {
+        return Ok(());
+    };
+
+    let (title, width, height, min_w, min_h) = if d.needs_review {
+        ("Download File Info".to_string(), PROGRESS_WINDOW_WIDTH, REVIEW_WINDOW_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, REVIEW_WINDOW_MIN_HEIGHT)
+    } else if d.status == DownloadStatus::Completed {
+        ("Download complete".to_string(), COMPLETE_WINDOW_WIDTH, COMPLETE_WINDOW_HEIGHT, COMPLETE_WINDOW_MIN_WIDTH, COMPLETE_WINDOW_MIN_HEIGHT)
     } else {
-        ("Download details".to_string(), PROGRESS_WINDOW_WIDTH, PROGRESS_WINDOW_EXPANDED_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT)
+        (d.filename.clone(), PROGRESS_WINDOW_WIDTH, PROGRESS_WINDOW_EXPANDED_HEIGHT, PROGRESS_WINDOW_MIN_WIDTH, PROGRESS_WINDOW_MIN_EXPANDED_HEIGHT)
     };
 
     let route = progress_route(&id)?;

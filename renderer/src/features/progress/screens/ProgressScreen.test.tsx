@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { makeDownload, makeSnapshot } from "@/test/fixtures";
 import { renderWithQuery } from "@/test/render";
 
@@ -145,6 +145,30 @@ describe("ProgressScreen", () => {
       expect(actionMock).toHaveBeenCalledWith("progress-1", "remove"),
     );
     await waitFor(() => expect(closeMock).toHaveBeenCalled());
+  });
+
+  it("auto-closes a details window whose download is gone", async () => {
+    vi.useFakeTimers();
+    try {
+      snapshotMock.mockResolvedValue(makeSnapshot({ downloads: [] }));
+      renderWithQuery(<ProgressScreen id="progress-1" />);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(
+        screen.getByText("This download is no longer in the list."),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2600);
+      });
+
+      expect(closeMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders the completed panel when download is completed", async () => {

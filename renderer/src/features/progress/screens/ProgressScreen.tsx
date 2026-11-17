@@ -45,6 +45,19 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
     snapshot.data?.downloads.find((item) => item.id === id) ?? null;
   const reviewing = Boolean(download?.needsReview && !review.isSuccess);
 
+  const close = useCallback(() => {
+    void progressApi.close();
+  }, []);
+
+  // A details window whose download vanished (removed, migrated, or replaced)
+  // must not linger on top of other windows with a stale message.
+  useEffect(() => {
+    if (!snapshot.isPending && !download) {
+      const timer = setTimeout(close, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [snapshot.isPending, download, close]);
+
   useEffect(() => {
     document.body.classList.toggle("review-window", reviewing);
     return () => {
@@ -58,10 +71,6 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
       document.body.classList.remove("details-collapsed");
     };
   }, [collapsed]);
-
-  const close = useCallback(() => {
-    void progressApi.close();
-  }, []);
 
   const submitReview = useCallback(
     (draft: ReviewDraft, queueOnly: boolean) => {
@@ -106,13 +115,13 @@ export function ProgressScreen({ id }: ProgressScreenProps) {
   if (snapshot.isError || !download) {
     return (
       <dialog id="details-dialog" className="details-dialog w-full h-screen border-0 m-0 max-w-none max-h-none flex flex-col p-0 static" open>
-        <div className="dialog-body" style={{ padding: 20 }}>
-          {snapshot.isError
-            ? `Could not read download: ${snapshot.error instanceof Error ? snapshot.error.message : "Error"}`
-            : "This download is no longer in the list."}
-        </div>
-        <div className="dialog-footer">
-          <button type="button" className="button" onClick={close}>
+        <div className="dialog-body flex flex-col items-center justify-center h-full gap-4 text-center" style={{ padding: 20 }}>
+          <p className="text-sm">
+            {snapshot.isError
+              ? `Could not read download: ${snapshot.error instanceof Error ? snapshot.error.message : "Error"}`
+              : "This download is no longer in the list."}
+          </p>
+          <button type="button" className="button" style={{ minWidth: 80 }} onClick={close}>
             Close
           </button>
         </div>

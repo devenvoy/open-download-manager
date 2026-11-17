@@ -513,6 +513,9 @@ async fn close_window_instance(app: &AppHandle, mode: &str, fake_progress_id: &s
     };
 
     if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.close();
+        // Benchmark teardown must not run the production close flow: a review
+        // prompt or a review-cancel would remove the seeded record, leaving
+        // later iterations measuring an orphan "no longer in the list" window.
+        let _ = win.destroy();
     }
 }
