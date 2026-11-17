@@ -51,7 +51,7 @@ impl Default for TorrentSettings {
             // pieces, and a torrent that is connected to ten peers runs at
             // the speed of ten peers.
             max_peers_per_torrent: 200,
-            seed_ratio_limit: 0.0,
+            seed_ratio_limit: 1.0,
             seed_time_limit_minutes: 0,
             start_paused: false,
             notify_on_complete: true,

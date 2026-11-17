@@ -1122,9 +1122,21 @@ impl TorrentService {
         };
         let target = librtbit::api::TorrentIdOrHash::Id(id);
         let piece_states = api.api_dump_piece_states(target).unwrap_or_default();
-        let (total_pieces, piece_length) = match api.api_dump_haves(target) {
-            Ok((_bf, len)) => (len, 0),
-            Err(_) => (piece_states.len() as u32, 0),
+        let total_pieces = match api.api_dump_haves(target) {
+            Ok((_bf, len)) => len,
+            Err(_) => piece_states.len() as u32,
+        };
+        let piece_length = if let Ok(guard) = self.engine.read() {
+            guard
+                .as_ref()
+                .and_then(|e| {
+                    e.session.get(target).and_then(|h| {
+                        h.with_metadata(|m| m.info.lengths().default_piece_length()).ok()
+                    })
+                })
+                .unwrap_or(0)
+        } else {
+            0
         };
         let completed_pieces = piece_states.iter().filter(|&&s| s == 2).count() as u32;
         Ok(TorrentPiecesInfo {
@@ -1190,12 +1202,56 @@ impl TorrentService {
                 // torrent that nobody looks at still has to ask the trackers
                 // for new peers when it runs dry.
                 service.refresh_peers(&list);
+                service.enforce_seeding_limits(&list).await;
                 if service.watching.load(Ordering::Relaxed) == 0 {
                     continue;
                 }
                 let _ = app.emit("torrent://progress", &list);
             }
         });
+    }
+
+/// Determines if a finished torrent has reached the configured seed ratio limit or time limit.
+pub fn should_stop_seeding(item: &TorrentListItem, settings: &TorrentSettings) -> Option<&'static str> {
+    if item.state != "live" && item.state != "seeding" {
+        return None;
+    }
+    if !item.finished {
+        return None;
+    }
+
+    if settings.seed_ratio_limit > 0.0 && item.ratio >= settings.seed_ratio_limit {
+        return Some("seed ratio limit reached");
+    }
+
+    if settings.seed_time_limit_minutes > 0 {
+        if let Some(added_on) = item.added_on {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            if now.saturating_sub(added_on) >= settings.seed_time_limit_minutes.saturating_mul(60) {
+                return Some("seed time limit reached");
+            }
+        }
+    }
+
+    None
+}
+
+    /// Automatically pauses finished torrents that have reached the configured
+    /// seed ratio limit or seed time limit.
+    async fn enforce_seeding_limits(self: &Arc<Self>, list: &[TorrentListItem]) {
+        let settings = self.settings();
+        for item in list {
+            if let Some(reason) = Self::should_stop_seeding(item, &settings) {
+                eprintln!(
+                    "[odm] auto-pausing finished torrent '{}' (ratio: {:.2}): {reason}",
+                    item.name, item.ratio
+                );
+                let _ = self.action(item.id, TorrentAction::Pause).await;
+            }
+        }
     }
 
     /// Asks the trackers for new peers when a torrent runs dry.
@@ -1907,5 +1963,64 @@ mod engine_contract_tests {
         assert_eq!(restored.id, id);
         assert_eq!(restored.name, "persist-test");
         assert_eq!(restored.state, "initializing");
+    }
+
+    #[test]
+    fn test_seeding_limits_enforcement_evaluation() {
+        use crate::domain::torrent::{TorrentListItem, TorrentSettings};
+        use super::TorrentService;
+        let mut settings = TorrentSettings::default();
+        settings.seed_ratio_limit = 1.5;
+        settings.seed_time_limit_minutes = 60;
+
+        let mut item = TorrentListItem {
+            id: 1,
+            info_hash: "abcd".to_string(),
+            name: "test".to_string(),
+            output_folder: "/tmp".to_string(),
+            state: "live".to_string(),
+            error: None,
+            progress_bytes: 1_000_000,
+            uploaded_bytes: 500_000,
+            total_bytes: 1_000_000,
+            finished: false, // Incomplete: should never stop
+            download_speed: 100,
+            upload_speed: 50,
+            time_remaining_secs: None,
+            seeds: 1,
+            leechers: 1,
+            peers: 2,
+            ratio: 0.5,
+            added_on: Some(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 100),
+            trackers: Vec::new(),
+            files: Vec::new(),
+        };
+
+        // 1. Not finished
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), None);
+
+        // 2. Finished, ratio 0.5 < 1.5
+        item.finished = true;
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), None);
+
+        // 3. Finished, ratio 1.5 >= 1.5
+        item.ratio = 1.5;
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), Some("seed ratio limit reached"));
+
+        // 4. Finished, ratio 2.0 >= 1.5
+        item.ratio = 2.0;
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), Some("seed ratio limit reached"));
+
+        // 5. Ratio limit disabled (0.0), elapsed time 100s < 3600s
+        settings.seed_ratio_limit = 0.0;
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), None);
+
+        // 6. Elapsed time 7200s >= 3600s (60m)
+        item.added_on = Some(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 7200);
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), Some("seed time limit reached"));
+
+        // 7. Paused torrent should not trigger
+        item.state = "paused".to_string();
+        assert_eq!(TorrentService::should_stop_seeding(&item, &settings), None);
     }
 }
