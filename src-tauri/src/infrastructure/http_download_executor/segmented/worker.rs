@@ -32,7 +32,7 @@ use super::{
         validator::{content_range, SegmentValidator},
     },
     progress::{stop_status, update_segment_progress},
-    MIN_CHUNK_REASSIGN_BYTES,
+    CHUNK_ALIGN, MIN_CHUNK_REASSIGN_BYTES,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -98,7 +98,12 @@ pub(crate) async fn run_segment_worker(
                     let unread_start = start + downloaded;
                     let unread_len = end.saturating_sub(unread_start) + 1;
                     if unread_len >= MIN_CHUNK_REASSIGN_BYTES {
-                        let split_point = unread_start + (unread_len / 2);
+                        let half = unread_len / 2;
+                        let mut split_point = unread_start + half;
+                        let aligned = split_point - (split_point % CHUNK_ALIGN);
+                        if aligned > unread_start && aligned < end {
+                            split_point = aligned;
+                        }
                         if split_point > unread_start && split_point < end {
                             // Shorten the target chunk
                             guard[target_idx].end = split_point;

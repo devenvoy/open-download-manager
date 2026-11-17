@@ -35,6 +35,7 @@ pub use discovery::{discover_ranges, segment_ranges};
 pub(crate) use worker::run_segment_worker;
 
 pub const MIN_CHUNK_REASSIGN_BYTES: u64 = 2 * 1024 * 1024; // 2 MB minimum remaining to split a chunk
+pub const CHUNK_ALIGN: u64 = 4096; // Sector/page boundary alignment for chunk splits
 
 #[allow(clippy::too_many_arguments)]
 pub async fn download_segments(
