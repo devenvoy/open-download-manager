@@ -29,7 +29,7 @@ impl DownloadTransferService {
 
         let task = async move {
             let Ok(url) = url::Url::parse(&url_str) else { return; };
-            let mut req = client.get(url).header(reqwest::header::RANGE, "bytes=0-0");
+            let mut req = client.get(url.clone()).header(reqwest::header::RANGE, "bytes=0-0");
             for (name, value) in request_headers.as_map() {
                 if name == "referer" {
                     continue;
@@ -64,7 +64,18 @@ impl DownloadTransferService {
                     let has_ranges = headers
                         .get(reqwest::header::ACCEPT_RANGES)
                         .is_some_and(|v| v.as_bytes() == b"bytes");
-                    (total, has_ranges)
+                    let mut probe_resumable = has_ranges;
+                    if !probe_resumable && total.is_some_and(|tot| tot >= 2 * 1024 * 1024) {
+                        let probe_req = client
+                            .get(url.clone())
+                            .header(reqwest::header::RANGE, "bytes=1048576-1048576");
+                        if let Ok(probe_resp) = probe_req.send().await {
+                            if probe_resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+                                probe_resumable = true;
+                            }
+                        }
+                    }
+                    (total, probe_resumable)
                 } else {
                     (None, false)
                 };

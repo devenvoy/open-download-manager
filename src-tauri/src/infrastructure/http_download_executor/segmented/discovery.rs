@@ -68,18 +68,71 @@ pub async fn discover_ranges(
         )));
     }
 
-    if response.status() != reqwest::StatusCode::PARTIAL_CONTENT
-        || response
+    let (total, is_verified) = if response.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+        if response
             .headers()
             .get(reqwest::header::CONTENT_ENCODING)
             .is_some_and(|encoding| encoding.as_bytes() != b"identity")
-    {
-        return Ok(None);
-    }
-    let Ok((0, 0, Some(total))) = content_range(&response) else {
+        {
+            return Ok(None);
+        }
+        let Ok((0, 0, Some(total))) = content_range(&response) else {
+            return Ok(None);
+        };
+        (total, true)
+    } else if response.status() == reqwest::StatusCode::OK {
+        let Some(total) = response.content_length() else {
+            return Ok(None);
+        };
+        if total < 2 * 1024 * 1024 {
+            return Ok(None);
+        }
+        if response
+            .headers()
+            .get(reqwest::header::CONTENT_ENCODING)
+            .is_some_and(|encoding| encoding.as_bytes() != b"identity")
+        {
+            return Ok(None);
+        }
+        let has_accept_ranges = response
+            .headers()
+            .get(reqwest::header::ACCEPT_RANGES)
+            .is_some_and(|value| value.as_bytes() == b"bytes");
+
+        if has_accept_ranges {
+            (total, true)
+        } else {
+            // Secondary probe: CDNs like Google Video CDN / Google Drive / Akamai
+            // frequently return 200 OK to Range: bytes=0-0 (treating 0-0 as starting at 0)
+            // and omit Accept-Ranges. Probe a single byte offset mid-file to conclusively test range honoring.
+            let probe_offset = (total / 2).min(1024 * 1024);
+            let probe_resolved = super::super::auth::send_authenticated_request_with_redirects(
+                client,
+                &resolved.final_url,
+                control,
+                override_creds,
+                matcher,
+                Some(probe_offset),
+                Some(probe_offset),
+                None,
+                referer,
+                request_headers,
+                request_headers_host,
+            )
+            .await;
+
+            match probe_resolved {
+                Ok(probe_resp) if probe_resp.response.status() == reqwest::StatusCode::PARTIAL_CONTENT => {
+                    (total, true)
+                }
+                _ => return Ok(None),
+            }
+        }
+    } else {
         return Ok(None);
     };
-    if total < 2 {
+
+    if !is_verified || total < 2 {
         return Ok(None);
     }
     let cd_filename = response

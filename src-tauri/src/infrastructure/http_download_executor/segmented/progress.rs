@@ -70,6 +70,7 @@ pub fn update_segment_progress(
         etag: validator.value().map(|s| s.to_string()),
         validator: validator.validator.clone(),
         filename: None,
+        resumable: Some(true),
     });
     Ok(())
 }

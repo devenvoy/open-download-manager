@@ -35,12 +35,17 @@ pub(crate) fn forwarded_headers(
     current_host: &str,
 ) -> HeaderMap {
     let mut map = HeaderMap::new();
-    if headers.is_empty() || !initial_host.eq_ignore_ascii_case(current_host) {
+    if headers.is_empty() {
         return map;
     }
+    let is_same_host = initial_host.eq_ignore_ascii_case(current_host);
     for (name, value) in headers.as_map() {
         // Referer is handled separately because it is validated as a URL.
         if name == "referer" {
+            continue;
+        }
+        // Protect sensitive credentials from leaking across cross-host redirects
+        if !is_same_host && (name == "cookie" || name == "authorization") {
             continue;
         }
         let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
@@ -204,7 +209,14 @@ mod tests {
         );
 
         let cross_host = forwarded_headers(&headers, "example.com", "cdn.example.com");
-        assert!(cross_host.is_empty());
+        assert_eq!(
+            cross_host
+                .get(reqwest::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("Browser")
+        );
+        assert!(cross_host.get(reqwest::header::COOKIE).is_none());
+        assert!(cross_host.get(reqwest::header::AUTHORIZATION).is_none());
     }
 
     #[test]

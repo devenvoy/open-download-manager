@@ -18,4 +18,5 @@ pub struct DownloadProgress {
     pub etag: Option<String>,
     pub validator: Option<TransferValidator>,
     pub filename: Option<String>,
+    pub resumable: Option<bool>,
 }

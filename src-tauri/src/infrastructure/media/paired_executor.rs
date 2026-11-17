@@ -152,6 +152,7 @@ impl PairedDownloadExecutor {
             etag: None,
             validator: None,
             filename: None,
+            resumable: Some(true),
         });
 
         let state = Arc::new(Mutex::new(PairedState {
@@ -293,6 +294,7 @@ impl PairedDownloadExecutor {
                             etag: None,
                             validator: None,
                             filename: None,
+                            resumable: Some(true),
                         });
                     }
                 }

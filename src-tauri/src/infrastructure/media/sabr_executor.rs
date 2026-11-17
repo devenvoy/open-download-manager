@@ -298,6 +298,7 @@ impl SabrDownloadExecutor {
                 etag: None,
                 validator: None,
                 filename: None,
+                resumable: Some(false),
             });
         }
 
@@ -326,6 +327,7 @@ impl SabrDownloadExecutor {
                 etag: None,
                 validator: None,
                 filename: None,
+                resumable: Some(false),
             });
         }
 
@@ -383,6 +385,7 @@ impl SabrDownloadExecutor {
                         etag: None,
                         validator: None,
                         filename: None,
+                        resumable: Some(true),
                     });
                     return ytdlp.download(
                         &watch_url,

@@ -157,6 +157,7 @@ pub(crate) async fn run_segment_worker(
                                 etag: validator.value().map(|s| s.to_string()),
                                 validator: validator.validator.clone(),
                                 filename: None,
+                                resumable: Some(true),
                             });
 
                             Some(new_chunk_idx)

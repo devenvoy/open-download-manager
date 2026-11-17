@@ -437,6 +437,7 @@ impl YtDlpTools {
                                         etag: None,
                                         validator: None,
                                         filename: None,
+                                        resumable: Some(true),
                                     });
                                 }
                             }

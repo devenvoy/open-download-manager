@@ -360,6 +360,7 @@ impl HttpDownloadExecutor {
                             etag: validator.value().map(|s| s.to_string()),
                             validator: validator.validator.clone(),
                             filename: None,
+                            resumable: Some(true),
                         });
                     }
                     let ranges_path = range_map::range_map_path(&temporary);
@@ -461,6 +462,7 @@ impl HttpDownloadExecutor {
                                 etag: None,
                                 validator: None,
                                 filename: None,
+                                resumable: Some(false),
                             });
                         }
                     }

@@ -254,6 +254,7 @@ pub(crate) async fn download_single_stream(
         etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
         validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
         filename: None,
+        resumable: Some(supports_range),
     });
 
     let mut bytes_since_tick = 0_u64;
@@ -371,6 +372,7 @@ pub(crate) async fn download_single_stream(
                                     etag: None,
                                     validator: None,
                                     filename: None,
+                                    resumable: Some(supports_range),
                                 });
                                 response = new_response;
                                 continue 'stream;
@@ -474,6 +476,7 @@ pub(crate) async fn download_single_stream(
                                 etag: None,
                                 validator: None,
                                 filename: None,
+                                resumable: Some(supports_range),
                             });
                             response = new_response;
                             continue 'stream;
@@ -538,6 +541,7 @@ pub(crate) async fn download_single_stream(
                 etag: new_validator.as_ref().and_then(|v| v.value().map(|s| s.to_string())),
                 validator: new_validator.as_ref().and_then(|v| v.validator.clone()),
                 filename: None,
+                resumable: Some(supports_range),
             });
             last_tick = Instant::now();
             bytes_since_tick = 0;

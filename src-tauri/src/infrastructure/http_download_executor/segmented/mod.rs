@@ -86,6 +86,7 @@ pub async fn download_segments(
             etag: validator.value().map(|s| s.to_string()),
             validator: validator.validator.clone(),
             filename: None,
+            resumable: Some(true),
         });
     }
 
@@ -132,6 +133,7 @@ pub async fn download_segments(
                         etag: ticker_validator.value().map(|s| s.to_string()),
                         validator: ticker_validator.validator.clone(),
                         filename: None,
+                        resumable: Some(true),
                     });
                 }
                 _ = ticker_control.stopped() => {
@@ -227,6 +229,7 @@ pub async fn download_segments(
         etag: validator.value().map(|s| s.to_string()),
         validator: validator.validator.clone(),
         filename: None,
+        resumable: Some(true),
     });
     Ok(final_segments)
 }

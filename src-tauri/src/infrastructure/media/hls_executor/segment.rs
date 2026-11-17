@@ -172,6 +172,7 @@ pub(crate) async fn download_hls_segment(
                     etag: None,
                     validator: None,
                     filename: None,
+                    resumable: Some(true),
                 });
             }
         }
@@ -219,6 +220,7 @@ pub(crate) async fn download_hls_segment(
                 etag: None,
                 validator: None,
                 filename: None,
+                resumable: Some(true),
             });
         }
     }

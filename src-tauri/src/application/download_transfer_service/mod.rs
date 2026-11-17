@@ -878,6 +878,9 @@ impl DownloadTransferService {
                 if let Some(ec) = progress.effective_concurrency {
                     download.connections = ec;
                 }
+                if let Some(r) = progress.resumable {
+                    download.resumable = Some(r);
+                }
                 if let Some(ref validator) = progress.validator {
                     download.validator = Some(validator.clone());
                     if let crate::domain::download::TransferValidator::ETag(ref etag) = validator {
