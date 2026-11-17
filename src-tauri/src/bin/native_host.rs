@@ -97,9 +97,10 @@ async fn run() -> Result<(), HostError> {
         }
     };
 
-    // A heartbeat only reports that the extension is alive. It must never
-    // start the desktop app: that would relaunch the app every minute.
-    let may_launch_desktop = action != "heartbeat";
+    // Only explicit user-initiated transfer actions may launch the desktop app.
+    // Passive background pings (heartbeats, policy queries, format inspections)
+    // must never launch the desktop app, or opening a browser would launch ODM.
+    let may_launch_desktop = matches!(action, "download" | "torrent");
 
     let url = format!("http://127.0.0.1:{}{endpoint}", bridge_config.port);
 

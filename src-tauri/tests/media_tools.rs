@@ -390,12 +390,12 @@ fn test_real_host_ffmpeg_execution_if_present() {
 fn test_download_specs_select_native_windows_arm64_binaries() {
     let ytdlp_arm64 = download_spec_for(MediaToolType::YtDlp, ToolPlatform::WindowsArm64)
         .expect("ARM64 yt-dlp spec");
-    assert!(ytdlp_arm64.url.ends_with("/yt-dlp_arm64.exe"));
+    assert!(ytdlp_arm64.url.ends_with("/yt-dlp_win_arm64.zip"));
     assert_eq!(ytdlp_arm64.binary_name, "yt-dlp.exe");
 
     let ytdlp_x64 =
         download_spec_for(MediaToolType::YtDlp, ToolPlatform::WindowsX64).expect("x64 yt-dlp spec");
-    assert!(ytdlp_x64.url.ends_with("/yt-dlp.exe"));
+    assert!(ytdlp_x64.url.ends_with("/yt-dlp_win.zip"));
     assert!(!ytdlp_x64.url.contains("arm64"));
 
     let ffmpeg_arm64 = download_spec_for(MediaToolType::Ffmpeg, ToolPlatform::WindowsArm64)
@@ -419,7 +419,7 @@ fn test_download_specs_cover_other_arm64_platforms_and_fail_loudly() {
 
     let ytdlp_macos_arm64 = download_spec_for(MediaToolType::YtDlp, ToolPlatform::MacosArm64)
         .expect("macOS ARM64 yt-dlp spec");
-    assert!(ytdlp_macos_arm64.url.ends_with("/yt-dlp_macos"));
+    assert!(ytdlp_macos_arm64.url.ends_with("/yt-dlp_macos.zip"));
 
     let ffmpeg_linux_arm64 = download_spec_for(MediaToolType::Ffmpeg, ToolPlatform::LinuxArm64)
         .expect_err("Linux ARM64 ffmpeg must not silently use an x64 binary");

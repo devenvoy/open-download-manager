@@ -105,6 +105,22 @@ impl MediaToolAdapter for MacosAdapter {
             .map(PathBuf::from)
             .collect()
     }
+
+    fn finalize_binary(&self, path: &Path) -> AppResult<()> {
+        crate::infrastructure::media::tools::binary::make_executable(path)?;
+        // Strip macOS Gatekeeper quarantine attribute if present so execution
+        // of downloaded media tool binaries or unpacked dependencies is not
+        // blocked by Gatekeeper.
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("/usr/bin/xattr")
+                .arg("-d")
+                .arg("com.apple.quarantine")
+                .arg(path)
+                .output();
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
