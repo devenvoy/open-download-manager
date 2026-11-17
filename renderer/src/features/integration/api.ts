@@ -117,4 +117,17 @@ export function useRegisterBrowser() {
   });
 }
 
+/** Unregisters a browser native messaging manifest. */
+export function useUnregisterBrowser() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ browser }: { browser: string }) =>
+      ipc.unregisterBrowser(browser),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: snapshotQueryKey });
+      await client.invalidateQueries({ queryKey: integrationKeys.info });
+    },
+  });
+}
+
 export type { IntegrationStatus };

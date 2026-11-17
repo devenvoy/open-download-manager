@@ -73,6 +73,8 @@ export const ipc = {
   integrationInfo: () => call("get_integration_info"),
   registerBrowser: (browser: string, extensionId: string) =>
     call("register_browser", { browser, extensionId }),
+  unregisterBrowser: (browser: string) =>
+    call("unregister_browser", { browser }),
   browserSetupAction: (action: string, browser: string) =>
     call("browser_setup_action", { action, browser }),
   advancedCapability: () => call("get_advanced_integration_capability"),

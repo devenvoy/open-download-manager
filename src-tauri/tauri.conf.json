@@ -55,6 +55,10 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
+    "resources": [
+      "extension/**/*",
+      "extension-firefox/**/*"
+    ],
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "11.0",

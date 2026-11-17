@@ -106,6 +106,10 @@ export interface CommandMap {
     args: { browser: string; extensionId: string };
     result: void;
   };
+  unregister_browser: {
+    args: { browser: string };
+    result: void;
+  };
   browser_setup_action: {
     args: { action: string; browser: string };
     result: BrowserSetupResult;

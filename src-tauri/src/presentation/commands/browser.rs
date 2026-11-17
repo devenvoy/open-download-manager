@@ -30,6 +30,15 @@ pub async fn register_browser(
 }
 
 #[tauri::command(async)]
+pub async fn unregister_browser(
+    state: State<'_, AppState>,
+    browser: String,
+) -> AppResult<()> {
+    let _timer = crate::infrastructure::perf::track_command("unregister_browser");
+    state.integration.unregister_browser(&browser).await
+}
+
+#[tauri::command(async)]
 pub async fn browser_setup_action(
     state: State<'_, AppState>,
     action: String,

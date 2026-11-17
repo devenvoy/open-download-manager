@@ -17,7 +17,7 @@ pub mod torrents;
 pub use browser::{
     browser_setup_action, disable_advanced_integration, enable_advanced_integration,
     get_advanced_integration_capability, get_integration_info, register_browser,
-    repair_advanced_integration,
+    repair_advanced_integration, unregister_browser,
 };
 pub use clipboard::dismiss_clipboard_candidate;
 pub use credentials::{delete_credential_rule, list_credential_rules, save_credential_rule};

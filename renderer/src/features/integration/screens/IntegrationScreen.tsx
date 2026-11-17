@@ -61,7 +61,7 @@ export function IntegrationScreen() {
         onSuccess: () => {
           toast.success(`${current.name} integration removed.`);
         },
-        onError: (err) => {
+        onError: (err: unknown) => {
           toast.error(
             `Failed to remove integration: ${err instanceof Error ? err.message : String(err)}`
           );
